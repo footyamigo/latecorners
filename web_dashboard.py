@@ -291,13 +291,33 @@ def get_live_matches():
     try:
         print(f"🌐 Calling SportMonks API: {url}")
         response = requests.get(url, params=params, timeout=30)
+        
+        # ENHANCED DEBUG: Log response details
+        print(f"📊 Response Status: {response.status_code}")
+        print(f"📊 Response Headers: {dict(response.headers)}")
+        
+        if response.status_code != 200:
+            error_text = response.text[:500] if response.text else 'No response body'
+            print(f"❌ API Error {response.status_code}: {error_text}")
+            # Store error for API response visibility
+            global last_api_error
+            last_api_error = f"SportMonks API Error {response.status_code}: {error_text}"
+            return []
+            
         response.raise_for_status()
         
         # Monitor rate limits
         monitor_rate_limits(response, 'livescores')
         
-        matches = response.json().get('data', [])
+        data = response.json()
+        matches = data.get('data', [])
         print(f"📥 Raw matches from API: {len(matches)}")
+        
+        # ENHANCED DEBUG: Log full response structure if empty
+        if len(matches) == 0:
+            print(f"⚠️ Empty response from SportMonks. Full response: {str(data)[:1000]}")
+            global last_api_error
+            last_api_error = f"SportMonks returned empty data. Response: {str(data)[:200]}"
         
         live_matches = []
         
@@ -311,11 +331,27 @@ def get_live_matches():
                     live_matches.append(match_data)
         
         print(f"✅ Filtered live matches: {len(live_matches)}")
+        
+        # Clear error if successful
+        last_api_error = None
+        
         return live_matches
         
-    except Exception as e:
-        print(f"❌ Error getting live matches: {e}")
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Network error calling SportMonks API: {str(e)}"
+        print(f"❌ {error_msg}")
+        global last_api_error
+        last_api_error = error_msg
         return []
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        print(f"❌ {error_msg}")
+        global last_api_error  
+        last_api_error = error_msg
+        return []
+
+# Global variable to store last API error for debugging
+last_api_error = None
 
 def extract_match_data(match):
     """Extract match data for dashboard"""
@@ -784,11 +820,29 @@ def api_alerts():
 @app.route('/api/live-matches')
 def api_live_matches():
     """API endpoint for live matches data"""
-    return jsonify({
+    response_data = {
         'matches': live_matches_data,
         'stats': dashboard_stats,
-        'alerts_triggered': dashboard_stats.get('alerts_triggered', 0)  # Include alert count
-    })
+        'alerts_triggered': dashboard_stats.get('alerts_triggered', 0)
+    }
+    
+    # DEBUGGING: Include API error information if available
+    global last_api_error
+    if last_api_error:
+        response_data['debug_error'] = last_api_error
+        response_data['debug_status'] = 'API_ERROR'
+    else:
+        response_data['debug_status'] = 'OK'
+        
+    # DEBUGGING: Add environment info
+    response_data['debug_info'] = {
+        'api_key_present': bool(os.getenv('SPORTMONKS_API_KEY')),
+        'api_key_length': len(os.getenv('SPORTMONKS_API_KEY', '')),
+        'total_matches': len(live_matches_data),
+        'last_update': dashboard_stats.get('last_update', 'Never')
+    }
+    
+    return jsonify(response_data)
 
 @app.route('/api/stats')
 def api_stats():
