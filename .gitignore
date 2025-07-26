@@ -1,0 +1,58 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# JSON data files (cached data)
+*.json
+
+# Test files (we'll keep main ones but ignore debug files)
+debug_*.py
+test_*.py
+investigate_*.py
+verify_*.py
+check_*.py
+decode_*.py
+discover_*.py
+examine_*.py
+extract_*.py
+find_*.py
+simple_*.py
+quick_*.py
+resolve_*.py 

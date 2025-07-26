@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+
+import asyncio
+import logging
+import time
+from datetime import datetime
+from typing import Dict, Set
+import sys
+import os
+
+# Add the current directory to the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from config import get_config
+from sportmonks_client import SportmonksClient
+from scoring_engine import ScoringEngine
+from telegram_bot import TelegramNotifier
+
+class LateCornerMonitor:
+    """Main application class that monitors live matches for corner opportunities"""
+    
+    def __init__(self):
+        self.config = get_config()
+        self.sportmonks_client = SportmonksClient()
+        self.scoring_engine = ScoringEngine()
+        self.telegram_notifier = TelegramNotifier()
+        
+        # Track which matches we're currently monitoring
+        self.monitored_matches: Set[int] = set()
+        
+        # Track matches we've already alerted on to avoid duplicates
+        self.alerted_matches: Set[int] = set()
+        
+        self.logger = self._setup_logging()
+        
+    def _setup_logging(self):
+        """Setup logging configuration"""
+        
+        # Create logger
+        logger = logging.getLogger()
+        logger.setLevel(getattr(logging, self.config.LOG_LEVEL))
+        
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # File handler
+        file_handler = logging.FileHandler(self.config.LOG_FILE)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        
+        return logger
+    
+    async def start_monitoring(self):
+        """Start the main monitoring loop"""
+        
+        self.logger.info("🚀 Starting Late Corner Monitor...")
+        
+        # Test connections
+        if not await self._test_connections():
+            self.logger.error("❌ Connection tests failed. Exiting.")
+            return
+        
+        # Send startup message
+        await self.telegram_notifier.send_startup_message()
+        
+        self.logger.info("✅ All systems ready. Starting match monitoring...")
+        
+        # Main monitoring loop
+        match_discovery_counter = 0
+        
+        while True:
+            try:
+                # Discover new matches every 5 minutes
+                if match_discovery_counter % (self.config.MATCH_DISCOVERY_INTERVAL // self.config.LIVE_POLL_INTERVAL) == 0:
+                    await self._discover_new_matches()
+                
+                # Monitor existing matches
+                await self._monitor_tracked_matches()
+                
+                # Cleanup finished matches
+                self._cleanup_finished_matches()
+                
+                match_discovery_counter += 1
+                
+                # Wait before next poll
+                await asyncio.sleep(self.config.LIVE_POLL_INTERVAL)
+                
+            except KeyboardInterrupt:
+                self.logger.info("🛑 Shutdown requested by user")
+                break
+            except Exception as e:
+                self.logger.error(f"❌ Unexpected error in main loop: {e}")
+                await self.telegram_notifier.send_system_message(
+                    f"Unexpected error in monitoring loop: {e}", "ERROR"
+                )
+                await asyncio.sleep(60)  # Wait a minute before retrying
+    
+    async def _test_connections(self) -> bool:
+        """Test all external connections"""
+        
+        self.logger.info("🔍 Testing connections...")
+        
+        # Test Sportmonks API
+        try:
+            live_matches = self.sportmonks_client.get_live_matches(filter_by_minute=False)  # Get all for testing
+            self.logger.info(f"✅ Sportmonks API connected - found {len(live_matches)} live matches")
+        except Exception as e:
+            self.logger.error(f"❌ Sportmonks API test failed: {e}")
+            return False
+        
+        # Test Telegram bot
+        try:
+            telegram_test = await self.telegram_notifier.test_connection()
+            if telegram_test:
+                self.logger.info("✅ Telegram bot connected")
+            else:
+                self.logger.error("❌ Telegram bot test failed")
+                return False
+        except Exception as e:
+            self.logger.error(f"❌ Telegram test failed: {e}")
+            return False
+        
+        return True
+    
+    async def _discover_new_matches(self):
+        """Discover new live matches to monitor"""
+        
+        self.logger.info("🔍 Discovering new live matches...")
+        
+        try:
+            # Get ALL live matches first
+            all_live_matches = self.sportmonks_client.get_live_matches(filter_by_minute=False)
+            
+            new_matches_count = 0
+            
+            for match in all_live_matches:
+                fixture_id = match['id']
+                minute = match.get('minute', 0)
+                state = match.get('state', {}).get('short_name', '')
+                
+                # Apply filtering in the main application logic
+                # Only start monitoring matches that are in 2nd half and past 70 minutes
+                if (fixture_id not in self.monitored_matches and 
+                    minute >= self.config.MIN_MINUTE_TO_START_MONITORING and
+                    state == 'INPLAY_2ND_HALF'):  # 🎯 OPTIMIZED: Only 2nd half matches
+                    
+                    self.monitored_matches.add(fixture_id)
+                    new_matches_count += 1
+                    
+                    # Get and cache the pre-match favorite
+                    favorite_team_id = self.sportmonks_client.get_pre_match_favorite(fixture_id)
+                    if favorite_team_id:
+                        self.scoring_engine.set_favorite(fixture_id, favorite_team_id)
+                    
+                    self.logger.info(f"📊 Now monitoring match {fixture_id} (minute {minute})")
+            
+            if new_matches_count > 0:
+                self.logger.info(f"🎯 Added {new_matches_count} new matches to monitoring")
+                
+                # Send update to Telegram
+                await self.telegram_notifier.send_system_message(
+                    f"🎯 Now monitoring {len(self.monitored_matches)} matches\n"
+                    f"Added {new_matches_count} new matches"
+                )
+            else:
+                # Log how many total live matches we found vs. qualifying ones
+                qualifying_count = sum(1 for match in all_live_matches 
+                                     if (match.get('minute', 0) >= self.config.MIN_MINUTE_TO_START_MONITORING and
+                                         match.get('state', {}).get('developer_name', '') == 'INPLAY_2ND_HALF'))
+                
+                self.logger.debug(
+                    f"Found {len(all_live_matches)} total live matches, "
+                    f"{qualifying_count} qualify for monitoring, "
+                    f"but all are already being tracked"
+                )
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error discovering new matches: {e}")
+    
+    async def _monitor_tracked_matches(self):
+        """Monitor all currently tracked matches"""
+        
+        if not self.monitored_matches:
+            return
+        
+        self.logger.debug(f"🔄 Monitoring {len(self.monitored_matches)} matches...")
+        
+        for fixture_id in list(self.monitored_matches):  # Copy to avoid modification during iteration
+            try:
+                await self._monitor_single_match(fixture_id)
+                
+            except Exception as e:
+                self.logger.error(f"❌ Error monitoring match {fixture_id}: {e}")
+    
+    async def _monitor_single_match(self, fixture_id: int):
+        """Monitor a single match for corner opportunities"""
+        
+        # Get current match stats
+        match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
+        
+        if not match_stats:
+            self.logger.warning(f"⚠️ No stats available for match {fixture_id}")
+            return
+        
+        # Check if match is finished
+        if match_stats.minute >= 100:  # Match ended
+            self.monitored_matches.discard(fixture_id)
+            self.logger.info(f"✅ Match {fixture_id} finished, removing from monitoring")
+            return
+        
+        # Run scoring engine
+        scoring_result = self.scoring_engine.evaluate_match(match_stats)
+        
+        if scoring_result and fixture_id not in self.alerted_matches:
+            # We have an alert! 
+            self.logger.info(
+                f"🚨 CORNER ALERT triggered for match {fixture_id}! "
+                f"Score: {scoring_result.total_score:.1f}"
+            )
+            
+            # Mark as alerted to prevent duplicates
+            self.alerted_matches.add(fixture_id)
+            
+            # Get live corner odds
+            corner_odds = self.sportmonks_client.get_live_corner_odds(fixture_id)
+            
+            # Create match info for the alert
+            match_info = self._extract_match_info(match_stats)
+            
+            # Send the alert
+            await self.telegram_notifier.send_corner_alert(
+                scoring_result, match_info, corner_odds
+            )
+            
+        elif scoring_result:
+            # Alert conditions met but already sent
+            self.logger.debug(
+                f"🔄 Match {fixture_id} still meeting alert conditions "
+                f"(score: {scoring_result.total_score:.1f}) but already alerted"
+            )
+    
+    def _extract_match_info(self, match_stats) -> Dict:
+        """Extract match information for alert formatting"""
+        
+        # This is a simplified version - in a real implementation,
+        # you'd get team names and league info from the API
+        return {
+            'home_team': f'Team {match_stats.home_team_id}',  # Would be actual team name
+            'away_team': f'Team {match_stats.away_team_id}',  # Would be actual team name
+            'league': 'Live Match',  # Would be actual league name
+            'home_score': match_stats.home_score,
+            'away_score': match_stats.away_score,
+        }
+    
+    def _cleanup_finished_matches(self):
+        """Remove finished matches from tracking"""
+        
+        # Clean up alerted matches older than 4 hours
+        # (This is a simple time-based cleanup - in production you'd track match end times)
+        if len(self.alerted_matches) > 50:  # Simple size-based cleanup
+            # Keep only the most recent 30 alerts
+            self.alerted_matches = set(list(self.alerted_matches)[-30:])
+            self.logger.info("🧹 Cleaned up old alert tracking")
+
+async def main():
+    """Main entry point"""
+    
+    # Create and start the monitor
+    monitor = LateCornerMonitor()
+    
+    try:
+        await monitor.start_monitoring()
+    except KeyboardInterrupt:
+        print("\n🛑 Late Corner Monitor stopped by user")
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    # Run the main async function
+    asyncio.run(main()) 
