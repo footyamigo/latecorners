@@ -289,6 +289,7 @@ def get_live_matches():
     }
     
     try:
+        global last_api_error
         print(f"🌐 Calling SportMonks API: {url}")
         response = requests.get(url, params=params, timeout=30)
         
@@ -300,7 +301,6 @@ def get_live_matches():
             error_text = response.text[:500] if response.text else 'No response body'
             print(f"❌ API Error {response.status_code}: {error_text}")
             # Store error for API response visibility
-            global last_api_error
             last_api_error = f"SportMonks API Error {response.status_code}: {error_text}"
             return []
             
@@ -316,7 +316,6 @@ def get_live_matches():
         # ENHANCED DEBUG: Log full response structure if empty
         if len(matches) == 0:
             print(f"⚠️ Empty response from SportMonks. Full response: {str(data)[:1000]}")
-            global last_api_error
             last_api_error = f"SportMonks returned empty data. Response: {str(data)[:200]}"
         
         live_matches = []
