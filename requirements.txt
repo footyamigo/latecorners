@@ -1,20 +1,2 @@
-# Core web framework
 Flask==3.0.0
-Werkzeug==3.0.1
-
-# HTTP requests
-requests==2.31.0
-
-# Environment management
-python-dotenv==1.0.0
-
-# For production deployment
-gunicorn==21.2.0
-
-# Optional: Remove unused dependencies that were from earlier iterations
-# python-telegram-bot==20.6  # Not needed - we use requests for Telegram
-# dataclasses-json==0.6.1    # Not used in final version
-# schedule==1.2.0            # Not used in final version  
-# aiohttp==3.9.1             # Not used in final version
-# typing-extensions==4.8.0   # Not needed with modern Python
-# pydantic==2.5.0            # Not used in final version 
+gunicorn==21.2.0 
