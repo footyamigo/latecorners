@@ -1186,51 +1186,92 @@ def corner_odds_test_page():
     '''
 
 if __name__ == '__main__':
-    print("🚀 WORLD-CLASS PROFITABLE CORNER SYSTEM STARTING")
-    print("=" * 60)
     print("📊 Loading initial data...")
-    
-    # Load initial data synchronously
     try:
+        # Test API connectivity first
+        api_key = os.getenv('SPORTMONKS_API_KEY')
+        if not api_key:
+            print("❌ CRITICAL: SPORTMONKS_API_KEY environment variable not set!")
+            print("🔧 Please add your SportMonks API key to Railway environment variables")
+        else:
+            print(f"✅ API Key loaded: {api_key[:10]}...{api_key[-5:]}")
+        
+        # Test basic API connectivity
+        test_url = f"https://api.sportmonks.com/v3/football/livescores/inplay"
+        test_params = {'api_token': api_key, 'include': 'scores'}
+        
+        print("🔗 Testing SportMonks API connectivity...")
+        test_response = requests.get(test_url, params=test_params, timeout=15)
+        
+        if test_response.status_code == 200:
+            print("✅ SportMonks API connection successful")
+        elif test_response.status_code == 401:
+            print("❌ CRITICAL: Invalid SportMonks API key - check your credentials")
+        elif test_response.status_code == 429:
+            print("⚠️ Rate limit exceeded - API key might be over quota")
+        else:
+            print(f"⚠️ API returned status code: {test_response.status_code}")
+        
+        # Load initial data with error handling
         initial_matches = get_live_matches()
-        live_matches_data = initial_matches
+        if initial_matches:
+            live_matches_data = initial_matches
+            print(f"✅ Initial data loaded: {len(initial_matches)} live matches")
+        else:
+            print("⚠️ No live matches found - this might be normal if no games are currently live")
+            live_matches_data = []
+        
+        # Calculate initial dashboard stats
+        matches_with_stats = [m for m in live_matches_data if m.get('statistics', {}).get('total_stats_available', 0) > 0]
+        late_matches = [m for m in matches_with_stats if m.get('minute', 0) >= 83 and m.get('minute', 0) < 85]
+        alert_ready_matches = [m for m in matches_with_stats if m.get('minute', 0) >= 85]
         
         dashboard_stats = {
-            'total_live': len(initial_matches),
-            'late_games': len([m for m in initial_matches if 83 <= m['minute'] < 85]),
-            'draws': len([m for m in initial_matches if m['is_draw']]),
-            'close_games': len([m for m in initial_matches if m['is_close']]),
-            'critical_games': len([m for m in initial_matches if m['minute'] >= 85]),
-            'with_stats': len([m for m in initial_matches if m['statistics']['total_stats_available'] > 0]),
-            'with_corners': len([m for m in initial_matches if m['statistics']['has_corners']]),
-            'with_odds': 0,  # Will be calculated by background thread
-            'alerts_triggered': 0,
+            'total_live': len(live_matches_data),
+            'with_stats': len(matches_with_stats),
+            'with_corners': len([m for m in matches_with_stats if m.get('statistics', {}).get('has_corners', False)]),
+            'late_games': len(late_matches),
+            'critical_games': len(alert_ready_matches),
+            'with_odds': 0,  # Will be updated by background thread
             'last_update': datetime.now().strftime('%H:%M:%S')
         }
         
-        print(f"✅ Initial data loaded: {len(initial_matches)} live matches")
+        print(f"📊 Dashboard initialized:")
+        print(f"   • {dashboard_stats['total_live']} total live matches")
+        print(f"   • {dashboard_stats['with_stats']} matches with statistics") 
+        print(f"   • {dashboard_stats['with_corners']} matches with corner data")
         
     except Exception as e:
         print(f"❌ Error loading initial data: {e}")
+        print(f"🔧 This might be a temporary issue. The app will still start.")
+        
+        # Set empty data and error stats
         live_matches_data = []
         dashboard_stats = {
             'total_live': 0,
-            'late_games': 0,
-            'draws': 0,
-            'close_games': 0,
-            'critical_games': 0,
-            'with_stats': 0,
+            'with_stats': 0, 
             'with_corners': 0,
+            'late_games': 0,
+            'critical_games': 0,
             'with_odds': 0,
-            'alerts_triggered': 0,
-            'last_update': 'Error'
+            'last_update': 'Error',
+            'error': str(e)
         }
     
-    # Start background data updater
+    # Start background data updates
+    print("🔄 Starting background data updates...")
     update_thread = threading.Thread(target=update_live_data, daemon=True)
     update_thread.start()
     
-    print("📊 Open your browser to: http://localhost:5000")
+    print("=" * 60)
+    
+    # Production configuration for Railway
+    port = int(os.getenv('PORT', 5000))
+    debug_mode = os.getenv('FLASK_ENV') != 'production'
+    
+    print(f"🌐 Starting server on port {port}")
+    print(f"🔧 Debug mode: {debug_mode}")
+    print(f"📊 Open your browser to: http://localhost:{port}")
     print("🔄 Auto-refreshes every 8 seconds (SportMonks optimized)")
     print("⚡ Smart rate limit monitoring per entity")
     print("🎯 PRECISION FEATURES:")
@@ -1240,12 +1281,5 @@ if __name__ == '__main__':
     print("   • Psychological scoring integration")
     print("   • Real-time corner category analysis")
     print("=" * 60)
-    
-    # Production configuration for Railway
-    port = int(os.getenv('PORT', 5000))
-    debug_mode = os.getenv('FLASK_ENV') != 'production'
-    
-    print(f"🌐 Starting server on port {port}")
-    print(f"🔧 Debug mode: {debug_mode}")
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port) 
