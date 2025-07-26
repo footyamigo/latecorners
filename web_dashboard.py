@@ -339,13 +339,11 @@ def get_live_matches():
     except requests.exceptions.RequestException as e:
         error_msg = f"Network error calling SportMonks API: {str(e)}"
         print(f"❌ {error_msg}")
-        global last_api_error
         last_api_error = error_msg
         return []
     except Exception as e:
         error_msg = f"Unexpected error: {str(e)}"
         print(f"❌ {error_msg}")
-        global last_api_error  
         last_api_error = error_msg
         return []
 
