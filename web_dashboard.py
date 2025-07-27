@@ -1236,6 +1236,63 @@ def corner_odds_test_page():
     </html>
     '''
 
+@app.route('/debug')
+def debug_status():
+    """Debug endpoint to check deployment status"""
+    try:
+        api_key = os.getenv('SPORTMONKS_API_KEY', '')
+        telegram_token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+        telegram_chat = os.getenv('TELEGRAM_CHAT_ID', '')
+        
+        debug_info = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'environment_variables': {
+                'SPORTMONKS_API_KEY': 'SET' if api_key else 'MISSING',
+                'SPORTMONKS_API_KEY_LENGTH': len(api_key),
+                'TELEGRAM_BOT_TOKEN': 'SET' if telegram_token else 'MISSING',
+                'TELEGRAM_CHAT_ID': 'SET' if telegram_chat else 'MISSING',
+                'PORT': os.getenv('PORT', 'NOT_SET'),
+                'FLASK_ENV': os.getenv('FLASK_ENV', 'NOT_SET')
+            },
+            'api_connectivity': 'NOT_TESTED',
+            'live_data_status': {
+                'matches_in_memory': len(live_matches_data),
+                'last_api_error': last_api_error,
+                'dashboard_stats': dashboard_stats
+            }
+        }
+        
+        # Test API connectivity if API key is available
+        if api_key:
+            try:
+                test_url = "https://api.sportmonks.com/v3/football/livescores/inplay"
+                test_params = {'api_token': api_key, 'include': 'scores'}
+                test_response = requests.get(test_url, params=test_params, timeout=15)
+                
+                debug_info['api_connectivity'] = {
+                    'status_code': test_response.status_code,
+                    'success': test_response.status_code == 200,
+                    'response_size': len(test_response.text) if hasattr(test_response, 'text') else 0
+                }
+                
+                if test_response.status_code == 200:
+                    data = test_response.json()
+                    matches = data.get('data', [])
+                    debug_info['api_connectivity']['live_matches_found'] = len(matches)
+                else:
+                    debug_info['api_connectivity']['error'] = test_response.text[:200]
+                    
+            except Exception as e:
+                debug_info['api_connectivity'] = {
+                    'error': str(e),
+                    'success': False
+                }
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({'error': str(e), 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
+
 if __name__ == '__main__':
     print("📊 Loading initial data...")
     try:
