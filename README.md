@@ -217,3 +217,39 @@ Monitor the logs to analyze performance and adjust thresholds as needed.
 ---
 
 **Good luck with your late corner betting! 🍀⚽** 
+
+## Production Setup (Zero-Touch)
+
+This app is now ready for robust production deployment on Railway, DigitalOcean, or any platform that supports multiple services/components.
+
+### How it Works
+- **Web App:**
+  - Serves the dashboard and API endpoints.
+  - Reads live match data from `live_matches.json` (no background threads).
+- **Updater Process:**
+  - Runs as a separate service/component.
+  - Fetches live match data from the API every 60 seconds and writes to `live_matches.json`.
+
+### Deployment Instructions
+
+#### Railway
+- The `railway.json` and `Procfile` define both the web and updater services.
+- On first deploy, go to your Railway dashboard and ensure both services are enabled ("web" and "updater").
+- Both will auto-deploy on every push.
+
+#### DigitalOcean App Platform
+- The `Procfile` defines both the web and updater components.
+- In the DigitalOcean dashboard, add both as components (web service and worker).
+- Both will auto-deploy on every push.
+
+#### Other Platforms
+- Run both processes in the same project directory:
+  - `gunicorn --bind 0.0.0.0:$PORT web_dashboard:app --timeout 120 --workers 1`
+  - `python live_data_updater.py`
+- Both must have access to the same `live_matches.json` file.
+
+### No Manual Steps Required After Setup
+- Once both services/components are enabled, everything is automatic.
+- No need to manually start/stop anything after each deploy.
+
+--- 

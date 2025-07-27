@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import threading
 import time
+import json
 
 load_dotenv()
 
@@ -40,14 +41,14 @@ def send_telegram_alert(message):
         return False
 
 # Global variables to store live data
-live_matches_data = []
-dashboard_stats = {
-    'total_live': 0,
-    'late_games': 0,
-    'draws': 0,
-    'close_games': 0,
-    'last_update': None
-}
+# live_matches_data = [] # Removed
+# dashboard_stats = { # Removed
+#     'total_live': 0, # Removed
+#     'late_games': 0, # Removed
+#     'draws': 0, # Removed
+#     'close_games': 0, # Removed
+#     'last_update': None # Removed
+# } # Removed
 
 # Global cache to avoid re-checking the same matches
 odds_cache = {}
@@ -621,90 +622,6 @@ def check_corner_odds_available(match_id):
         odds_cache[match_id] = (time.time(), result)
         return result
 
-def update_live_data():
-    """Update live data in background"""
-    
-    global live_matches_data, dashboard_stats
-    
-    while True:
-        try:
-            print(f"🔄 Starting data update at {datetime.now().strftime('%H:%M:%S')}")
-            
-            # Get fresh data
-            matches = get_live_matches()
-            print(f"📊 Got {len(matches)} matches from API")
-            
-            # Update global data
-            live_matches_data = matches
-            
-            # Calculate stats focused on 85-minute corner alert system
-            alert_ready_matches = [m for m in matches if m['minute'] >= 85]  # Matches at alert time
-            approaching_alert_matches = [m for m in matches if 83 <= m['minute'] < 85]  # Preparing for alerts
-            matches_with_stats = [m for m in matches if m['statistics']['total_stats_available'] > 0]
-            
-            print(f"🚨 Alert System Status:")
-            print(f"   • {len(alert_ready_matches)} matches at 85+ minutes (alert time)")
-            print(f"   • {len(approaching_alert_matches)} matches approaching alerts (83-84 min)")
-            print(f"   • {len(matches_with_stats)} matches with live stats total")
-            
-            # STEP 1: Trigger 85-minute alerts for qualified matches
-            alerts_triggered = 0
-            for match in alert_ready_matches:
-                if match['statistics']['has_corners'] and match.get('corner_odds', {}).get('available', False):
-                    if trigger_85_minute_alert(match):
-                        alerts_triggered += 1
-            
-            if alerts_triggered > 0:
-                print(f"🚨 TRIGGERED {alerts_triggered} CORNER ALERTS!")
-            
-            # STEP 2: Check corner odds for matches approaching alert window (83-84 minutes)
-            matches_with_odds = 0
-            checked_count = 0
-            
-            for match in matches_with_stats:
-                if should_check_odds(match):  # Only 83-84 minute matches
-                    checked_count += 1
-                    print(f"🎯 Checking odds for upcoming alert: {match['match_id']} ({match['minute']}' - {match['home_team']} vs {match['away_team']})")
-                    odds_check = check_corner_odds_available(match['match_id'])
-                    if odds_check['available']:
-                        matches_with_odds += 1
-                        match['corner_odds'] = odds_check
-                        print(f"✅ Corner odds ready for alert: {odds_check['count']} markets available")
-                    else:
-                        print(f"❌ No corner odds available - will not trigger alert")
-                else:
-                    # Check cached odds for display purposes
-                    if match['match_id'] in odds_cache:
-                        cache_time, cache_data = odds_cache[match['match_id']]
-                        if time.time() - cache_time < 300:  # 5-minute cache
-                            if cache_data['available']:
-                                matches_with_odds += 1
-                                match['corner_odds'] = cache_data
-            
-            print(f"📊 Pre-alert preparation: checked {checked_count} matches, {matches_with_odds} with corner odds ready")
-            
-            dashboard_stats = {
-                'total_live': len(matches),
-                'late_games': len(approaching_alert_matches),  # 83-84 minute matches (preparing)
-                'draws': len([m for m in matches if m['is_draw']]),
-                'close_games': len([m for m in matches if m['is_close']]),
-                'critical_games': len(alert_ready_matches),  # 85+ minute matches (alert time)
-                'with_stats': len([m for m in matches if m['statistics']['total_stats_available'] > 0]),
-                'with_corners': len([m for m in matches if m['statistics']['has_corners']]),
-                'with_odds': matches_with_odds,  # Matches with corner odds available
-                'alerts_triggered': alerts_triggered,  # New: Track alerts sent this cycle
-                'last_update': datetime.now().strftime('%H:%M:%S')
-            }
-            
-            print(f"📈 Dashboard updated: {dashboard_stats['total_live']} live matches, {dashboard_stats['with_odds']} with odds at {dashboard_stats['last_update']}")
-            
-        except Exception as e:
-            print(f"❌ Error updating data: {e}")
-            import traceback
-            print(f"🔍 Full error: {traceback.format_exc()}")
-        
-        time.sleep(8)  # Update every 8 seconds (450 calls/hour - still only 15% of quota)
-
 # Corner count sweet spot analysis (research-optimized)
 CORNER_COUNT_SCORING = {
     # OPTIMAL SWEET SPOTS (Research-backed)
@@ -842,14 +759,39 @@ def _get_recommendation(final_score, corner_category, minute):
             'reason': f'Insufficient activity (Score: {final_score:.1f})'
         }
 
+def load_live_data():
+    """Load live matches and stats from live_matches.json"""
+    try:
+        with open('live_matches.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            matches = data.get('matches', [])
+            last_update = data.get('last_update', None)
+    except Exception as e:
+        matches = []
+        last_update = None
+    # Calculate dashboard stats
+    matches_with_stats = [m for m in matches if m.get('statistics', {}).get('total_stats_available', 0) > 0]
+    late_matches = [m for m in matches_with_stats if m.get('minute', 0) >= 83 and m.get('minute', 0) < 85]
+    alert_ready_matches = [m for m in matches_with_stats if m.get('minute', 0) >= 85]
+    dashboard_stats = {
+        'total_live': len(matches),
+        'with_stats': len(matches_with_stats),
+        'with_corners': len([m for m in matches_with_stats if m.get('statistics', {}).get('has_corners', False)]),
+        'late_games': len(late_matches),
+        'critical_games': len(alert_ready_matches),
+        'with_odds': 0,  # Not calculated here
+        'last_update': last_update
+    }
+    return matches, dashboard_stats
+
 @app.route('/')
 def dashboard():
-    """Main dashboard page"""
-    return render_template('dashboard.html')
+    matches, dashboard_stats = load_live_data()
+    return render_template('dashboard.html', matches=matches, stats=dashboard_stats)
 
 @app.route('/api/alerts')
 def api_alerts():
-    """API endpoint for alert history"""
+    matches, dashboard_stats = load_live_data()
     recent_alerts = []
     cutoff_time = datetime.now() - timedelta(hours=2)  # Last 2 hours
     
@@ -877,9 +819,9 @@ def api_alerts():
 
 @app.route('/api/live-matches')
 def api_live_matches():
-    """API endpoint for live matches data"""
+    matches, dashboard_stats = load_live_data()
     response_data = {
-        'matches': live_matches_data,
+        'matches': matches,
         'stats': dashboard_stats,
         'alerts_triggered': dashboard_stats.get('alerts_triggered', 0)
     }
@@ -896,7 +838,7 @@ def api_live_matches():
     response_data['debug_info'] = {
         'api_key_present': bool(os.getenv('SPORTMONKS_API_KEY')),
         'api_key_length': len(os.getenv('SPORTMONKS_API_KEY', '')),
-        'total_matches': len(live_matches_data),
+        'total_matches': len(matches),
         'last_update': dashboard_stats.get('last_update', 'Never')
     }
     
@@ -904,6 +846,7 @@ def api_live_matches():
 
 @app.route('/api/stats')
 def api_stats():
+    matches, dashboard_stats = load_live_data()
     """API endpoint for just stats"""
     return jsonify(dashboard_stats)
 
@@ -1317,9 +1260,9 @@ def debug_status():
             },
             'api_connectivity': 'NOT_TESTED',
             'live_data_status': {
-                'matches_in_memory': len(live_matches_data),
+                'matches_in_memory': 0, # No longer in memory
                 'last_api_error': last_api_error,
-                'dashboard_stats': dashboard_stats
+                'dashboard_stats': {} # No longer in memory
             }
         }
         
@@ -1355,100 +1298,6 @@ def debug_status():
         return jsonify({'error': str(e), 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
 
 if __name__ == '__main__':
-    print("📊 Loading initial data...")
-    try:
-        # Test API connectivity first
-        api_key = os.getenv('SPORTMONKS_API_KEY')
-        if not api_key:
-            print("❌ CRITICAL: SPORTMONKS_API_KEY environment variable not set!")
-            print("🔧 Please add your SportMonks API key to Railway environment variables")
-        else:
-            print(f"✅ API Key loaded: {api_key[:10]}...{api_key[-5:]}")
-        
-        # Test basic API connectivity
-        test_url = f"https://api.sportmonks.com/v3/football/livescores/inplay"
-        test_params = {'api_token': api_key, 'include': 'scores'}
-        
-        print("🔗 Testing SportMonks API connectivity...")
-        test_response = requests.get(test_url, params=test_params, timeout=15)
-        
-        if test_response.status_code == 200:
-            print("✅ SportMonks API connection successful")
-        elif test_response.status_code == 401:
-            print("❌ CRITICAL: Invalid SportMonks API key - check your credentials")
-        elif test_response.status_code == 429:
-            print("⚠️ Rate limit exceeded - API key might be over quota")
-        else:
-            print(f"⚠️ API returned status code: {test_response.status_code}")
-        
-        # Load initial data with error handling
-        initial_matches = get_live_matches()
-        if initial_matches:
-            live_matches_data = initial_matches
-            print(f"✅ Initial data loaded: {len(initial_matches)} live matches")
-        else:
-            print("⚠️ No live matches found - this might be normal if no games are currently live")
-            live_matches_data = []
-        
-        # Calculate initial dashboard stats
-        matches_with_stats = [m for m in live_matches_data if m.get('statistics', {}).get('total_stats_available', 0) > 0]
-        late_matches = [m for m in matches_with_stats if m.get('minute', 0) >= 83 and m.get('minute', 0) < 85]
-        alert_ready_matches = [m for m in matches_with_stats if m.get('minute', 0) >= 85]
-        
-        dashboard_stats = {
-            'total_live': len(live_matches_data),
-            'with_stats': len(matches_with_stats),
-            'with_corners': len([m for m in matches_with_stats if m.get('statistics', {}).get('has_corners', False)]),
-            'late_games': len(late_matches),
-            'critical_games': len(alert_ready_matches),
-            'with_odds': 0,  # Will be updated by background thread
-            'last_update': datetime.now().strftime('%H:%M:%S')
-        }
-        
-        print(f"📊 Dashboard initialized:")
-        print(f"   • {dashboard_stats['total_live']} total live matches")
-        print(f"   • {dashboard_stats['with_stats']} matches with statistics") 
-        print(f"   • {dashboard_stats['with_corners']} matches with corner data")
-        
-    except Exception as e:
-        print(f"❌ Error loading initial data: {e}")
-        print(f"🔧 This might be a temporary issue. The app will still start.")
-        
-        # Set empty data and error stats
-        live_matches_data = []
-        dashboard_stats = {
-            'total_live': 0,
-            'with_stats': 0, 
-            'with_corners': 0,
-            'late_games': 0,
-            'critical_games': 0,
-            'with_odds': 0,
-            'last_update': 'Error',
-            'error': str(e)
-        }
-    
-    # Start background data updates
-    print("🔄 Starting background data updates...")
-    update_thread = threading.Thread(target=update_live_data, daemon=True)
-    update_thread.start()
-    
-    print("=" * 60)
-    
-    # Production configuration for Railway
     port = int(os.getenv('PORT', 5000))
     debug_mode = os.getenv('FLASK_ENV') != 'production'
-    
-    print(f"🌐 Starting server on port {port}")
-    print(f"🔧 Debug mode: {debug_mode}")
-    print(f"📊 Open your browser to: http://localhost:{port}")
-    print("🔄 Auto-refreshes every 8 seconds (SportMonks optimized)")
-    print("⚡ Smart rate limit monitoring per entity")
-    print("🎯 PRECISION FEATURES:")
-    print("   • 85-minute alerts with Asian corner odds")
-    print("   • Optimized corner count ranges (7-9 = PRIME ZONE)")
-    print("   • Stop monitoring after alerts sent")
-    print("   • Psychological scoring integration")
-    print("   • Real-time corner category analysis")
-    print("=" * 60)
-    
     app.run(debug=debug_mode, host='0.0.0.0', port=port) 
