@@ -290,16 +290,16 @@ def get_live_matches():
     
     try:
         global last_api_error
-        print(f"🌐 Calling SportMonks API: {url}")
+        log_debug(f"🌐 Calling SportMonks API: {url}")
         response = requests.get(url, params=params, timeout=30)
         
         # ENHANCED DEBUG: Log response details
-        print(f"📊 Response Status: {response.status_code}")
-        print(f"📊 Response Headers: {dict(response.headers)}")
+        log_debug(f"📊 Response Status: {response.status_code}")
+        log_debug(f"📊 Response Headers: {dict(response.headers)}")
         
         if response.status_code != 200:
             error_text = response.text[:500] if response.text else 'No response body'
-            print(f"❌ API Error {response.status_code}: {error_text}")
+            log_debug(f"❌ API Error {response.status_code}: {error_text}")
             # Store error for API response visibility
             last_api_error = f"SportMonks API Error {response.status_code}: {error_text}"
             return []
@@ -311,16 +311,38 @@ def get_live_matches():
         
         data = response.json()
         matches = data.get('data', [])
-        print(f"📥 Raw matches from API: {len(matches)}")
+        log_debug(f"📥 Raw matches from API: {len(matches)}")
         
         # ENHANCED DEBUG: Log full response structure if empty
         if len(matches) == 0:
-            print(f"⚠️ Empty response from SportMonks. Full response: {str(data)[:1000]}")
+            log_debug(f"⚠️ Empty response from SportMonks. Full response: {str(data)[:1000]}")
             last_api_error = f"SportMonks returned empty data. Response: {str(data)[:200]}"
         
         live_matches = []
         
-        for match in matches:
+        # ENHANCED DEBUG: Log filtering process
+        log_debug("🔍 DETAILED FILTERING DEBUG:")
+        for i, match in enumerate(matches[:5]):  # Debug first 5 matches
+            match_id = match.get('id', 'unknown')
+            periods = match.get('periods', [])
+            has_ticking = any(period.get('ticking', False) for period in periods)
+            
+            log_debug(f"  Match {i+1} (ID: {match_id}):")
+            log_debug(f"    Periods: {len(periods)} found")
+            log_debug(f"    Periods data: {periods}")
+            log_debug(f"    Has ticking: {has_ticking}")
+            
+            if has_ticking:
+                match_data = extract_match_data(match)
+                if match_data:
+                    live_matches.append(match_data)
+                    log_debug(f"    ✅ INCLUDED: {match_data.get('home_team', 'Unknown')} vs {match_data.get('away_team', 'Unknown')}")
+                else:
+                    log_debug(f"    ❌ EXCLUDED: extract_match_data returned None")
+            else:
+                log_debug(f"    ❌ EXCLUDED: No ticking periods")
+        
+        for match in matches[5:]:  # Process remaining matches without detailed logging
             periods = match.get('periods', [])
             has_ticking = any(period.get('ticking', False) for period in periods)
             
@@ -329,7 +351,25 @@ def get_live_matches():
                 if match_data:  # Include ALL live matches, regardless of stats availability
                     live_matches.append(match_data)
         
-        print(f"✅ Filtered live matches: {len(live_matches)}")
+        log_debug(f"✅ Filtered live matches: {len(live_matches)}")
+        
+        # FALLBACK: If no matches found with ticking method, try alternative approach
+        if len(live_matches) == 0 and len(matches) > 0:
+            log_debug("🔄 FALLBACK FILTERING: Trying alternative approach...")
+            
+            # Alternative: Filter by match state instead of ticking periods
+            for match in matches:
+                state = match.get('state', {})
+                state_short = state.get('short_name', '')
+                
+                # Include matches that are actively playing
+                if state_short in ['1H', '2H', 'HT', 'ET', '1st', '2nd', 'INPLAY_1ST_HALF', 'INPLAY_2ND_HALF']:
+                    match_data = extract_match_data(match)
+                    if match_data:
+                        live_matches.append(match_data)
+                        log_debug(f"    ✅ FALLBACK INCLUDED: {match_data.get('home_team', 'Unknown')} vs {match_data.get('away_team', 'Unknown')} (State: {state_short})")
+            
+            log_debug(f"✅ Fallback filtering found: {len(live_matches)} matches")
         
         # Clear error if successful
         last_api_error = None
@@ -338,17 +378,38 @@ def get_live_matches():
         
     except requests.exceptions.RequestException as e:
         error_msg = f"Network error calling SportMonks API: {str(e)}"
-        print(f"❌ {error_msg}")
+        log_debug(f"❌ {error_msg}")
         last_api_error = error_msg
         return []
     except Exception as e:
         error_msg = f"Unexpected error: {str(e)}"
-        print(f"❌ {error_msg}")
+        log_debug(f"❌ {error_msg}")
         last_api_error = error_msg
         return []
 
 # Global variable to store last API error for debugging
 last_api_error = None
+
+# Global variable to store debug logs
+debug_logs = []
+
+def log_debug(message):
+    """Add debug message to logs with timestamp"""
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    debug_logs.append(f"[{timestamp}] {message}")
+    # Keep only last 50 logs
+    if len(debug_logs) > 50:
+        debug_logs.pop(0)
+    print(message)  # Also print to console
+
+@app.route('/logs')
+def view_logs():
+    """View recent debug logs"""
+    return jsonify({
+        'logs': debug_logs,
+        'total_logs': len(debug_logs),
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    })
 
 def extract_match_data(match):
     """Extract match data for dashboard"""
