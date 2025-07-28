@@ -185,7 +185,15 @@ class LateCornerMonitor:
                     if favorite_team_id:
                         self.scoring_engine.set_favorite(fixture_id, favorite_team_id)
                     
-                    self.logger.info(f"MONITORING: Now monitoring match {fixture_id} (minute {minute})")
+                    self.logger.info(f"🚨 NEW MATCH: Now monitoring {fixture_id} (minute {minute}, state: {state})")
+                else:
+                    # Log why matches are being skipped
+                    if fixture_id in self.monitored_matches:
+                        self.logger.debug(f"🚨 SKIP: Match {fixture_id} already monitored")
+                    elif minute < self.config.MIN_MINUTE_TO_START_MONITORING:
+                        self.logger.debug(f"🚨 SKIP: Match {fixture_id} too early (minute {minute})")
+                    elif state not in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']:
+                        self.logger.debug(f"🚨 SKIP: Match {fixture_id} wrong state ({state})")
             
             if new_matches_count > 0:
                 self.logger.info(f"SUCCESS: Added {new_matches_count} new matches to monitoring")
@@ -214,16 +222,18 @@ class LateCornerMonitor:
         """Monitor all currently tracked matches"""
         
         if not self.monitored_matches:
+            self.logger.info("🚨 MONITORING: No matches being monitored yet")
             return
         
-        self.logger.debug(f"MONITORING: Checking {len(self.monitored_matches)} matches...")
+        self.logger.info(f"🚨 MONITORING: Checking {len(self.monitored_matches)} matches...")
         
         for fixture_id in list(self.monitored_matches):  # Copy to avoid modification during iteration
             try:
+                self.logger.info(f"🚨 CHECKING: Match {fixture_id}...")
                 await self._monitor_single_match(fixture_id)
                 
             except Exception as e:
-                self.logger.error(f"ERROR: Error monitoring match {fixture_id}: {e}")
+                self.logger.error(f"🚨 ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
         """Monitor a single match for corner opportunities"""
@@ -242,7 +252,7 @@ class LateCornerMonitor:
             return
         
         # TEST ALERT: Send test notification at 85 minutes (for Telegram bot testing)
-        if (match_stats.minute == 85 and 
+        if (match_stats.minute >= 80 and  # TEMPORARILY LOWERED FROM 85 TO 80
             fixture_id not in self.alerted_matches and 
             fixture_id not in getattr(self, 'test_alerted_matches', set())):
             
@@ -251,7 +261,7 @@ class LateCornerMonitor:
                 self.test_alerted_matches = set()
             
             self.logger.info(
-                f"TEST: 85th minute reached for match {fixture_id}! "
+                f"🧪 TEST ALERT: {match_stats.minute}th minute reached for match {fixture_id}! "
                 f"Sending test alert (NOT corner bet alert)"
             )
             
