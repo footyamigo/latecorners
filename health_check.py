@@ -123,12 +123,12 @@ class HealthChecker:
             self.start_time = datetime.now()
         return (datetime.now() - self.start_time).total_seconds()
     
-    def run_server(self, host='0.0.0.0', port=8080, debug=False):
+    def run_server(self, host='0.0.0.0', port=8081, debug=False):
         """Run the health check server"""
         self.start_time = datetime.now()
         self.app.run(host=host, port=port, debug=debug, threaded=True)
 
-def start_health_server_thread(port=8080):
+def start_health_server_thread(port=8081):
     """Start health check server in a background thread"""
     health_checker = HealthChecker()
     server_thread = threading.Thread(
@@ -142,4 +142,4 @@ def start_health_server_thread(port=8080):
 if __name__ == "__main__":
     # Run standalone health check server
     health_checker = HealthChecker()
-    health_checker.run_server(port=8080, debug=True) 
+    health_checker.run_server(port=8081, debug=True) 

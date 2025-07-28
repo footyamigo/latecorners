@@ -68,8 +68,8 @@ class LateCornerMonitor:
         
         # Start health check server
         try:
-            start_health_server_thread(port=8080)
-            self.logger.info("SUCCESS: Health check server started on port 8080")
+            start_health_server_thread(port=8081)
+            self.logger.info("SUCCESS: Health check server started on port 8081")
         except Exception as e:
             self.logger.warning(f"WARNING: Failed to start health check server: {e}")
         
