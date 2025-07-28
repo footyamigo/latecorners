@@ -241,6 +241,29 @@ class LateCornerMonitor:
             self.logger.info(f"FINISHED: Match {fixture_id} finished, removing from monitoring")
             return
         
+        # TEST ALERT: Send test notification at 85 minutes (for Telegram bot testing)
+        if (match_stats.minute == 85 and 
+            fixture_id not in self.alerted_matches and 
+            fixture_id not in getattr(self, 'test_alerted_matches', set())):
+            
+            # Initialize test alert tracking if not exists
+            if not hasattr(self, 'test_alerted_matches'):
+                self.test_alerted_matches = set()
+            
+            self.logger.info(
+                f"TEST: 85th minute reached for match {fixture_id}! "
+                f"Sending test alert (NOT corner bet alert)"
+            )
+            
+            # Mark as test alerted to prevent duplicates
+            self.test_alerted_matches.add(fixture_id)
+            
+            # Create match info for the test alert
+            match_info = self._extract_match_info(match_stats)
+            
+            # Send test alert
+            await self.telegram_notifier.send_test_alert(match_info)
+        
         # Run scoring engine
         scoring_result = self.scoring_engine.evaluate_match(match_stats)
         
@@ -275,15 +298,36 @@ class LateCornerMonitor:
     def _extract_match_info(self, match_stats) -> Dict:
         """Extract match information for alert formatting"""
         
-        # This is a simplified version - in a real implementation,
-        # you'd get team names and league info from the API
-        return {
+        # Extract match info including current statistics
+        match_info = {
             'home_team': f'Team {match_stats.home_team_id}',  # Would be actual team name
             'away_team': f'Team {match_stats.away_team_id}',  # Would be actual team name
             'league': 'Live Match',  # Would be actual league name
             'home_score': match_stats.home_score,
             'away_score': match_stats.away_score,
+            'minute': match_stats.minute
         }
+        
+        # Add current statistics if available
+        if hasattr(match_stats, 'home_corners') and hasattr(match_stats, 'away_corners'):
+            match_info['corners'] = {
+                'home': match_stats.home_corners,
+                'away': match_stats.away_corners
+            }
+        
+        if hasattr(match_stats, 'home_shots') and hasattr(match_stats, 'away_shots'):
+            match_info['shots'] = {
+                'home': match_stats.home_shots,
+                'away': match_stats.away_shots
+            }
+        
+        if hasattr(match_stats, 'home_dangerous_attacks') and hasattr(match_stats, 'away_dangerous_attacks'):
+            match_info['attacks'] = {
+                'home': match_stats.home_dangerous_attacks,
+                'away': match_stats.away_dangerous_attacks
+            }
+        
+        return match_info
     
     def _cleanup_finished_matches(self):
         """Remove finished matches from tracking"""

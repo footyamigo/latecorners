@@ -307,7 +307,7 @@ def get_live_matches():
             
             if has_ticking:
                 match_data = extract_match_data(match)
-                if match_data:  # Include ALL live matches, regardless of stats availability
+                if match_data and is_valid_live_match(match_data):
                     live_matches.append(match_data)
         
         print(f"✅ Filtered live matches: {len(live_matches)}")
@@ -316,6 +316,24 @@ def get_live_matches():
     except Exception as e:
         print(f"❌ Error getting live matches: {e}")
         return []
+
+def is_valid_live_match(match_data):
+    """Check if a match is valid for display (has stats and reasonable time)"""
+    
+    # Must have live statistics available
+    if not match_data.get('statistics') or match_data['statistics'].get('total_stats_available', 0) == 0:
+        return False
+    
+    # Filter out matches with unrealistic minutes (likely ended or data error)
+    minute = match_data.get('minute', 0)
+    if minute > 120:  # Even with extra time, 120+ minutes is suspicious
+        return False
+    
+    # Must have basic match data
+    if not match_data.get('home_team') or not match_data.get('away_team'):
+        return False
+    
+    return True
 
 def extract_match_data(match):
     """Extract match data for dashboard"""
