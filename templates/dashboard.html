@@ -380,8 +380,9 @@
         function updateHeader(stats) {
             const headerElement = document.getElementById('lastUpdate');
             const statsCount = stats.with_stats || 0;
-            const timestamp = stats.last_update || 'Unknown';
-            headerElement.textContent = `${statsCount} matches with live stats | Last updated: ${new Date().toLocaleTimeString()} (${timestamp})`;
+            const currentTime = new Date().toLocaleTimeString();
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+            headerElement.textContent = `${statsCount} matches with live stats | Last updated: ${currentTime} (${timezone})`;
         }
 
         function renderStats(stats) {

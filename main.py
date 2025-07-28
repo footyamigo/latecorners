@@ -15,6 +15,7 @@ from config import get_config
 from sportmonks_client import SportmonksClient
 from scoring_engine import ScoringEngine
 from telegram_bot import TelegramNotifier
+from health_check import start_health_server_thread
 
 class LateCornerMonitor:
     """Main application class that monitors live matches for corner opportunities"""
@@ -62,17 +63,24 @@ class LateCornerMonitor:
     async def start_monitoring(self):
         """Start the main monitoring loop"""
         
-        self.logger.info("🚀 Starting Late Corner Monitor...")
+        self.logger.info("STARTING Late Corner Monitor...")
+        
+        # Start health check server
+        try:
+            start_health_server_thread(port=8080)
+            self.logger.info("SUCCESS: Health check server started on port 8080")
+        except Exception as e:
+            self.logger.warning(f"WARNING: Failed to start health check server: {e}")
         
         # Test connections
         if not await self._test_connections():
-            self.logger.error("❌ Connection tests failed. Exiting.")
+            self.logger.error("ERROR: Connection tests failed. Exiting.")
             return
         
         # Send startup message
         await self.telegram_notifier.send_startup_message()
         
-        self.logger.info("✅ All systems ready. Starting match monitoring...")
+        self.logger.info("SUCCESS: All systems ready. Starting match monitoring...")
         
         # Main monitoring loop
         match_discovery_counter = 0
@@ -98,7 +106,7 @@ class LateCornerMonitor:
                 self.logger.info("🛑 Shutdown requested by user")
                 break
             except Exception as e:
-                self.logger.error(f"❌ Unexpected error in main loop: {e}")
+                self.logger.error(f"ERROR: Unexpected error in main loop: {e}")
                 await self.telegram_notifier.send_system_message(
                     f"Unexpected error in monitoring loop: {e}", "ERROR"
                 )
@@ -107,26 +115,26 @@ class LateCornerMonitor:
     async def _test_connections(self) -> bool:
         """Test all external connections"""
         
-        self.logger.info("🔍 Testing connections...")
+        self.logger.info("TESTING connections...")
         
         # Test Sportmonks API
         try:
             live_matches = self.sportmonks_client.get_live_matches(filter_by_minute=False)  # Get all for testing
-            self.logger.info(f"✅ Sportmonks API connected - found {len(live_matches)} live matches")
+            self.logger.info(f"SUCCESS: Sportmonks API connected - found {len(live_matches)} live matches")
         except Exception as e:
-            self.logger.error(f"❌ Sportmonks API test failed: {e}")
+            self.logger.error(f"ERROR: Sportmonks API test failed: {e}")
             return False
         
         # Test Telegram bot
         try:
             telegram_test = await self.telegram_notifier.test_connection()
             if telegram_test:
-                self.logger.info("✅ Telegram bot connected")
+                self.logger.info("SUCCESS: Telegram bot connected")
             else:
-                self.logger.error("❌ Telegram bot test failed")
+                self.logger.error("ERROR: Telegram bot test failed")
                 return False
         except Exception as e:
-            self.logger.error(f"❌ Telegram test failed: {e}")
+            self.logger.error(f"ERROR: Telegram test failed: {e}")
             return False
         
         return True
@@ -134,7 +142,7 @@ class LateCornerMonitor:
     async def _discover_new_matches(self):
         """Discover new live matches to monitor"""
         
-        self.logger.info("🔍 Discovering new live matches...")
+        self.logger.info("DISCOVERING new live matches...")
         
         try:
             # Get ALL live matches first
@@ -151,7 +159,7 @@ class LateCornerMonitor:
                 # Only start monitoring matches that are in 2nd half and past 70 minutes
                 if (fixture_id not in self.monitored_matches and 
                     minute >= self.config.MIN_MINUTE_TO_START_MONITORING and
-                    state == 'INPLAY_2ND_HALF'):  # 🎯 OPTIMIZED: Only 2nd half matches
+                    state == 'INPLAY_2ND_HALF'):  # OPTIMIZED: Only 2nd half matches
                     
                     self.monitored_matches.add(fixture_id)
                     new_matches_count += 1
@@ -161,14 +169,14 @@ class LateCornerMonitor:
                     if favorite_team_id:
                         self.scoring_engine.set_favorite(fixture_id, favorite_team_id)
                     
-                    self.logger.info(f"📊 Now monitoring match {fixture_id} (minute {minute})")
+                    self.logger.info(f"MONITORING: Now monitoring match {fixture_id} (minute {minute})")
             
             if new_matches_count > 0:
-                self.logger.info(f"🎯 Added {new_matches_count} new matches to monitoring")
+                self.logger.info(f"SUCCESS: Added {new_matches_count} new matches to monitoring")
                 
                 # Send update to Telegram
                 await self.telegram_notifier.send_system_message(
-                    f"🎯 Now monitoring {len(self.monitored_matches)} matches\n"
+                    f"SUCCESS: Now monitoring {len(self.monitored_matches)} matches\n"
                     f"Added {new_matches_count} new matches"
                 )
             else:
@@ -184,7 +192,7 @@ class LateCornerMonitor:
                 )
             
         except Exception as e:
-            self.logger.error(f"❌ Error discovering new matches: {e}")
+            self.logger.error(f"ERROR: Error discovering new matches: {e}")
     
     async def _monitor_tracked_matches(self):
         """Monitor all currently tracked matches"""
@@ -192,14 +200,14 @@ class LateCornerMonitor:
         if not self.monitored_matches:
             return
         
-        self.logger.debug(f"🔄 Monitoring {len(self.monitored_matches)} matches...")
+        self.logger.debug(f"MONITORING: Checking {len(self.monitored_matches)} matches...")
         
         for fixture_id in list(self.monitored_matches):  # Copy to avoid modification during iteration
             try:
                 await self._monitor_single_match(fixture_id)
                 
             except Exception as e:
-                self.logger.error(f"❌ Error monitoring match {fixture_id}: {e}")
+                self.logger.error(f"ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
         """Monitor a single match for corner opportunities"""
@@ -208,13 +216,13 @@ class LateCornerMonitor:
         match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
         
         if not match_stats:
-            self.logger.warning(f"⚠️ No stats available for match {fixture_id}")
+            self.logger.warning(f"WARNING: No stats available for match {fixture_id}")
             return
         
         # Check if match is finished
         if match_stats.minute >= 100:  # Match ended
             self.monitored_matches.discard(fixture_id)
-            self.logger.info(f"✅ Match {fixture_id} finished, removing from monitoring")
+            self.logger.info(f"FINISHED: Match {fixture_id} finished, removing from monitoring")
             return
         
         # Run scoring engine
@@ -223,7 +231,7 @@ class LateCornerMonitor:
         if scoring_result and fixture_id not in self.alerted_matches:
             # We have an alert! 
             self.logger.info(
-                f"🚨 CORNER ALERT triggered for match {fixture_id}! "
+                f"ALERT: CORNER ALERT triggered for match {fixture_id}! "
                 f"Score: {scoring_result.total_score:.1f}"
             )
             
@@ -244,7 +252,7 @@ class LateCornerMonitor:
         elif scoring_result:
             # Alert conditions met but already sent
             self.logger.debug(
-                f"🔄 Match {fixture_id} still meeting alert conditions "
+                f"STATUS: Match {fixture_id} still meeting alert conditions "
                 f"(score: {scoring_result.total_score:.1f}) but already alerted"
             )
     
@@ -269,7 +277,7 @@ class LateCornerMonitor:
         if len(self.alerted_matches) > 50:  # Simple size-based cleanup
             # Keep only the most recent 30 alerts
             self.alerted_matches = set(list(self.alerted_matches)[-30:])
-            self.logger.info("🧹 Cleaned up old alert tracking")
+            self.logger.info("CLEANUP: Cleaned up old alert tracking")
 
 async def main():
     """Main entry point"""
@@ -280,9 +288,9 @@ async def main():
     try:
         await monitor.start_monitoring()
     except KeyboardInterrupt:
-        print("\n🛑 Late Corner Monitor stopped by user")
+        print("\nSTOPPED: Late Corner Monitor stopped by user")
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        print(f"FATAL ERROR: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

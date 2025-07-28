@@ -7,11 +7,11 @@ SPORTMONKS_API_KEY=your_sportmonks_api_key_here
 # Telegram Bot Configuration
 # 1. Create a bot by messaging @BotFather on Telegram
 # 2. Copy the bot token here
-TELEGRAM_BOT_TOKEN=7545649572:AAFHdNBOVSd8gAFNxzD9vGjxPflGynLHCgk
+TELEGRAM_BOT_TOKEN=1234567890:ABCDEFghijklmnop-example-bot-token
 
 # 3. Get your chat ID by messaging @userinfobot on Telegram
 # 4. Copy your chat ID here (can be your personal chat or a group)
-TELEGRAM_CHAT_ID=1407471669
+TELEGRAM_CHAT_ID=123456789
 
 # Optional: Override default configuration
 # ALERT_THRESHOLD=6
