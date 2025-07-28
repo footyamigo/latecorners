@@ -172,10 +172,10 @@ class LateCornerMonitor:
                 state = match.get('state', {}).get('short_name', '')
                 
                 # Apply filtering in the main application logic
-                # Only start monitoring matches that are in 2nd half and past 70 minutes
+                # Only start monitoring matches past 70 minutes (any live state)
                 if (fixture_id not in self.monitored_matches and 
                     minute >= self.config.MIN_MINUTE_TO_START_MONITORING and
-                    state == 'INPLAY_2ND_HALF'):  # OPTIMIZED: Only 2nd half matches
+                    state in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']):  # Any live state
                     
                     self.monitored_matches.add(fixture_id)
                     new_matches_count += 1
