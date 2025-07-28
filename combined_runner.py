@@ -27,8 +27,11 @@ def run_web_dashboard():
     """Run the web dashboard"""
     print("STARTING: Web dashboard...")
     try:
-        # Import the Flask app from web_dashboard
-        from web_dashboard import app
+        # Import the Flask app AND the background thread starter
+        from web_dashboard import app, start_dashboard_background_thread
+        
+        # CRITICAL: Start the background thread that populates live data
+        start_dashboard_background_thread()
         
         # Get port from environment (Railway sets PORT automatically)
         port = int(os.environ.get('PORT', 5000))

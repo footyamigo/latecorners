@@ -285,7 +285,7 @@ def get_live_matches():
     url = f"https://api.sportmonks.com/v3/football/livescores/inplay"
     params = {
         'api_token': api_key,
-        'include': 'scores;participants;state;periods;league;statistics'
+        'include': 'scores;participants;state;periods;periods.statistics;league;statistics'
     }
     
     try:
@@ -402,6 +402,7 @@ def extract_match_data(match):
         }
         
     except Exception as e:
+        print(f"❌ Error extracting match data for match ID {match.get('id', 'unknown')}: {e}")
         return None
 
 def extract_live_statistics(match):
@@ -529,6 +530,8 @@ def check_corner_odds_available(match_id):
 
 def update_live_data():
     """Update live data in background"""
+    
+    print("🔄 Background updater thread started!")
     
     global live_matches_data, dashboard_stats
     
@@ -1226,9 +1229,16 @@ if __name__ == '__main__':
             'last_update': 'Error'
         }
     
-    # Start background data updater
+def start_dashboard_background_thread():
+    """Start the background data updater thread"""
+    print("🚀 Starting background data updater thread...")
     update_thread = threading.Thread(target=update_live_data, daemon=True)
     update_thread.start()
+    print("✅ Background thread started!")
+
+if __name__ == "__main__":
+    # When running web_dashboard.py directly
+    start_dashboard_background_thread()
     
     print("📊 Open your browser to: http://localhost:5000")
     print("🔄 Auto-refreshes every 8 seconds (SportMonks optimized)")
