@@ -798,6 +798,15 @@ def api_stats():
     """API endpoint for just stats"""
     return jsonify(dashboard_stats)
 
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint for Railway"""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'latecorners-dashboard',
+        'timestamp': datetime.now().isoformat()
+    })
+
 @app.route('/api/corner-odds/<match_id>')
 def get_corner_odds(match_id):
     """Get LIVE UPDATED Asian Total Corner odds (Market 61) from bet365 (Bookmaker 2)"""
