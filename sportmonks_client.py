@@ -43,12 +43,20 @@ class MatchStats:
     state: str = ""
     events: List[Dict] = None
     statistics: List[Dict] = None
+    periods: List[Dict] = None
+    
+    # Period-based statistics for better "recent activity" detection
+    second_half_stats: Dict[str, Dict[str, int]] = None  # {'home': {...}, 'away': {...}}
     
     def __post_init__(self):
         if self.events is None:
             self.events = []
         if self.statistics is None:
             self.statistics = []
+        if self.periods is None:
+            self.periods = []
+        if self.second_half_stats is None:
+            self.second_half_stats = {'home': {}, 'away': {}}
 
 class SportmonksClient:
     """Client for interacting with Sportmonks API"""
@@ -261,7 +269,7 @@ class SportmonksClient:
         
         # 🎯 KEY FIX: Add includes to get detailed match data + periods for minute
         params = {
-            'include': 'statistics;events;scores;participants;state;periods'  # 🎯 ADDED: periods for minute
+            'include': 'statistics;events;scores;participants;state;periods;periods.statistics'  # 🎯 ENHANCED: Added period-level statistics
         }
         
         data = self._make_request(f"/fixtures/{fixture_id}", params=params)
@@ -438,6 +446,10 @@ class SportmonksClient:
             elif 'red card' in event_type.lower():
                 red_cards.append(event)
         
+        # Parse periods and extract second half statistics
+        periods = fixture_data.get('periods', [])
+        second_half_stats = self._extract_second_half_stats(periods, home_team_id, away_team_id, stat_id_mapping)
+        
         return MatchStats(
             fixture_id=fixture_id,
             minute=minute,
@@ -448,9 +460,45 @@ class SportmonksClient:
             total_corners=total_corners,
             **stats_dict,
             substitutions=substitutions,
-            red_cards=red_cards
+            red_cards=red_cards,
+            periods=periods,
+            second_half_stats=second_half_stats
         )
     
+    def _extract_second_half_stats(self, periods: List[Dict], home_team_id: int, away_team_id: int, stat_id_mapping: Dict) -> Dict[str, Dict[str, int]]:
+        """Extract statistics for the second half period"""
+        second_half_stats = {'home': {}, 'away': {}}
+        
+        # Find the second half period
+        second_half_period = None
+        for period in periods:
+            description = period.get('description', '').lower()
+            if '2nd' in description or 'second' in description:
+                second_half_period = period
+                break
+        
+        if not second_half_period:
+            # Return empty stats if no second half period found
+            return second_half_stats
+        
+        # Extract statistics from the second half period
+        period_statistics = second_half_period.get('statistics', [])
+        
+        for stat in period_statistics:
+            stat_id = stat.get('type_id')
+            stat_name = stat_id_mapping.get(stat_id)
+            
+            if stat_name and stat_name != 'corners':  # Skip corners as they're handled separately
+                participant_id = stat.get('participant_id')
+                value = stat.get('value', 0)
+                
+                if participant_id == home_team_id:
+                    second_half_stats['home'][stat_name] = value
+                elif participant_id == away_team_id:
+                    second_half_stats['away'][stat_name] = value
+        
+        return second_half_stats
+
     def get_live_corner_odds(self, fixture_id: int) -> Optional[Dict]:
         """Get live corner betting odds"""
         self.logger.info(f"Getting live corner odds for fixture {fixture_id}")

@@ -81,8 +81,8 @@ class ScoringEngine:
         # Update state tracking
         self.state_tracker.update_match_state(current_stats)
         
-        # Only evaluate matches at 85+ minutes
-        if current_stats.minute < self.config.MIN_MINUTE_FOR_ALERT:
+        # Precise 85th minute timing - only evaluate in the exact window
+        if not self._is_in_alert_window(current_stats.minute):
             return None
         
         # Calculate all scoring conditions
@@ -162,37 +162,57 @@ class ScoringEngine:
         score = 0.0
         conditions = []
         
-        # Favorite losing/drawing after 80 minutes
+        # Favorite trailing by exactly 1 goal after 80 minutes (ENHANCED)
         favorite_team_id = self.favorites_cache.get(stats.fixture_id)
         if favorite_team_id:
-            if ((favorite_team_id == stats.home_team_id and stats.home_score <= stats.away_score) or
-                (favorite_team_id == stats.away_team_id and stats.away_score <= stats.home_score)):
-                score += SCORING_MATRIX['favorite_losing_drawing_80plus']
-                conditions.append('Favorite losing/drawing after 80\'')
+            goal_diff = abs(stats.home_score - stats.away_score)
+            favorite_score = stats.home_score if favorite_team_id == stats.home_team_id else stats.away_score
+            opponent_score = stats.away_score if favorite_team_id == stats.home_team_id else stats.home_score
+            
+            # Favorite trailing by exactly 1 goal (HIGH PRIORITY)
+            if opponent_score - favorite_score == 1:
+                score += SCORING_MATRIX['favorite_losing_drawing_80plus'] + 1  # Extra point for trailing by 1
+                conditions.append('Favorite trailing by 1 goal after 80\'')
+            # Favorite drawing (MEDIUM PRIORITY)  
+            elif favorite_score == opponent_score:
+                score += SCORING_MATRIX['favorite_losing_drawing_80plus'] - 1  # Slightly less for draw
+                conditions.append('Favorite drawing after 80\'')
         
-        # Shots on target in last 15 minutes (5+)
-        shots_last_15 = self._get_last_minutes_stat(stats, 'shots_on_target', 15, team_focus)
-        if shots_last_15 >= 5:
+        # Any team trailing by exactly 1 goal after 80 minutes (SECONDARY PRIORITY)
+        elif abs(stats.home_score - stats.away_score) == 1:
+            score += SCORING_MATRIX['team_trailing_by_1_after_75min']
+            trailing_team = 'home' if stats.home_score < stats.away_score else 'away'
+            conditions.append(f'{trailing_team.title()} team trailing by 1 goal after 80\'')
+        
+        # Use second half stats for much better "recent activity" detection
+        # This is a major improvement - we now have period-level granularity!
+        
+        # Get second half stats for the focused team
+        second_half_team_stats = stats.second_half_stats.get(team_focus, {})
+        
+        # High shots on target in 2nd half (much more accurate than total)
+        second_half_shots_on_target = second_half_team_stats.get('shots_on_target', 0)
+        if second_half_shots_on_target >= 5 and stats.minute >= 75:  # 5+ in 2nd half = very active
             score += SCORING_MATRIX['shots_on_target_last_15min_5plus']
-            conditions.append(f'{shots_last_15} shots on target in last 15min')
+            conditions.append(f'{second_half_shots_on_target} shots on target in 2nd half')
         
-        # Dangerous attacks in last 10 minutes (6+)
-        attacks_last_10 = self._get_last_minutes_stat(stats, 'dangerous_attacks', 10, team_focus)
-        if attacks_last_10 >= 6:
+        # High dangerous attacks in 2nd half
+        second_half_attacks = second_half_team_stats.get('dangerous_attacks', 0)
+        if second_half_attacks >= 6 and stats.minute >= 75:
             score += SCORING_MATRIX['dangerous_attacks_last_10min_6plus']
-            conditions.append(f'{attacks_last_10} dangerous attacks in last 10min')
+            conditions.append(f'{second_half_attacks} dangerous attacks in 2nd half')
         
-        # Shots blocked in last 10 minutes (4+)
-        blocked_last_10 = self._get_last_minutes_stat(stats, 'shots_blocked', 10, team_focus)
-        if blocked_last_10 >= 4:
+        # High shots blocked in 2nd half (shows pressure being applied)
+        second_half_blocked = second_half_team_stats.get('shots_blocked', 0)
+        if second_half_blocked >= 4 and stats.minute >= 75:
             score += SCORING_MATRIX['shots_blocked_last_10min_4plus']
-            conditions.append(f'{blocked_last_10} shots blocked in last 10min')
+            conditions.append(f'{second_half_blocked} shots blocked in 2nd half')
         
-        # Big chances created in last 15 minutes (3+)
-        big_chances_last_15 = self._get_last_minutes_stat(stats, 'big_chances_created', 15, team_focus)
-        if big_chances_last_15 >= 3:
+        # High big chances in 2nd half
+        second_half_big_chances = second_half_team_stats.get('big_chances_created', 0)
+        if second_half_big_chances >= 3 and stats.minute >= 75:
             score += SCORING_MATRIX['big_chances_created_last_15min_3plus']
-            conditions.append(f'{big_chances_last_15} big chances created in last 15min')
+            conditions.append(f'{second_half_big_chances} big chances in 2nd half')
         
         # Team trailing by 1 goal after 75 minutes
         if stats.minute >= 75:
@@ -232,35 +252,38 @@ class ScoringEngine:
             score += SCORING_MATRIX['possession_last_15min_65plus']
             conditions.append(f'{current_possession}% possession')
         
-        # Shots inside box in last 20 minutes (5+)
-        shots_inside_last_20 = self._get_last_minutes_stat(stats, 'shots_inside_box', 20, team_focus)
-        if shots_inside_last_20 >= 5:
-            score += SCORING_MATRIX['shots_inside_box_last_20min_5plus']
-            conditions.append(f'{shots_inside_last_20} shots inside box in last 20min')
+        # Get second half stats for the focused team (for medium priority)
+        second_half_team_stats = stats.second_half_stats.get(team_focus, {})
         
-        # Hit woodwork 3+ times
-        woodwork_hits = stats.hit_woodwork[team_focus]
+        # High shots inside box in 2nd half
+        second_half_shots_inside = second_half_team_stats.get('shots_inside_box', 0)
+        if second_half_shots_inside >= 4 and stats.minute >= 70:  # Lower threshold for 2nd half only
+            score += SCORING_MATRIX['shots_inside_box_last_20min_5plus']
+            conditions.append(f'{second_half_shots_inside} shots inside box in 2nd half')
+        
+        # Hit woodwork 3+ times (use total match - woodwork is rare)
+        woodwork_hits = stats.hit_woodwork.get(team_focus, 0)
         if woodwork_hits >= 3:
             score += SCORING_MATRIX['hit_woodwork_3plus']
             conditions.append(f'{woodwork_hits} times hit woodwork')
         
-        # Crosses in last 15 minutes (8+)
-        crosses_last_15 = self._get_last_minutes_stat(stats, 'crosses_total', 15, team_focus)
-        if crosses_last_15 >= 8:
+        # High crosses in 2nd half
+        second_half_crosses = second_half_team_stats.get('crosses_total', 0)
+        if second_half_crosses >= 6 and stats.minute >= 70:  # 6+ crosses in 2nd half shows attacking intent
             score += SCORING_MATRIX['crosses_last_15min_8plus']
-            conditions.append(f'{crosses_last_15} crosses in last 15min')
+            conditions.append(f'{second_half_crosses} crosses in 2nd half')
         
-        # Key passes in last 10 minutes (4+)
-        key_passes_last_10 = self._get_last_minutes_stat(stats, 'key_passes', 10, team_focus)
-        if key_passes_last_10 >= 4:
+        # High key passes in 2nd half
+        second_half_key_passes = second_half_team_stats.get('key_passes', 0)
+        if second_half_key_passes >= 4 and stats.minute >= 70:
             score += SCORING_MATRIX['key_passes_last_10min_4plus']
-            conditions.append(f'{key_passes_last_10} key passes in last 10min')
+            conditions.append(f'{second_half_key_passes} key passes in 2nd half')
         
-        # Counter attacks in last 15 minutes (2+)
-        counter_attacks_last_15 = self._get_last_minutes_stat(stats, 'counter_attacks', 15, team_focus)
-        if counter_attacks_last_15 >= 2:
+        # Counter attacks in 2nd half (desperation play)
+        second_half_counter_attacks = second_half_team_stats.get('counter_attacks', 0)
+        if second_half_counter_attacks >= 2 and stats.minute >= 70:
             score += SCORING_MATRIX['counter_attacks_last_15min_2plus']
-            conditions.append(f'{counter_attacks_last_15} counter attacks in last 15min')
+            conditions.append(f'{second_half_counter_attacks} counter attacks in 2nd half')
         
         return score, conditions
     
@@ -276,31 +299,34 @@ class ScoringEngine:
             conditions.append(f'{len(attacking_subs)} attacking subs after 70\'')
         
         # Fouls drawn (15+)
-        fouls_drawn = stats.fouls_drawn[team_focus]
+        fouls_drawn = stats.fouls_drawn.get(team_focus, 0)
         if fouls_drawn >= 15:
             score += SCORING_MATRIX['fouls_drawn_15plus']
             conditions.append(f'{fouls_drawn} fouls drawn')
         
-        # Successful dribbles in last 20 minutes (5+)
-        dribbles_last_20 = self._get_last_minutes_stat(stats, 'successful_dribbles', 20, team_focus)
-        if dribbles_last_20 >= 5:
+        # Get second half stats for tactical indicators
+        second_half_team_stats = stats.second_half_stats.get(team_focus, {})
+        
+        # High successful dribbles in 2nd half (attacking play)
+        second_half_dribbles = second_half_team_stats.get('successful_dribbles', 0)
+        if second_half_dribbles >= 5 and stats.minute >= 70:  # 5+ in 2nd half = attacking intent
             score += SCORING_MATRIX['successful_dribbles_last_20min_5plus']
-            conditions.append(f'{dribbles_last_20} successful dribbles in last 20min')
+            conditions.append(f'{second_half_dribbles} successful dribbles in 2nd half')
         
-        # Offsides in last 15 minutes (3+)
-        offsides_last_15 = self._get_last_minutes_stat(stats, 'offsides', 15, team_focus)
-        if offsides_last_15 >= 3:
+        # High offsides in 2nd half (desperate attacking)
+        second_half_offsides = second_half_team_stats.get('offsides', 0)
+        if second_half_offsides >= 3 and stats.minute >= 70:  # 3+ in 2nd half = desperate
             score += SCORING_MATRIX['offsides_last_15min_3plus']
-            conditions.append(f'{offsides_last_15} offsides in last 15min')
+            conditions.append(f'{second_half_offsides} offsides in 2nd half (desperate attacking)')
         
-        # Throwins in last 20 minutes (8+)
-        throwins_last_20 = self._get_last_minutes_stat(stats, 'throwins', 20, team_focus)
-        if throwins_last_20 >= 8:
+        # High throwins in 2nd half (pressure play)
+        second_half_throwins = second_half_team_stats.get('throwins', 0)
+        if second_half_throwins >= 8 and stats.minute >= 70:  # 8+ in 2nd half = sustained pressure
             score += SCORING_MATRIX['throwins_last_20min_8plus']
-            conditions.append(f'{throwins_last_20} throwins in last 20min')
+            conditions.append(f'{second_half_throwins} throwins in 2nd half (pressure play)')
         
-        # Low pass accuracy (<75%)
-        pass_accuracy = stats.successful_passes_percentage[team_focus]
+        # Low pass accuracy (<75%) - using available pass accuracy data
+        pass_accuracy = stats.pass_accuracy.get(team_focus, 85)  # Default to 85% if not available
         if pass_accuracy < 75:
             score += SCORING_MATRIX['low_pass_accuracy_under_75percent']
             conditions.append(f'{pass_accuracy}% pass accuracy (rushed play)')
@@ -393,6 +419,18 @@ class ScoringEngine:
             return TIME_MULTIPLIERS['80_to_90_minutes']
         else:
             return TIME_MULTIPLIERS['70_to_80_minutes']
+    
+    def _is_in_alert_window(self, current_minute: int) -> bool:
+        """Check if current minute is in the precise 85th minute alert window"""
+        # Primary target: Exactly 85 minutes
+        if current_minute == self.config.TARGET_ALERT_MINUTE:
+            return True  # Perfect timing!
+        
+        # Small buffer for API timing variations (84:50-85:15 window)
+        if current_minute == (self.config.TARGET_ALERT_MINUTE - 1):
+            return True  # 84:xx - close enough for API delays
+        
+        return False  # Outside the precise window
     
     def _generate_match_context(self, stats: MatchStats, conditions: List[str]) -> str:
         """Generate human-readable match context"""

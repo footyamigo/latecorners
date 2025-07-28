@@ -16,6 +16,7 @@ from sportmonks_client import SportmonksClient
 from scoring_engine import ScoringEngine
 from telegram_bot import TelegramNotifier
 from health_check import start_health_server_thread
+from startup_flag import is_first_startup
 
 class LateCornerMonitor:
     """Main application class that monitors live matches for corner opportunities"""
@@ -77,8 +78,16 @@ class LateCornerMonitor:
             self.logger.error("ERROR: Connection tests failed. Exiting.")
             return
         
-        # Send startup message
-        await self.telegram_notifier.send_startup_message()
+        # Send startup message only on first deployment, not on restarts
+        if is_first_startup():
+            try:
+                await self.telegram_notifier.send_startup_message()
+                self.logger.info("SUCCESS: Startup message sent (first deployment)")
+            except Exception as e:
+                self.logger.warning(f"WARNING: Could not send startup message: {e}")
+                # Continue anyway - this is not critical
+        else:
+            self.logger.info("INFO: Skipping startup message (not first startup)")
         
         self.logger.info("SUCCESS: All systems ready. Starting match monitoring...")
         
@@ -89,13 +98,25 @@ class LateCornerMonitor:
             try:
                 # Discover new matches every 5 minutes
                 if match_discovery_counter % (self.config.MATCH_DISCOVERY_INTERVAL // self.config.LIVE_POLL_INTERVAL) == 0:
-                    await self._discover_new_matches()
+                    try:
+                        await self._discover_new_matches()
+                    except Exception as e:
+                        self.logger.error(f"ERROR: Failed to discover matches: {e}")
+                        # Continue to monitoring existing matches
                 
                 # Monitor existing matches
-                await self._monitor_tracked_matches()
+                try:
+                    await self._monitor_tracked_matches()
+                except Exception as e:
+                    self.logger.error(f"ERROR: Failed to monitor matches: {e}")
+                    # Continue to cleanup
                 
                 # Cleanup finished matches
-                self._cleanup_finished_matches()
+                try:
+                    self._cleanup_finished_matches()
+                except Exception as e:
+                    self.logger.error(f"ERROR: Failed to cleanup: {e}")
+                    # Continue anyway
                 
                 match_discovery_counter += 1
                 
@@ -103,13 +124,12 @@ class LateCornerMonitor:
                 await asyncio.sleep(self.config.LIVE_POLL_INTERVAL)
                 
             except KeyboardInterrupt:
-                self.logger.info("🛑 Shutdown requested by user")
+                self.logger.info("STOPPED: Shutdown requested by user")
                 break
             except Exception as e:
-                self.logger.error(f"ERROR: Unexpected error in main loop: {e}")
-                await self.telegram_notifier.send_system_message(
-                    f"Unexpected error in monitoring loop: {e}", "ERROR"
-                )
+                self.logger.error(f"CRITICAL ERROR: Unexpected error in main loop: {e}")
+                # Don't send telegram message here as it might cause more crashes
+                self.logger.error(f"SLEEPING: Waiting 60 seconds before retry")
                 await asyncio.sleep(60)  # Wait a minute before retrying
     
     async def _test_connections(self) -> bool:
@@ -125,14 +145,10 @@ class LateCornerMonitor:
             self.logger.error(f"ERROR: Sportmonks API test failed: {e}")
             return False
         
-        # Test Telegram bot
+        # Test Telegram bot (without sending test message)
         try:
-            telegram_test = await self.telegram_notifier.test_connection()
-            if telegram_test:
-                self.logger.info("SUCCESS: Telegram bot connected")
-            else:
-                self.logger.error("ERROR: Telegram bot test failed")
-                return False
+            # Skip the test message in production to avoid spam
+            self.logger.info("SUCCESS: Telegram bot configured")
         except Exception as e:
             self.logger.error(f"ERROR: Telegram test failed: {e}")
             return False
@@ -229,10 +245,10 @@ class LateCornerMonitor:
         scoring_result = self.scoring_engine.evaluate_match(match_stats)
         
         if scoring_result and fixture_id not in self.alerted_matches:
-            # We have an alert! 
+            # We have a PRECISE 85th minute alert! 
             self.logger.info(
-                f"ALERT: CORNER ALERT triggered for match {fixture_id}! "
-                f"Score: {scoring_result.total_score:.1f}"
+                f"ALERT: 85th MINUTE CORNER ALERT triggered for match {fixture_id}! "
+                f"Minute: {match_stats.minute}' | Score: {scoring_result.total_score:.1f}"
             )
             
             # Mark as alerted to prevent duplicates

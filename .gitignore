@@ -81,4 +81,7 @@ htmlcov/
 production.env
 
 # Railway
-.railway/ 
+.railway/
+
+# Startup tracking
+latecorners_started.txt 
