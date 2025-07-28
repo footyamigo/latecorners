@@ -825,6 +825,28 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/system-status')
+def system_status():
+    """Debug endpoint to check if alert system thread is running"""
+    import threading
+    
+    # Get all running threads
+    threads = threading.enumerate()
+    thread_names = [t.name for t in threads]
+    
+    # Check if alert system might be running
+    alert_system_running = any('alert' in name.lower() or 'main' in name.lower() for name in thread_names)
+    
+    return jsonify({
+        'dashboard_status': 'running',
+        'total_threads': len(threads),
+        'thread_names': thread_names,
+        'alert_system_detected': alert_system_running,
+        'timestamp': datetime.now().isoformat(),
+        'live_matches_count': len(live_matches_data),
+        'service': 'Late Corner Monitor - System Status Debug'
+    })
+
 @app.route('/api/corner-odds/<match_id>')
 def get_corner_odds(match_id):
     """Get LIVE UPDATED Asian Total Corner odds (Market 61) from bet365 (Bookmaker 2)"""
