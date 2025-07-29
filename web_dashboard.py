@@ -630,7 +630,7 @@ def update_live_data():
             import traceback
             print(f"🔍 Full error: {traceback.format_exc()}")
         
-        time.sleep(8)  # Update every 8 seconds (450 calls/hour - still only 15% of quota)
+        time.sleep(45)  # Update every 45 seconds (reduced from 8 to avoid rate limits)
 
 # Corner count sweet spot analysis (research-optimized)
 CORNER_COUNT_SCORING = {

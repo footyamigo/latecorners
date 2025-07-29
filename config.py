@@ -25,9 +25,9 @@ class Config:
     CORNER_SWEET_SPOT_MAX: int = 11
     
     # Monitoring Configuration
-    LIVE_POLL_INTERVAL: int = 15  # Poll every 15 seconds for precise timing
+    LIVE_POLL_INTERVAL: int = 30  # Poll every 30 seconds (reduced from 15 to avoid rate limits)
     MATCH_DISCOVERY_INTERVAL: int = 300  # Check for new matches every 5 minutes
-    MIN_MINUTE_TO_START_MONITORING: int = 5   # LOWERED for 11-minute test alerts
+    MIN_MINUTE_TO_START_MONITORING: int = 60   # Start monitoring from 60th minute
     
     # Precise 85th Minute Alert Configuration
     TARGET_ALERT_MINUTE: int = 85  # Exact minute for alerts
@@ -35,7 +35,8 @@ class Config:
     ALERT_WINDOW_END: int = 85   # Stop checking at 85:15
     
     # Rate Limiting
-    API_RATE_LIMIT_DELAY: float = 0.5  # Delay between API calls (seconds)
+    API_RATE_LIMIT_DELAY: float = 1.0  # Increased delay between API calls (seconds)
+    MAX_REQUESTS_PER_MINUTE: int = 100  # Conservative limit
     
     # Logging
     LOG_LEVEL: str = 'INFO'

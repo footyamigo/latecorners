@@ -5,6 +5,44 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from config import get_config
 
+# Rate limiting tracker
+class RateLimitTracker:
+    def __init__(self):
+        self.request_times = []
+        self.last_429_time = 0
+        self.backoff_until = 0
+        
+    def can_make_request(self) -> bool:
+        """Check if we can make a request without hitting rate limits"""
+        now = time.time()
+        
+        # If we're in backoff period, wait
+        if now < self.backoff_until:
+            return False
+            
+        # Clean old request times (older than 1 minute)
+        self.request_times = [t for t in self.request_times if now - t < 60]
+        
+        # Check if we're under the limit
+        config = get_config()
+        max_per_minute = getattr(config, 'MAX_REQUESTS_PER_MINUTE', 100)
+        return len(self.request_times) < max_per_minute
+    
+    def record_request(self):
+        """Record a successful request"""
+        self.request_times.append(time.time())
+    
+    def record_429_error(self):
+        """Record a 429 error and set backoff time"""
+        now = time.time()
+        self.last_429_time = now
+        # Exponential backoff: start with 60 seconds, double each time
+        backoff_duration = min(300, 60 * (2 ** len([t for t in self.request_times if now - t < 300])))
+        self.backoff_until = now + backoff_duration
+        logging.warning(f"⚠️ Rate limit hit! Backing off for {backoff_duration} seconds")
+
+rate_limiter = RateLimitTracker()
+
 @dataclass
 class MatchStats:
     """Container for match statistics"""
@@ -70,6 +108,11 @@ class SportmonksClient:
         
     def _make_request(self, endpoint: str, params: Dict = None) -> Optional[Dict]:
         """Make a request to the Sportmonks API with rate limiting"""
+        # Check rate limiting before making request
+        if not rate_limiter.can_make_request():
+            self.logger.warning("⚠️ Rate limit check failed, skipping request")
+            return None
+        
         url = f"{self.base_url}{endpoint}"
         
         if params is None:
@@ -78,11 +121,19 @@ class SportmonksClient:
         params['api_token'] = self.api_key
         
         try:
-            # Rate limiting
+            # Rate limiting delay
             time.sleep(self.config.API_RATE_LIMIT_DELAY)
             
             response = self.session.get(url, params=params)
+            
+            # Handle 429 specifically
+            if response.status_code == 429:
+                rate_limiter.record_429_error()
+                self.logger.error(f"❌ Rate limit exceeded (429) for {endpoint}. Backing off...")
+                return None
+            
             response.raise_for_status()
+            rate_limiter.record_request()
             
             data = response.json()
             
@@ -93,6 +144,8 @@ class SportmonksClient:
             return data
             
         except requests.exceptions.RequestException as e:
+            if "429" in str(e):
+                rate_limiter.record_429_error()
             self.logger.error(f"API request failed for {endpoint}: {e}")
             return None
         except ValueError as e:
