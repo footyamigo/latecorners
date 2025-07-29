@@ -72,10 +72,12 @@ class TelegramNotifier:
         message += f"<b>🎯 ALERT SCORE: {scoring_result.total_score:.1f}</b>\n"
         message += f"(Threshold: {self.config.ALERT_THRESHOLD})\n\n"
         
-        # Focus team
-        focus_team = home_team if scoring_result.team_focus == 'home' else away_team
-        message += f"<b>📈 Focus Team: {focus_team}</b>\n"
-        message += f"(Most likely to generate corners)\n\n"
+        # Live match statistics
+        message += f"<b>📊 Live Stats:</b>\n"
+        message += f"🚩 Corners: {match_info.get('home_corners', 0)} - {match_info.get('away_corners', 0)}\n"
+        message += f"⚽ Total Shots: {match_info.get('home_shots', 0)} - {match_info.get('away_shots', 0)}\n"
+        message += f"🎯 Shots on Target: {match_info.get('home_shots_on_target', 0)} - {match_info.get('away_shots_on_target', 0)}\n"
+        message += f"⚡ Total Attacks: {match_info.get('home_attacks', 0)} - {match_info.get('away_attacks', 0)}\n\n"
         
         # Key conditions (top 5)
         message += f"<b>🔥 Key Conditions:</b>\n"
@@ -95,15 +97,24 @@ class TelegramNotifier:
         message += f"• Win if 2+ corners\n"
         message += f"• Optimal entry: NOW (85th minute sweet spot)\n\n"
         
-        # Live odds (if available)
+        # Live odds (if available) - Only Bet365
         if corner_odds:
             message += f"<b>📊 Live Corner Odds:</b>\n"
             
-            # Show best available odds
-            for odds_key, odds_data in list(corner_odds.items())[:3]:  # Show top 3
-                bookmaker = odds_key.split('_')[0]
-                selection = odds_data['selection']
-                odds = odds_data['odds']
+            # Filter for Bet365 odds only
+            bet365_odds = {k: v for k, v in corner_odds.items() if 'bet365' in k.lower()}
+            
+            if bet365_odds:
+                for odds_key, odds_data in bet365_odds.items():
+                    selection = odds_data['selection']
+                    odds = odds_data['odds']
+                    message += f"• Bet365: {selection} @ {odds}\n"
+            else:
+                # Fallback to first available if no Bet365
+                first_odds = list(corner_odds.items())[0]
+                bookmaker = first_odds[0].split('_')[0]
+                selection = first_odds[1]['selection']
+                odds = first_odds[1]['odds']
                 message += f"• {bookmaker}: {selection} @ {odds}\n"
             
             message += "\n"

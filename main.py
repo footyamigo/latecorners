@@ -244,19 +244,6 @@ class LateCornerMonitor:
             self.alerted_matches.add(fixture_id)
             match_info = self._extract_match_info(match_stats)
             await self.telegram_notifier.send_corner_alert(scoring_result, match_info, corner_odds)
-        elif (not scoring_result and match_stats.minute == 10):
-            if not hasattr(self, 'test_alerted_matches'):
-                self.test_alerted_matches = set()
-            self.logger.info(f"🧪 DEBUG: test_alerted_matches = {self.test_alerted_matches}")
-            if fixture_id not in self.test_alerted_matches:
-                self.logger.info(f"🧪 TEST ALERT CONDITION MET for match {fixture_id} at minute {match_stats.minute}")
-                self.test_alerted_matches.add(fixture_id)
-                match_info = self._extract_match_info(match_stats)
-                try:
-                    await self.telegram_notifier.send_test_alert(match_info)
-                    self.logger.info(f"🧪 TEST ALERT SENT for match {fixture_id} at minute {match_stats.minute}")
-                except Exception as e:
-                    self.logger.error(f"🧪 ERROR sending test alert for match {fixture_id}: {e}")
         elif scoring_result:
             self.logger.info(f"🧪 DEBUG: Match {fixture_id} meets alert conditions but already alerted.")
         else:
@@ -271,19 +258,19 @@ class LateCornerMonitor:
             'league': 'Live Match',  # Would be actual league name
             'home_score': match_stats.home_score,
             'away_score': match_stats.away_score,
-            'minute': match_stats.minute
+            'minute': match_stats.minute,
+            
+            # Live statistics for Telegram message
+            'home_corners': match_stats.total_corners // 2 if hasattr(match_stats, 'total_corners') else 0,  # Rough split
+            'away_corners': match_stats.total_corners // 2 if hasattr(match_stats, 'total_corners') else 0,  # Rough split
+            'home_shots': match_stats.shots_total.get('home', 0) if hasattr(match_stats, 'shots_total') else 0,
+            'away_shots': match_stats.shots_total.get('away', 0) if hasattr(match_stats, 'shots_total') else 0,
+            'home_shots_on_target': match_stats.shots_on_target.get('home', 0) if hasattr(match_stats, 'shots_on_target') else 0,
+            'away_shots_on_target': match_stats.shots_on_target.get('away', 0) if hasattr(match_stats, 'shots_on_target') else 0,
+            'home_attacks': match_stats.dangerous_attacks.get('home', 0) if hasattr(match_stats, 'dangerous_attacks') else 0,
+            'away_attacks': match_stats.dangerous_attacks.get('away', 0) if hasattr(match_stats, 'dangerous_attacks') else 0,
         }
-        # Add current statistics if available
-        if hasattr(match_stats, 'home_corners') and hasattr(match_stats, 'away_corners'):
-            match_info['corners'] = {
-                'home': match_stats.home_corners,
-                'away': match_stats.away_corners
-            }
-        if hasattr(match_stats, 'home_shots') and hasattr(match_stats, 'away_shots'):
-            match_info['shots'] = {
-                'home': match_stats.home_shots,
-                'away': match_stats.away_shots
-            }
+        
         self.logger.info(f"🧪 DEBUG: Extracted match_info: {match_info}")
         return match_info
     
