@@ -194,8 +194,9 @@ class LateCornerMonitor:
                 self.logger.error(f"🚨 ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
-        """Monitor a single match for corner opportunities (FORCE TEST ALERT)"""
+        """Monitor a single match for corner opportunities (FORCE TEST ALERT + DEBUG LOGS)"""
         match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
+        self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
         if not match_stats:
             self.logger.warning(f"WARNING: No stats available for match {fixture_id}")
             return
@@ -211,7 +212,12 @@ class LateCornerMonitor:
             )
             self.test_alerted_matches.add(fixture_id)
             match_info = self._extract_match_info(match_stats)
-            await self.telegram_notifier.send_test_alert(match_info)
+            self.logger.info(f"🧪 DEBUG: About to send test alert for match {fixture_id}")
+            try:
+                await self.telegram_notifier.send_test_alert(match_info)
+                self.logger.info(f"🧪 DEBUG: Sent test alert for match {fixture_id}")
+            except Exception as e:
+                self.logger.error(f"🧪 ERROR: Failed to send test alert for match {fixture_id}: {e}")
         # (Keep the rest of the real alert logic unchanged below this)
         
         # Run scoring engine
