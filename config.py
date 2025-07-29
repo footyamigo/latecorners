@@ -16,9 +16,14 @@ class Config:
     TELEGRAM_BOT_TOKEN: str = os.getenv('TELEGRAM_BOT_TOKEN', '')
     TELEGRAM_CHAT_ID: str = os.getenv('TELEGRAM_CHAT_ID', '')
     
-    # Scoring System Configuration
-    ALERT_THRESHOLD: int = 6  # Minimum score to trigger alert
+    # Scoring System Configuration - ELITE MODE
+    ALERT_THRESHOLD: int = 10  # Minimum score to trigger ELITE alert (updated from 6)
+    MIN_HIGH_PRIORITY_INDICATORS: int = 2  # Minimum high-priority indicators for ELITE alert
     MIN_MINUTE_FOR_ALERT: int = 85  # Don't alert before 85th minute
+    
+    # Scoring System Configuration - RELAXED MODE  
+    RELAXED_ALERT_THRESHOLD: int = 6  # Lower threshold for relaxed alerts
+    RELAXED_MIN_HIGH_PRIORITY_INDICATORS: int = 1  # Only need 1 high-priority indicator
     
     # Corner Count Sweet Spot (at 85th minute)
     CORNER_SWEET_SPOT_MIN: int = 8
