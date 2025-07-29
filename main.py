@@ -194,30 +194,23 @@ class LateCornerMonitor:
                 self.logger.error(f"🚨 ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
-        """Monitor a single match for corner opportunities (FORCE TEST ALERT + DEBUG LOGS)"""
+        """Monitor a single match for corner opportunities (ALWAYS SEND TEST ALERT)"""
         match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
         self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
         if not match_stats:
             self.logger.warning(f"WARNING: No stats available for match {fixture_id}")
             return
-        # Force test alert for every match
-        if (
-            fixture_id not in self.alerted_matches and
-            fixture_id not in getattr(self, 'test_alerted_matches', set())
-        ):
-            if not hasattr(self, 'test_alerted_matches'):
-                self.test_alerted_matches = set()
-            self.logger.info(
-                f"🧪 FORCED TEST ALERT: Sending test alert for match {fixture_id} (minute {match_stats.minute}, state: {getattr(match_stats, 'state', 'N/A')})"
-            )
-            self.test_alerted_matches.add(fixture_id)
-            match_info = self._extract_match_info(match_stats)
-            self.logger.info(f"🧪 DEBUG: About to send test alert for match {fixture_id}")
-            try:
-                await self.telegram_notifier.send_test_alert(match_info)
-                self.logger.info(f"🧪 DEBUG: Sent test alert for match {fixture_id}")
-            except Exception as e:
-                self.logger.error(f"🧪 ERROR: Failed to send test alert for match {fixture_id}: {e}")
+        # Always send test alert for every match, every cycle
+        self.logger.info(
+            f"🧪 FORCED TEST ALERT: Sending test alert for match {fixture_id} (minute {match_stats.minute}, state: {getattr(match_stats, 'state', 'N/A')})"
+        )
+        match_info = self._extract_match_info(match_stats)
+        self.logger.info(f"🧪 DEBUG: About to send test alert for match {fixture_id}")
+        try:
+            await self.telegram_notifier.send_test_alert(match_info)
+            self.logger.info(f"🧪 DEBUG: Sent test alert for match {fixture_id}")
+        except Exception as e:
+            self.logger.error(f"🧪 ERROR: Failed to send test alert for match {fixture_id}: {e}")
         # (Keep the rest of the real alert logic unchanged below this)
         
         # Run scoring engine
