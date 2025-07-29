@@ -156,77 +156,26 @@ class LateCornerMonitor:
         return True
     
     async def _discover_new_matches(self):
-        """Discover new live matches to monitor"""
-        
-        self.logger.info("🚨 DISCOVERING new live matches...")
-        
+        """Discover new live matches to monitor (NO FILTERING - DEBUG MODE)"""
+        self.logger.info("🚨 DISCOVERING new live matches (NO FILTERING)...")
         try:
-            # Get ALL live matches first
             all_live_matches = self.sportmonks_client.get_live_matches(filter_by_minute=False)
-            
             self.logger.info(f"🚨 DISCOVERY: Found {len(all_live_matches)} total live matches from API")
-            
             new_matches_count = 0
-            
             for match in all_live_matches:
                 fixture_id = match['id']
                 minute = match.get('minute', 0)
                 state = match.get('state', {}).get('developer_name', '')
                 state_full = match.get('state', {}).get('name', 'Unknown')
-                
-                # Log every match we're evaluating
-                self.logger.info(f"🚨 EVALUATING: Match {fixture_id} - minute:{minute}, state:'{state}'/'{state_full}', min_required:{self.config.MIN_MINUTE_TO_START_MONITORING}")
-                
-                # Apply filtering in the main application logic  
-                # Only start monitoring matches past 70 minutes (any live state)
-                if (fixture_id not in self.monitored_matches and 
-                    minute >= self.config.MIN_MINUTE_TO_START_MONITORING and
-                    state in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']):  # OFFICIAL SportMonks developer_name states
-                    
+                self.logger.info(f"🚨 FORCED MONITOR: Adding match {fixture_id} (minute:{minute}, state:'{state}'/'{state_full}') to monitored_matches")
+                if fixture_id not in self.monitored_matches:
                     self.monitored_matches.add(fixture_id)
                     new_matches_count += 1
-                    
-                    # Get and cache the pre-match favorite
-                    favorite_team_id = self.sportmonks_client.get_pre_match_favorite(fixture_id)
-                    if favorite_team_id:
-                        self.scoring_engine.set_favorite(fixture_id, favorite_team_id)
-                    
-                    self.logger.info(f"🚨 ✅ NEW MATCH: Now monitoring {fixture_id} (minute {minute}, state: {state})")
-                else:
-                    # Log why matches are being skipped with more detail
-                    reasons = []
-                    if fixture_id in self.monitored_matches:
-                        reasons.append("already monitored")
-                    if minute < self.config.MIN_MINUTE_TO_START_MONITORING:
-                        reasons.append(f"minute {minute} < {self.config.MIN_MINUTE_TO_START_MONITORING}")
-                    if state not in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']:
-                        reasons.append(f"state '{state}' not in allowed list")
-                    
-                    self.logger.info(f"🚨 ❌ SKIPPED: Match {fixture_id} - {', '.join(reasons)}")
-            
             if new_matches_count > 0:
-                self.logger.info(f"SUCCESS: Added {new_matches_count} new matches to monitoring")
-                
-                # Send update to Telegram
-                await self.telegram_notifier.send_system_message(
-                    f"SUCCESS: Now monitoring {len(self.monitored_matches)} matches\n"
-                    f"Added {new_matches_count} new matches"
-                )
-            else:
-                # Log how many total live matches we found vs. qualifying ones
-                qualifying_count = sum(1 for match in all_live_matches 
-                                     if (match.get('minute', 0) >= self.config.MIN_MINUTE_TO_START_MONITORING and
-                                         match.get('state', {}).get('developer_name', '') == 'INPLAY_2ND_HALF'))
-                
-                self.logger.debug(
-                    f"Found {len(all_live_matches)} total live matches, "
-                    f"{qualifying_count} qualify for monitoring, "
-                    f"but all are already being tracked"
-                )
-            
+                self.logger.info(f"🚨 FORCED: Added {new_matches_count} new matches to monitoring (NO FILTERING)")
         except Exception as e:
             self.logger.error(f"ERROR: Error discovering new matches: {e}")
-    
+
     async def _monitor_tracked_matches(self):
         """Monitor all currently tracked matches"""
         
@@ -245,43 +194,25 @@ class LateCornerMonitor:
                 self.logger.error(f"🚨 ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
-        """Monitor a single match for corner opportunities"""
-        
-        # Get current match stats
+        """Monitor a single match for corner opportunities (FORCE TEST ALERT)"""
         match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
-        
         if not match_stats:
             self.logger.warning(f"WARNING: No stats available for match {fixture_id}")
             return
-        
-        # Check if match is finished
-        if match_stats.minute >= 100:  # Match ended
-            self.monitored_matches.discard(fixture_id)
-            self.logger.info(f"FINISHED: Match {fixture_id} finished, removing from monitoring")
-            return
-        
-        # TEST ALERT: Send test notification at 11+ minutes (for QUICK testing)
-        if (match_stats.minute >= 11 and  # Set to 11 minutes for testing
-            fixture_id not in self.alerted_matches and 
-            fixture_id not in getattr(self, 'test_alerted_matches', set())):
-            
-            # Initialize test alert tracking if not exists
+        # Force test alert for every match
+        if (
+            fixture_id not in self.alerted_matches and
+            fixture_id not in getattr(self, 'test_alerted_matches', set())
+        ):
             if not hasattr(self, 'test_alerted_matches'):
                 self.test_alerted_matches = set()
-            
             self.logger.info(
-                f"🧪 TEST ALERT: {match_stats.minute}th minute reached for match {fixture_id}! "
-                f"Sending test alert (NOT corner bet alert)"
+                f"🧪 FORCED TEST ALERT: Sending test alert for match {fixture_id} (minute {match_stats.minute}, state: {getattr(match_stats, 'state', 'N/A')})"
             )
-            
-            # Mark as test alerted to prevent duplicates
             self.test_alerted_matches.add(fixture_id)
-            
-            # Create match info for the test alert
             match_info = self._extract_match_info(match_stats)
-            
-            # Send test alert
             await self.telegram_notifier.send_test_alert(match_info)
+        # (Keep the rest of the real alert logic unchanged below this)
         
         # Run scoring engine
         scoring_result = self.scoring_engine.evaluate_match(match_stats)
