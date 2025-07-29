@@ -78,10 +78,10 @@ class LateCornerMonitor:
             self.logger.error("ERROR: Connection tests failed. Exiting.")
             return
         
-        # Send startup message only on first deployment, not on restarts
+                # Send startup message only on first deployment, not on restarts
         if is_first_startup():
             try:
-        await self.telegram_notifier.send_startup_message()
+                await self.telegram_notifier.send_startup_message()
                 self.logger.info("SUCCESS: Startup message sent (first deployment)")
             except Exception as e:
                 self.logger.warning(f"WARNING: Could not send startup message: {e}")
@@ -99,21 +99,21 @@ class LateCornerMonitor:
                 # Discover new matches every 5 minutes
                 if match_discovery_counter % (self.config.MATCH_DISCOVERY_INTERVAL // self.config.LIVE_POLL_INTERVAL) == 0:
                     try:
-                    await self._discover_new_matches()
+                        await self._discover_new_matches()
                     except Exception as e:
                         self.logger.error(f"ERROR: Failed to discover matches: {e}")
                         # Continue to monitoring existing matches
                 
                 # Monitor existing matches
                 try:
-                await self._monitor_tracked_matches()
+                    await self._monitor_tracked_matches()
                 except Exception as e:
                     self.logger.error(f"ERROR: Failed to monitor matches: {e}")
                     # Continue to cleanup
                 
                 # Cleanup finished matches
                 try:
-                self._cleanup_finished_matches()
+                    self._cleanup_finished_matches()
                 except Exception as e:
                     self.logger.error(f"ERROR: Failed to cleanup: {e}")
                     # Continue anyway
