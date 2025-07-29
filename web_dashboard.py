@@ -66,17 +66,45 @@ rate_limit_info = {
 def monitor_rate_limits(response, entity_name):
     """Monitor and track rate limit information from API responses"""
     try:
-        # Check if response has rate limit headers or data
-        if hasattr(response, 'json'):
-            data = response.json()
-            if 'rate_limit' in data:
-                rate_limit_data = data['rate_limit']
+        # SportMonks includes rate limit info in response headers
+        if hasattr(response, 'headers'):
+            headers = response.headers
+            
+            # Check for rate limit headers (common patterns)
+            remaining = None
+            reset_time = None
+            
+            # Try different header patterns SportMonks might use
+            for header_name in ['X-RateLimit-Remaining', 'X-Rate-Limit-Remaining', 'RateLimit-Remaining']:
+                if header_name in headers:
+                    remaining = int(headers[header_name])
+                    break
+            
+            for header_name in ['X-RateLimit-Reset', 'X-Rate-Limit-Reset', 'RateLimit-Reset']:
+                if header_name in headers:
+                    reset_time = int(headers[header_name])
+                    break
+            
+            # Also check JSON response for rate limit data
+            if hasattr(response, 'json'):
+                try:
+                    data = response.json()
+                    if 'rate_limit' in data:
+                        rate_limit_data = data['rate_limit']
+                        remaining = rate_limit_data.get('remaining', remaining)
+                        reset_time = rate_limit_data.get('resets_in_seconds', reset_time)
+                except:
+                    pass
+            
+            # Update our tracking if we got valid data
+            if remaining is not None:
                 rate_limit_info[entity_name] = {
-                    'remaining': rate_limit_data.get('remaining', 3000),
-                    'resets_in_seconds': rate_limit_data.get('resets_in_seconds', 3600),
-                    'requested_entity': rate_limit_data.get('requested_entity', entity_name)
+                    'remaining': remaining,
+                    'resets_in_seconds': reset_time or 3600,
+                    'last_updated': time.time()
                 }
-                print(f"📊 Rate limit for {entity_name}: {rate_limit_info[entity_name]['remaining']}/3000 remaining")
+                print(f"📊 Rate limit for {entity_name}: {remaining}/3000 remaining")
+                
     except Exception as e:
         print(f"⚠️ Could not parse rate limit info: {e}")
 
@@ -85,10 +113,16 @@ def can_make_request(entity_name, required_calls=1):
     entity_info = rate_limit_info.get(entity_name, {'remaining': 3000})
     remaining = entity_info['remaining']
     
-    # Conservative check: ensure we have at least 10% buffer
-    safe_threshold = max(300, required_calls * 2)  # 10% of 3000 or double required calls
+    # Much less aggressive: only block if we're truly low (less than 50 calls)
+    # This allows normal operation while still preventing complete exhaustion
+    safe_threshold = 50
     
-    return remaining > safe_threshold
+    can_proceed = remaining > safe_threshold
+    
+    if not can_proceed:
+        print(f"🚨 Rate limit protection: Only {remaining} calls remaining for {entity_name}, threshold is {safe_threshold}")
+    
+    return can_proceed
 
 def trigger_85_minute_alert(match):
     """Trigger alert for 85-minute corner betting opportunity"""
@@ -306,9 +340,11 @@ def get_live_matches():
             has_ticking = any(period.get('ticking', False) for period in periods)
             
             if has_ticking:
-                match_data = extract_match_data(match)
-                if match_data and is_valid_live_match(match_data):
-                    live_matches.append(match_data)
+                # First validate the raw match has basic requirements
+                if is_valid_live_match(match):
+                    match_data = extract_match_data(match)
+                    if match_data:
+                        live_matches.append(match_data)
         
         print(f"✅ Filtered live matches: {len(live_matches)}")
         return live_matches
@@ -317,20 +353,33 @@ def get_live_matches():
         print(f"❌ Error getting live matches: {e}")
         return []
 
-def is_valid_live_match(match_data):
-    """Check if a match is valid for display (has stats and reasonable time)"""
+def is_valid_live_match(raw_match):
+    """Check if a raw match from API is valid for display"""
     
     # Must have live statistics available
-    if not match_data.get('statistics') or match_data['statistics'].get('total_stats_available', 0) == 0:
+    raw_statistics = raw_match.get('statistics', [])
+    if not raw_statistics or len(raw_statistics) == 0:
         return False
     
-    # Filter out matches with unrealistic minutes (likely ended or data error)
-    minute = match_data.get('minute', 0)
+    # Must have participants (teams)
+    participants = raw_match.get('participants', [])
+    if len(participants) < 2:
+        return False
+    
+    # Must have periods data
+    periods = raw_match.get('periods', [])
+    if not periods:
+        return False
+    
+    # Get the current minute from periods
+    minute = 0
+    for period in periods:
+        if period.get('ticking', False):
+            minute = period.get('minutes', 0)
+            break
+    
+    # Filter out matches with unrealistic minutes (likely ended or data error)  
     if minute > 120:  # Even with extra time, 120+ minutes is suspicious
-        return False
-    
-    # Must have basic match data
-    if not match_data.get('home_team') or not match_data.get('away_team'):
         return False
     
     return True
