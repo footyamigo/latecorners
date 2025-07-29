@@ -171,11 +171,11 @@ class LateCornerMonitor:
                 minute = match.get('minute', 0)
                 state = match.get('state', {}).get('short_name', '')
                 
-                # Apply filtering in the main application logic
+                # Apply filtering in the main application logic  
                 # Only start monitoring matches past 70 minutes (any live state)
                 if (fixture_id not in self.monitored_matches and 
                     minute >= self.config.MIN_MINUTE_TO_START_MONITORING and
-                    state in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']):  # Any live state
+                    state in ['1H', '1st', '2H', '2nd', 'HT']):  # FIXED: Actual SportMonks state names
                     
                     self.monitored_matches.add(fixture_id)
                     new_matches_count += 1
@@ -192,7 +192,7 @@ class LateCornerMonitor:
                         self.logger.debug(f"🚨 SKIP: Match {fixture_id} already monitored")
                     elif minute < self.config.MIN_MINUTE_TO_START_MONITORING:
                         self.logger.debug(f"🚨 SKIP: Match {fixture_id} too early (minute {minute})")
-                    elif state not in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']:
+                    elif state not in ['1H', '1st', '2H', '2nd', 'HT']:
                         self.logger.debug(f"🚨 SKIP: Match {fixture_id} wrong state ({state})")
             
             if new_matches_count > 0:
@@ -251,8 +251,8 @@ class LateCornerMonitor:
             self.logger.info(f"FINISHED: Match {fixture_id} finished, removing from monitoring")
             return
         
-        # TEST ALERT: Send test notification at 85 minutes (for Telegram bot testing)
-        if (match_stats.minute >= 80 and  # TEMPORARILY LOWERED FROM 85 TO 80
+        # TEST ALERT: Send test notification at 2+ minutes (for QUICK testing)
+        if (match_stats.minute >= 2 and   # VERY LOW for immediate testing
             fixture_id not in self.alerted_matches and 
             fixture_id not in getattr(self, 'test_alerted_matches', set())):
             
