@@ -264,6 +264,32 @@ class LateCornerMonitor:
                     self.logger.info(f"🏁 REMOVED finished match {fixture_id} from monitoring")
                 return None
             
+            # TEST ALERT: Simple 85th minute + 6 corners test (bypass scoring system)
+            if match_stats.minute == 85 and match_stats.total_corners >= 6:
+                if fixture_id not in self.alerted_matches:
+                    self.logger.info(f"🧪 TEST ALERT TRIGGERED: Match {fixture_id} at 85' with {match_stats.total_corners} corners")
+                    
+                    # Send simple test alert
+                    test_message = (
+                        f"🧪 <b>TEST ALERT - NOT MAIN SYSTEM</b> 🧪\n\n"
+                        f"⚽ <b>{match_stats.home_team} vs {match_stats.away_team}</b>\n"
+                        f"📊 Score: {match_stats.home_score}-{match_stats.away_score} (85')\n"
+                        f"🚩 Corners: {match_stats.total_corners} total\n\n"
+                        f"📱 <b>This is just a system test!</b>\n"
+                        f"✅ Telegram alerts are working\n"
+                        f"✅ 85th minute detection working\n"
+                        f"✅ Corner counting working\n\n"
+                        f"💡 <i>Real alerts use elite scoring system</i>"
+                    )
+                    
+                    success = await self.telegram_bot.send_alert(test_message)
+                    if success:
+                        self.alerted_matches.add(fixture_id)
+                        self.logger.info(f"🧪 TEST ALERT SENT successfully for match {fixture_id}")
+                        return None  # Don't continue to main scoring
+                    else:
+                        self.logger.error(f"❌ TEST ALERT FAILED for match {fixture_id}")
+            
             # Check if this match meets our alert criteria
             scoring_result = self.scoring_engine.evaluate_match(match_stats)
             
