@@ -245,37 +245,28 @@ class LateCornerMonitor:
             )
     
     def _extract_match_info(self, match_stats) -> Dict:
-        """Extract match information for alert formatting"""
-        
-        # Extract match info including current statistics
+        """Extract match information for alert formatting (FIXED: use team names)"""
+        self.logger.info(f"🧪 DEBUG: Extracting match info for alert (fixture_id={match_stats.fixture_id})")
         match_info = {
-            'home_team': f'Team {match_stats.home_team_id}',  # Would be actual team name
-            'away_team': f'Team {match_stats.away_team_id}',  # Would be actual team name
+            'home_team': getattr(match_stats, 'home_team', 'Unknown'),  # Use name, not ID
+            'away_team': getattr(match_stats, 'away_team', 'Unknown'),  # Use name, not ID
             'league': 'Live Match',  # Would be actual league name
             'home_score': match_stats.home_score,
             'away_score': match_stats.away_score,
             'minute': match_stats.minute
         }
-        
         # Add current statistics if available
         if hasattr(match_stats, 'home_corners') and hasattr(match_stats, 'away_corners'):
             match_info['corners'] = {
                 'home': match_stats.home_corners,
                 'away': match_stats.away_corners
             }
-        
         if hasattr(match_stats, 'home_shots') and hasattr(match_stats, 'away_shots'):
             match_info['shots'] = {
                 'home': match_stats.home_shots,
                 'away': match_stats.away_shots
             }
-        
-        if hasattr(match_stats, 'home_dangerous_attacks') and hasattr(match_stats, 'away_dangerous_attacks'):
-            match_info['attacks'] = {
-                'home': match_stats.home_dangerous_attacks,
-                'away': match_stats.away_dangerous_attacks
-            }
-        
+        self.logger.info(f"🧪 DEBUG: Extracted match_info: {match_info}")
         return match_info
     
     def _cleanup_finished_matches(self):
