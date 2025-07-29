@@ -244,7 +244,7 @@ class LateCornerMonitor:
             self.alerted_matches.add(fixture_id)
             match_info = self._extract_match_info(match_stats)
             await self.telegram_notifier.send_corner_alert(scoring_result, match_info, corner_odds)
-        elif (not scoring_result and match_stats.minute == 85):
+        elif (not scoring_result and match_stats.minute == 10):
             if not hasattr(self, 'test_alerted_matches'):
                 self.test_alerted_matches = set()
             self.logger.info(f"🧪 DEBUG: test_alerted_matches = {self.test_alerted_matches}")
