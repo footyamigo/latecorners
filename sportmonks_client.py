@@ -499,6 +499,70 @@ class SportmonksClient:
         
         return second_half_stats
 
+    def _parse_live_match_data(self, match_data: Dict) -> Optional[MatchStats]:
+        """Parse live match data from livescores/inplay endpoint into MatchStats format"""
+        try:
+            fixture_id = match_data['id']
+            minute = self._extract_minute(match_data)
+            state = self._extract_state(match_data)
+            home_team, away_team = self._extract_teams(match_data)
+            home_score, away_score = self._extract_score(match_data)
+            
+            # Parse statistics from live feed
+            stats = match_data.get('statistics', [])
+            events = match_data.get('events', [])
+            
+            # Initialize counters
+            total_corners = 0
+            
+            # Extract corner statistics
+            for stat in stats:
+                stat_type = stat.get('type', {}).get('name', '')
+                value = stat.get('value', 0)
+                
+                if stat_type == 'Corner Kicks':
+                    total_corners += value
+            
+            return MatchStats(
+                fixture_id=fixture_id,
+                minute=minute,
+                home_team=home_team,
+                away_team=away_team,
+                home_score=home_score,
+                away_score=away_score,
+                total_corners=total_corners,
+                shots_on_target={'home': 0, 'away': 0},  # Will be filled by scoring engine
+                shots_total={'home': 0, 'away': 0},
+                shots_blocked={'home': 0, 'away': 0},
+                dangerous_attacks={'home': 0, 'away': 0},
+                big_chances_created={'home': 0, 'away': 0},
+                big_chances_missed={'home': 0, 'away': 0},
+                possession={'home': 0, 'away': 0},
+                shots_inside_box={'home': 0, 'away': 0},
+                hit_woodwork={'home': 0, 'away': 0},
+                crosses_total={'home': 0, 'away': 0},
+                key_passes={'home': 0, 'away': 0},
+                counter_attacks={'home': 0, 'away': 0},
+                fouls_drawn={'home': 0, 'away': 0},
+                successful_dribbles={'home': 0, 'away': 0},
+                offsides={'home': 0, 'away': 0},
+                throwins={'home': 0, 'away': 0},
+                pass_accuracy={'home': 0, 'away': 0},
+                
+                # Events
+                substitutions=[],
+                red_cards=[],
+                
+                # Additional fields
+                state=state,
+                events=events,
+                statistics=stats
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing live match data for fixture {match_data.get('id', 'unknown')}: {e}")
+            return None
+
     def get_live_corner_odds(self, fixture_id: int) -> Optional[Dict]:
         """Get live corner betting odds"""
         self.logger.info(f"Getting live corner odds for fixture {fixture_id}")

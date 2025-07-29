@@ -81,7 +81,7 @@ class LateCornerMonitor:
         # Send startup message only on first deployment, not on restarts
         if is_first_startup():
             try:
-                await self.telegram_notifier.send_startup_message()
+        await self.telegram_notifier.send_startup_message()
                 self.logger.info("SUCCESS: Startup message sent (first deployment)")
             except Exception as e:
                 self.logger.warning(f"WARNING: Could not send startup message: {e}")
@@ -99,21 +99,21 @@ class LateCornerMonitor:
                 # Discover new matches every 5 minutes
                 if match_discovery_counter % (self.config.MATCH_DISCOVERY_INTERVAL // self.config.LIVE_POLL_INTERVAL) == 0:
                     try:
-                        await self._discover_new_matches()
+                    await self._discover_new_matches()
                     except Exception as e:
                         self.logger.error(f"ERROR: Failed to discover matches: {e}")
                         # Continue to monitoring existing matches
                 
                 # Monitor existing matches
                 try:
-                    await self._monitor_tracked_matches()
+                await self._monitor_tracked_matches()
                 except Exception as e:
                     self.logger.error(f"ERROR: Failed to monitor matches: {e}")
                     # Continue to cleanup
                 
                 # Cleanup finished matches
                 try:
-                    self._cleanup_finished_matches()
+                self._cleanup_finished_matches()
                 except Exception as e:
                     self.logger.error(f"ERROR: Failed to cleanup: {e}")
                     # Continue anyway
@@ -175,7 +175,7 @@ class LateCornerMonitor:
                 self.logger.info(f"🚨 FORCED: Added {new_matches_count} new matches to monitoring (NO FILTERING)")
         except Exception as e:
             self.logger.error(f"ERROR: Error discovering new matches: {e}")
-
+    
     async def _monitor_tracked_matches(self):
         """Monitor all currently tracked matches"""
         
@@ -194,18 +194,44 @@ class LateCornerMonitor:
                 self.logger.error(f"🚨 ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
-        """Monitor a single match for corner opportunities (REAL + TEST ALERT LOGIC)"""
-        match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
-        self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
-        if not match_stats:
-            self.logger.warning(f"WARNING: No stats available for match {fixture_id}")
+        """Monitor a single match for corner opportunities using the WORKING livescores/inplay endpoint"""
+        
+        # 🎯 FIX: Use the SAME endpoint as dashboard (livescores/inplay) instead of individual fixtures
+        try:
+            # Get ALL live matches from the working endpoint
+            live_matches = self.sportmonks_client.get_live_matches(filter_by_minute=False)
+            
+            # Find our specific match in the live feed
+            match_data = None
+            for match in live_matches:
+                if match['id'] == fixture_id:
+                    match_data = match
+                    break
+            
+            if not match_data:
+                self.logger.warning(f"🧪 WARNING: Match {fixture_id} not found in live feed - may have finished")
+                # Remove from monitoring if not in live feed
+                self.monitored_matches.discard(fixture_id)
+                return
+            
+            # Extract match stats from live feed data (same as dashboard)
+            match_stats = self.sportmonks_client._parse_live_match_data(match_data)
+            if not match_stats:
+                self.logger.warning(f"WARNING: Could not parse stats for match {fixture_id}")
+                return
+                
+            self.logger.info(f"🧪 DEBUG: Live feed stats for match {fixture_id}: minute={match_stats.minute}, state={match_stats.state}")
+            
+        except Exception as e:
+            self.logger.error(f"🧪 ERROR: Failed to get live feed data for match {fixture_id}: {e}")
             return
-        self.logger.info(f"🧪 DEBUG: Checking match {fixture_id} at minute {match_stats.minute} (type: {type(match_stats.minute)})")
+        
         # Check if match is finished
         if match_stats.minute >= 100 or getattr(match_stats, 'state', '') == 'FT':
             self.monitored_matches.discard(fixture_id)
             self.logger.info(f"FINISHED: Match {fixture_id} finished (minute={match_stats.minute}, state={getattr(match_stats, 'state', '')}), removing from monitoring")
             return
+            
         # Only send alert at 85th minute if scoring engine returns a result
         scoring_result = self.scoring_engine.evaluate_match(match_stats)
         if scoring_result and fixture_id not in self.alerted_matches:
