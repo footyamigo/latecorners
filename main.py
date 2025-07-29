@@ -194,7 +194,7 @@ class LateCornerMonitor:
                 self.logger.error(f"🚨 ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
-        """Monitor a single match for corner opportunities (REAL ALERT LOGIC)"""
+        """Monitor a single match for corner opportunities (REAL + TEST ALERT LOGIC)"""
         match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
         self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
         if not match_stats:
@@ -217,6 +217,15 @@ class LateCornerMonitor:
             self.alerted_matches.add(fixture_id)
             match_info = self._extract_match_info(match_stats)
             await self.telegram_notifier.send_corner_alert(scoring_result, match_info, corner_odds)
+        elif (not scoring_result and match_stats.minute == 85):
+            # TEST ALERT: Send a test alert at 85th minute if not already sent
+            if not hasattr(self, 'test_alerted_matches'):
+                self.test_alerted_matches = set()
+            if fixture_id not in self.test_alerted_matches:
+                self.logger.info(f"🧪 TEST ALERT: 85th minute reached for match {fixture_id} (NOT a betting opportunity)")
+                self.test_alerted_matches.add(fixture_id)
+                match_info = self._extract_match_info(match_stats)
+                await self.telegram_notifier.send_test_alert(match_info)
         elif scoring_result:
             self.logger.info(f"🧪 DEBUG: Match {fixture_id} meets alert conditions but already alerted.")
         else:
