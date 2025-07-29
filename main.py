@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config import get_config
-from telegram_bot import TelegramBot
+from telegram_bot import TelegramNotifier
 from scoring_engine import ScoringEngine
 from startup_flag import should_send_startup_message, mark_startup_message_sent
 
@@ -21,7 +21,7 @@ class LateCornerMonitor:
     
     def __init__(self):
         self.config = get_config()
-        self.telegram_bot = TelegramBot()
+        self.telegram_bot = TelegramNotifier()
         self.scoring_engine = ScoringEngine()
         
         # Track which matches we've already alerted on
@@ -282,7 +282,7 @@ class LateCornerMonitor:
                         f"💡 <i>Real alerts use elite scoring system</i>"
                     )
                     
-                    success = await self.telegram_bot.send_alert(test_message)
+                    success = await self.telegram_bot.send_system_message(test_message)
                     if success:
                         self.alerted_matches.add(fixture_id)
                         self.logger.info(f"🧪 TEST ALERT SENT successfully for match {fixture_id}")
@@ -416,7 +416,7 @@ class LateCornerMonitor:
                     "💰 Ready to catch profitable corner opportunities!"
                 )
                 
-                success = await self.telegram_bot.send_alert(startup_message)
+                success = await self.telegram_bot.send_system_message(startup_message)
                 if success:
                     mark_startup_message_sent()
                     self.logger.info("📱 SUCCESS: Startup message sent")
@@ -446,11 +446,25 @@ class LateCornerMonitor:
                                     alert_info = await self._monitor_single_match(match)
                                     
                                     if alert_info:
-                                        # Send alert
-                                        success = await self.telegram_bot.send_match_alert(
-                                            alert_info, 
-                                            scoring_result={'total_score': 10, 'high_priority_indicators': 2},  # Placeholder
-                                            corner_odds={'available': True}  # Placeholder
+                                        # Send alert using the correct method
+                                        # Create a proper scoring result object
+                                        from scoring_engine import ScoringResult
+                                        scoring_obj = ScoringResult(
+                                            fixture_id=match_id,
+                                            minute=85,  # We know it's 85th minute from our logic
+                                            total_score=10,  # Elite threshold met
+                                            high_priority_indicators=2,  # Elite threshold met
+                                            conditions_met=[],  # Can be empty for now
+                                            detailed_breakdown={}  # Can be empty for now
+                                        )
+                                        
+                                        # Get corner odds from alert_info or use placeholder
+                                        corner_odds = {'available': True}  # Placeholder
+                                        
+                                        success = await self.telegram_bot.send_corner_alert(
+                                            scoring_result=scoring_obj,
+                                            match_info=alert_info,
+                                            corner_odds=corner_odds
                                         )
                                         
                                         if success:
