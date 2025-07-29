@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import get_config
 from telegram_bot import TelegramNotifier
 from scoring_engine import ScoringEngine
-from startup_flag import should_send_startup_message, mark_startup_message_sent
+from startup_flag import is_first_startup, mark_startup
 
 class LateCornerMonitor:
     """Monitor live matches for late corner betting opportunities using shared dashboard data"""
@@ -282,13 +282,13 @@ class LateCornerMonitor:
                         f"💡 <i>Real alerts use elite scoring system</i>"
                     )
                     
-                    success = await self.telegram_bot.send_system_message(test_message)
-                    if success:
+                    try:
+                        await self.telegram_bot.send_system_message(test_message)
                         self.alerted_matches.add(fixture_id)
                         self.logger.info(f"🧪 TEST ALERT SENT successfully for match {fixture_id}")
                         return None  # Don't continue to main scoring
-                    else:
-                        self.logger.error(f"❌ TEST ALERT FAILED for match {fixture_id}")
+                    except Exception as e:
+                        self.logger.error(f"❌ TEST ALERT FAILED for match {fixture_id}: {e}")
             
             # Check if this match meets our alert criteria
             scoring_result = self.scoring_engine.evaluate_match(match_stats)
@@ -400,7 +400,7 @@ class LateCornerMonitor:
         
         try:
             # Send startup message if it's the first deployment
-            if should_send_startup_message():
+            if is_first_startup():
                 startup_message = (
                     "🚀 <b>Late Corner Monitor Started!</b>\n\n"
                     "📊 <b>System Status:</b>\n"
@@ -416,12 +416,12 @@ class LateCornerMonitor:
                     "💰 Ready to catch profitable corner opportunities!"
                 )
                 
-                success = await self.telegram_bot.send_system_message(startup_message)
-                if success:
-                    mark_startup_message_sent()
+                try:
+                    await self.telegram_bot.send_system_message(startup_message)
+                    mark_startup()
                     self.logger.info("📱 SUCCESS: Startup message sent")
-                else:
-                    self.logger.error("❌ Failed to send startup message")
+                except Exception as e:
+                    self.logger.error(f"❌ Failed to send startup message: {e}")
             
             self.logger.info("🎯 SUCCESS: All systems ready. Starting match monitoring with shared data...")
             
