@@ -200,10 +200,11 @@ class LateCornerMonitor:
         if not match_stats:
             self.logger.warning(f"WARNING: No stats available for match {fixture_id}")
             return
+        self.logger.info(f"🧪 DEBUG: Checking match {fixture_id} at minute {match_stats.minute} (type: {type(match_stats.minute)})")
         # Check if match is finished
-        if match_stats.minute >= 100:
+        if match_stats.minute >= 100 or getattr(match_stats, 'state', '') == 'FT':
             self.monitored_matches.discard(fixture_id)
-            self.logger.info(f"FINISHED: Match {fixture_id} finished, removing from monitoring")
+            self.logger.info(f"FINISHED: Match {fixture_id} finished (minute={match_stats.minute}, state={getattr(match_stats, 'state', '')}), removing from monitoring")
             return
         # Only send alert at 85th minute if scoring engine returns a result
         scoring_result = self.scoring_engine.evaluate_match(match_stats)
@@ -218,14 +219,18 @@ class LateCornerMonitor:
             match_info = self._extract_match_info(match_stats)
             await self.telegram_notifier.send_corner_alert(scoring_result, match_info, corner_odds)
         elif (not scoring_result and match_stats.minute == 85):
-            # TEST ALERT: Send a test alert at 85th minute if not already sent
             if not hasattr(self, 'test_alerted_matches'):
                 self.test_alerted_matches = set()
+            self.logger.info(f"🧪 DEBUG: test_alerted_matches = {self.test_alerted_matches}")
             if fixture_id not in self.test_alerted_matches:
-                self.logger.info(f"🧪 TEST ALERT: 85th minute reached for match {fixture_id} (NOT a betting opportunity)")
+                self.logger.info(f"🧪 TEST ALERT CONDITION MET for match {fixture_id} at minute {match_stats.minute}")
                 self.test_alerted_matches.add(fixture_id)
                 match_info = self._extract_match_info(match_stats)
-                await self.telegram_notifier.send_test_alert(match_info)
+                try:
+                    await self.telegram_notifier.send_test_alert(match_info)
+                    self.logger.info(f"🧪 TEST ALERT SENT for match {fixture_id} at minute {match_stats.minute}")
+                except Exception as e:
+                    self.logger.error(f"🧪 ERROR sending test alert for match {fixture_id}: {e}")
         elif scoring_result:
             self.logger.info(f"🧪 DEBUG: Match {fixture_id} meets alert conditions but already alerted.")
         else:
