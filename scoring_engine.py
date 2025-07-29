@@ -15,7 +15,6 @@ class ScoringResult:
     triggered_conditions: List[str]
     team_focus: str  # 'home' or 'away' - which team is most likely to get corners
     match_context: str
-    alert_type: str = 'ELITE'  # 'ELITE' or 'RELAXED'
     
 class MatchStateTracker:
     """Tracks match state changes to calculate 'last X minutes' stats"""
@@ -124,7 +123,7 @@ class ScoringEngine:
         high_priority_count = self._count_high_priority_indicators(triggered_conditions)
         self.logger.info(f"🧪 SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}, triggered={triggered_conditions}")
         
-        # Check if ELITE alert threshold is met (strict conditions)
+        # Check if alert threshold is met
         if total_score >= 10 and high_priority_count >= 2:
             return ScoringResult(
                 fixture_id=current_stats.fixture_id,
@@ -132,70 +131,7 @@ class ScoringEngine:
                 minute=current_stats.minute,
                 triggered_conditions=triggered_conditions,
                 team_focus=team_focus,
-                match_context=self._generate_match_context(current_stats, triggered_conditions),
-                alert_type='ELITE'  # Mark as elite alert
-            )
-        
-        return None
-    
-    def evaluate_match_relaxed(self, current_stats: MatchStats) -> Optional[ScoringResult]:
-        """Relaxed evaluation method - lower thresholds for more opportunities"""
-        
-        # Update state tracking
-        self.state_tracker.update_match_state(current_stats)
-        
-        # Precise 85th minute timing - only evaluate in the exact window
-        if not self._is_in_alert_window(current_stats.minute):
-            return None
-        
-        # Calculate all scoring conditions (same as elite)
-        triggered_conditions = []
-        total_score = 0.0
-        team_focus = self._determine_team_focus(current_stats)
-        
-        # HIGH PRIORITY INDICATORS (3-5 points)
-        score, conditions = self._evaluate_high_priority_conditions(current_stats, team_focus)
-        total_score += score
-        triggered_conditions.extend(conditions)
-        
-        # MEDIUM PRIORITY INDICATORS (2-3 points)
-        score, conditions = self._evaluate_medium_priority_conditions(current_stats, team_focus)
-        total_score += score
-        triggered_conditions.extend(conditions)
-        
-        # TACTICAL INDICATORS (1-2 points)
-        score, conditions = self._evaluate_tactical_conditions(current_stats, team_focus)
-        total_score += score
-        triggered_conditions.extend(conditions)
-        
-        # CORNER COUNT CONTEXT
-        score, conditions = self._evaluate_corner_context(current_stats)
-        total_score += score
-        triggered_conditions.extend(conditions)
-        
-        # NEGATIVE INDICATORS
-        score, conditions = self._evaluate_negative_conditions(current_stats)
-        total_score += score
-        triggered_conditions.extend(conditions)
-        
-        # Apply time multiplier
-        time_multiplier = self._get_time_multiplier(current_stats.minute)
-        total_score *= time_multiplier
-        
-        # Count high-priority indicators
-        high_priority_count = self._count_high_priority_indicators(triggered_conditions)
-        self.logger.info(f"🧪 RELAXED SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}, triggered={triggered_conditions}")
-        
-        # Check if RELAXED alert threshold is met (more lenient conditions)
-        if total_score >= 6 and high_priority_count >= 1:
-            return ScoringResult(
-                fixture_id=current_stats.fixture_id,
-                total_score=total_score,
-                minute=current_stats.minute,
-                triggered_conditions=triggered_conditions,
-                team_focus=team_focus,
-                match_context=self._generate_match_context(current_stats, triggered_conditions),
-                alert_type='RELAXED'  # Mark as relaxed alert
+                match_context=self._generate_match_context(current_stats, triggered_conditions)
             )
         
         return None

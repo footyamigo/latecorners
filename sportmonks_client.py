@@ -562,7 +562,7 @@ class SportmonksClient:
         except Exception as e:
             self.logger.error(f"Error parsing live match data for fixture {match_data.get('id', 'unknown')}: {e}")
             return None
-
+    
     def get_live_corner_odds(self, fixture_id: int) -> Optional[Dict]:
         """Get live corner betting odds"""
         self.logger.info(f"Getting live corner odds for fixture {fixture_id}")

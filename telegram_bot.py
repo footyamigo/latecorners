@@ -60,23 +60,17 @@ class TelegramNotifier:
         league = match_info.get('league', 'Unknown League')
         score = f"{match_info.get('home_score', 0)}-{match_info.get('away_score', 0)}"
         
-        # Header with emoji (different for alert types)
-        alert_type = getattr(scoring_result, 'alert_type', 'ELITE')
-        if alert_type == 'ELITE':
-            message = f"🚨 <b>ELITE CORNER ALERT</b> 🚨\n\n"
-            threshold_text = f"(Elite Threshold: 10 pts + 2 high-priority)"
-        else:  # RELAXED
-            message = f"🟡 <b>RELAXED CORNER ALERT</b> 🟡\n\n"
-            threshold_text = f"(Relaxed Threshold: 6 pts + 1 high-priority)"
+        # Header with emoji
+        message = f"🚨 <b>LATE CORNER ALERT</b> 🚨\n\n"
         
         # Match details
         message += f"<b>{home_team} vs {away_team}</b>\n"
         message += f"📊 Score: {score} | ⏱️ {scoring_result.minute}'\n"
         message += f"🏆 {league}\n\n"
         
-        # Scoring details with alert type indicator
+        # Scoring details
         message += f"<b>🎯 ALERT SCORE: {scoring_result.total_score:.1f}</b>\n"
-        message += f"{threshold_text}\n\n"
+        message += f"(Threshold: {self.config.ALERT_THRESHOLD})\n\n"
         
         # Live match statistics
         message += f"<b>📊 Live Stats:</b>\n"
@@ -96,12 +90,9 @@ class TelegramNotifier:
         
         message += "\n"
         
-        # Betting recommendation with alert type disclaimer
+        # Betting recommendation
         message += f"<b>💰 BETTING RECOMMENDATION:</b>\n"
-        if alert_type == 'ELITE':
-            message += f"<i>Asian Over 1 Corner</i> ⭐ <b>HIGH CONFIDENCE</b>\n"
-        else:  # RELAXED
-            message += f"<i>Asian Over 1 Corner</i> ⚠️ <b>MODERATE OPPORTUNITY</b>\n"
+        message += f"<i>Asian Over 1 Corner</i>\n"
         message += f"• Get money back if exactly 1 corner\n"
         message += f"• Win if 2+ corners\n"
         message += f"• Optimal entry: NOW (85th minute sweet spot)\n\n"

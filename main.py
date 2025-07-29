@@ -31,8 +31,7 @@ class LateCornerMonitor:
         self.monitored_matches: Set[int] = set()
         
         # Track matches we've already alerted on to avoid duplicates
-        self.alerted_matches: Set[int] = set()  # Elite alerts sent
-        self.relaxed_alerted_matches: Set[int] = set()  # Relaxed alerts sent
+        self.alerted_matches: Set[int] = set()
         
         self.logger = self._setup_logging()
         
@@ -233,39 +232,22 @@ class LateCornerMonitor:
             self.logger.info(f"FINISHED: Match {fixture_id} finished (minute={match_stats.minute}, state={getattr(match_stats, 'state', '')}), removing from monitoring")
             return
             
-        # Check for ELITE alerts first (priority)
-        elite_result = self.scoring_engine.evaluate_match(match_stats)
-        if elite_result and fixture_id not in self.alerted_matches:
+        # Only send alert at 85th minute if scoring engine returns a result
+        scoring_result = self.scoring_engine.evaluate_match(match_stats)
+        if scoring_result and fixture_id not in self.alerted_matches:
             # Check for live odds
             corner_odds = self.sportmonks_client.get_live_corner_odds(fixture_id)
             if not corner_odds:
-                self.logger.info(f"🧪 DEBUG: No live odds for match {fixture_id}, skipping ELITE alert.")
-            else:
-                self.logger.info(f"🚨 ELITE ALERT: 85th MINUTE CORNER ALERT triggered for match {fixture_id}! Minute: {match_stats.minute}' | Score: {elite_result.total_score:.1f} | High-priority: {self.scoring_engine._count_high_priority_indicators(elite_result)} | Odds: {corner_odds}")
-                self.alerted_matches.add(fixture_id)
-                match_info = self._extract_match_info(match_stats)
-                await self.telegram_notifier.send_corner_alert(elite_result, match_info, corner_odds)
-                return  # Don't check relaxed if elite was sent
-        
-        # Check for RELAXED alerts (only if no elite alert was sent)
-        if fixture_id not in self.alerted_matches and fixture_id not in self.relaxed_alerted_matches:
-            relaxed_result = self.scoring_engine.evaluate_match_relaxed(match_stats)
-            if relaxed_result:
-                # Check for live odds
-                corner_odds = self.sportmonks_client.get_live_corner_odds(fixture_id)
-                if not corner_odds:
-                    self.logger.info(f"🧪 DEBUG: No live odds for match {fixture_id}, skipping RELAXED alert.")
-                else:
-                    self.logger.info(f"🟡 RELAXED ALERT: 85th MINUTE CORNER ALERT triggered for match {fixture_id}! Minute: {match_stats.minute}' | Score: {relaxed_result.total_score:.1f} | High-priority: {self.scoring_engine._count_high_priority_indicators(relaxed_result)} | Odds: {corner_odds}")
-                    self.relaxed_alerted_matches.add(fixture_id)
-                    match_info = self._extract_match_info(match_stats)
-                    await self.telegram_notifier.send_corner_alert(relaxed_result, match_info, corner_odds)
-        
-        # Debug logging
-        if elite_result and fixture_id in self.alerted_matches:
-            self.logger.info(f"🧪 DEBUG: Match {fixture_id} meets ELITE conditions but already alerted.")
-        elif not elite_result:
-            self.logger.info(f"🧪 DEBUG: Match {fixture_id} does not meet ELITE conditions at minute {match_stats.minute}.")
+                self.logger.info(f"🧪 DEBUG: No live odds for match {fixture_id}, skipping alert.")
+                return
+            self.logger.info(f"🚨 ALERT: 85th MINUTE CORNER ALERT triggered for match {fixture_id}! Minute: {match_stats.minute}' | Score: {scoring_result.total_score:.1f} | High-priority: {self.scoring_engine._count_high_priority_indicators(scoring_result)} | Odds: {corner_odds}")
+            self.alerted_matches.add(fixture_id)
+            match_info = self._extract_match_info(match_stats)
+            await self.telegram_notifier.send_corner_alert(scoring_result, match_info, corner_odds)
+        elif scoring_result:
+            self.logger.info(f"🧪 DEBUG: Match {fixture_id} meets alert conditions but already alerted.")
+        else:
+            self.logger.info(f"🧪 DEBUG: Match {fixture_id} does not meet alert conditions at minute {match_stats.minute}.")
     
     def _extract_match_info(self, match_stats) -> Dict:
         """Extract match information for alert formatting (FIXED: use team names)"""
@@ -300,12 +282,7 @@ class LateCornerMonitor:
         if len(self.alerted_matches) > 50:  # Simple size-based cleanup
             # Keep only the most recent 30 alerts
             self.alerted_matches = set(list(self.alerted_matches)[-30:])
-            self.logger.info("CLEANUP: Cleaned up old ELITE alert tracking")
-            
-        if len(self.relaxed_alerted_matches) > 50:  # Simple size-based cleanup
-            # Keep only the most recent 30 alerts
-            self.relaxed_alerted_matches = set(list(self.relaxed_alerted_matches)[-30:])
-            self.logger.info("CLEANUP: Cleaned up old RELAXED alert tracking")
+            self.logger.info("CLEANUP: Cleaned up old alert tracking")
 
 async def main():
     """Main entry point"""
