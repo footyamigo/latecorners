@@ -332,10 +332,33 @@ class LateCornerMonitor:
     def _parse_match_data_from_shared(self, match_data):
         """Parse match data from shared dashboard format into MatchStats"""
         try:
-            # This uses the converted SportMonks format from dashboard data
+            # Use the SportMonks client to parse the live match data
             from sportmonks_client import SportmonksClient
             client = SportmonksClient()
-            return client._parse_live_match_data(match_data)
+            match_stats = client._parse_live_match_data(match_data)
+            
+            # Fix total_corners calculation from raw statistics data
+            if match_stats and hasattr(match_stats, 'statistics'):
+                home_corners = 0
+                away_corners = 0
+                
+                # Look for type_id 34 (corners) in statistics
+                for stat in match_stats.statistics:
+                    if stat.get('type_id') == 34:  # Corners
+                        value = stat.get('data', {}).get('value', 0)
+                        location = stat.get('location', '')
+                        
+                        if location == 'home':
+                            home_corners = value
+                        elif location == 'away':
+                            away_corners = value
+                
+                # Update total_corners with correct calculation
+                match_stats.total_corners = home_corners + away_corners
+                
+                self.logger.debug(f"🧪 CORNER FIX: Match {match_stats.fixture_id} - Home: {home_corners}, Away: {away_corners}, Total: {match_stats.total_corners}")
+            
+            return match_stats
         except Exception as e:
             self.logger.error(f"❌ Error parsing shared match data: {e}")
             return None
