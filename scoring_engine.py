@@ -382,12 +382,13 @@ class ScoringEngine:
             conditions.append('Team has <30% possession (no control)')
         
         # Goalkeeper making 8+ saves (shots from distance)
-        home_saves = stats.saves['home']
-        away_saves = stats.saves['away']
+        # Note: saves data not available in current MatchStats, using shots_on_target as proxy
+        home_saves = stats.shots_on_target.get('away', 0)  # Away shots on target = home goalkeeper saves attempt
+        away_saves = stats.shots_on_target.get('home', 0)  # Home shots on target = away goalkeeper saves attempt
         
         if home_saves >= 8 or away_saves >= 8:
             score += SCORING_MATRIX['gk_making_8plus_saves']
-            conditions.append(f'GK making {max(home_saves, away_saves)} saves (distant shots)')
+            conditions.append(f'GK facing {max(home_saves, away_saves)} shots on target (high pressure)')
         
         return score, conditions
     
