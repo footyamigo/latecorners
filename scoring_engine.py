@@ -119,13 +119,12 @@ class ScoringEngine:
         time_multiplier = self._get_time_multiplier(current_stats.minute)
         total_score *= time_multiplier
         
-        self.logger.info(
-            f"Fixture {current_stats.fixture_id} at {current_stats.minute}': "
-            f"Score = {total_score:.1f} (threshold: {self.config.ALERT_THRESHOLD})"
-        )
+        # Count high-priority indicators
+        high_priority_count = self._count_high_priority_indicators(triggered_conditions)
+        self.logger.info(f"🧪 SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}, triggered={triggered_conditions}")
         
         # Check if alert threshold is met
-        if total_score >= self.config.ALERT_THRESHOLD:
+        if total_score >= 10 and high_priority_count >= 2:
             return ScoringResult(
                 fixture_id=current_stats.fixture_id,
                 total_score=total_score,
@@ -442,3 +441,19 @@ class ScoringEngine:
         conditions_text = "; ".join(top_conditions)
         
         return f"{score_context} at {minute_context} | {conditions_text}" 
+
+    def _count_high_priority_indicators(self, triggered_conditions: list) -> int:
+        """Count how many high-priority indicators are present in the triggered conditions list"""
+        high_priority_keywords = [
+            'favorite losing',
+            'shots on target',
+            'dangerous attacks',
+            'shots blocked',
+            'big chances created',
+            'trailing by 1',
+        ]
+        count = 0
+        for cond in triggered_conditions:
+            if any(keyword in cond.lower() for keyword in high_priority_keywords):
+                count += 1
+        return count 

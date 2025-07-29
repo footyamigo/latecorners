@@ -194,55 +194,33 @@ class LateCornerMonitor:
                 self.logger.error(f"🚨 ERROR: Error monitoring match {fixture_id}: {e}")
     
     async def _monitor_single_match(self, fixture_id: int):
-        """Monitor a single match for corner opportunities (ALWAYS SEND TEST ALERT)"""
+        """Monitor a single match for corner opportunities (REAL ALERT LOGIC)"""
         match_stats = self.sportmonks_client.get_fixture_stats(fixture_id)
         self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
         if not match_stats:
             self.logger.warning(f"WARNING: No stats available for match {fixture_id}")
             return
-        # Always send test alert for every match, every cycle
-        self.logger.info(
-            f"🧪 FORCED TEST ALERT: Sending test alert for match {fixture_id} (minute {match_stats.minute}, state: {getattr(match_stats, 'state', 'N/A')})"
-        )
-        match_info = self._extract_match_info(match_stats)
-        self.logger.info(f"🧪 DEBUG: About to send test alert for match {fixture_id}")
-        try:
-            await self.telegram_notifier.send_test_alert(match_info)
-            self.logger.info(f"🧪 DEBUG: Sent test alert for match {fixture_id}")
-        except Exception as e:
-            self.logger.error(f"🧪 ERROR: Failed to send test alert for match {fixture_id}: {e}")
-        # (Keep the rest of the real alert logic unchanged below this)
-        
-        # Run scoring engine
+        # Check if match is finished
+        if match_stats.minute >= 100:
+            self.monitored_matches.discard(fixture_id)
+            self.logger.info(f"FINISHED: Match {fixture_id} finished, removing from monitoring")
+            return
+        # Only send alert at 85th minute if scoring engine returns a result
         scoring_result = self.scoring_engine.evaluate_match(match_stats)
-        
         if scoring_result and fixture_id not in self.alerted_matches:
-            # We have a PRECISE 85th minute alert! 
-            self.logger.info(
-                f"ALERT: 85th MINUTE CORNER ALERT triggered for match {fixture_id}! "
-                f"Minute: {match_stats.minute}' | Score: {scoring_result.total_score:.1f}"
-            )
-            
-            # Mark as alerted to prevent duplicates
-            self.alerted_matches.add(fixture_id)
-            
-            # Get live corner odds
+            # Check for live odds
             corner_odds = self.sportmonks_client.get_live_corner_odds(fixture_id)
-            
-            # Create match info for the alert
+            if not corner_odds:
+                self.logger.info(f"🧪 DEBUG: No live odds for match {fixture_id}, skipping alert.")
+                return
+            self.logger.info(f"🚨 ALERT: 85th MINUTE CORNER ALERT triggered for match {fixture_id}! Minute: {match_stats.minute}' | Score: {scoring_result.total_score:.1f} | High-priority: {self.scoring_engine._count_high_priority_indicators(scoring_result)} | Odds: {corner_odds}")
+            self.alerted_matches.add(fixture_id)
             match_info = self._extract_match_info(match_stats)
-            
-            # Send the alert
-            await self.telegram_notifier.send_corner_alert(
-                scoring_result, match_info, corner_odds
-            )
-            
+            await self.telegram_notifier.send_corner_alert(scoring_result, match_info, corner_odds)
         elif scoring_result:
-            # Alert conditions met but already sent
-            self.logger.debug(
-                f"STATUS: Match {fixture_id} still meeting alert conditions "
-                f"(score: {scoring_result.total_score:.1f}) but already alerted"
-            )
+            self.logger.info(f"🧪 DEBUG: Match {fixture_id} meets alert conditions but already alerted.")
+        else:
+            self.logger.info(f"🧪 DEBUG: Match {fixture_id} does not meet alert conditions at minute {match_stats.minute}.")
     
     def _extract_match_info(self, match_stats) -> Dict:
         """Extract match information for alert formatting (FIXED: use team names)"""
