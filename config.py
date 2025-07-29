@@ -27,7 +27,7 @@ class Config:
     # Monitoring Configuration
     LIVE_POLL_INTERVAL: int = 15  # Poll every 15 seconds for precise timing
     MATCH_DISCOVERY_INTERVAL: int = 300  # Check for new matches every 5 minutes
-    MIN_MINUTE_TO_START_MONITORING: int = 70  # Back to normal (monitoring late matches)
+    MIN_MINUTE_TO_START_MONITORING: int = 5   # LOWERED for 11-minute test alerts
     
     # Precise 85th Minute Alert Configuration
     TARGET_ALERT_MINUTE: int = 85  # Exact minute for alerts

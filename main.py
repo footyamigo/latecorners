@@ -158,24 +158,30 @@ class LateCornerMonitor:
     async def _discover_new_matches(self):
         """Discover new live matches to monitor"""
         
-        self.logger.info("DISCOVERING new live matches...")
+        self.logger.info("🚨 DISCOVERING new live matches...")
         
         try:
             # Get ALL live matches first
             all_live_matches = self.sportmonks_client.get_live_matches(filter_by_minute=False)
+            
+            self.logger.info(f"🚨 DISCOVERY: Found {len(all_live_matches)} total live matches from API")
             
             new_matches_count = 0
             
             for match in all_live_matches:
                 fixture_id = match['id']
                 minute = match.get('minute', 0)
-                state = match.get('state', {}).get('short_name', '')
+                state = match.get('state', {}).get('developer_name', '')
+                state_full = match.get('state', {}).get('name', 'Unknown')
+                
+                # Log every match we're evaluating
+                self.logger.info(f"🚨 EVALUATING: Match {fixture_id} - minute:{minute}, state:'{state}'/'{state_full}', min_required:{self.config.MIN_MINUTE_TO_START_MONITORING}")
                 
                 # Apply filtering in the main application logic  
                 # Only start monitoring matches past 70 minutes (any live state)
                 if (fixture_id not in self.monitored_matches and 
                     minute >= self.config.MIN_MINUTE_TO_START_MONITORING and
-                    state in ['1H', '1st', '2H', '2nd', 'HT']):  # FIXED: Actual SportMonks state names
+                    state in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']):  # OFFICIAL SportMonks developer_name states
                     
                     self.monitored_matches.add(fixture_id)
                     new_matches_count += 1
@@ -185,15 +191,18 @@ class LateCornerMonitor:
                     if favorite_team_id:
                         self.scoring_engine.set_favorite(fixture_id, favorite_team_id)
                     
-                    self.logger.info(f"🚨 NEW MATCH: Now monitoring {fixture_id} (minute {minute}, state: {state})")
+                    self.logger.info(f"🚨 ✅ NEW MATCH: Now monitoring {fixture_id} (minute {minute}, state: {state})")
                 else:
-                    # Log why matches are being skipped
+                    # Log why matches are being skipped with more detail
+                    reasons = []
                     if fixture_id in self.monitored_matches:
-                        self.logger.debug(f"🚨 SKIP: Match {fixture_id} already monitored")
-                    elif minute < self.config.MIN_MINUTE_TO_START_MONITORING:
-                        self.logger.debug(f"🚨 SKIP: Match {fixture_id} too early (minute {minute})")
-                    elif state not in ['1H', '1st', '2H', '2nd', 'HT']:
-                        self.logger.debug(f"🚨 SKIP: Match {fixture_id} wrong state ({state})")
+                        reasons.append("already monitored")
+                    if minute < self.config.MIN_MINUTE_TO_START_MONITORING:
+                        reasons.append(f"minute {minute} < {self.config.MIN_MINUTE_TO_START_MONITORING}")
+                    if state not in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']:
+                        reasons.append(f"state '{state}' not in allowed list")
+                    
+                    self.logger.info(f"🚨 ❌ SKIPPED: Match {fixture_id} - {', '.join(reasons)}")
             
             if new_matches_count > 0:
                 self.logger.info(f"SUCCESS: Added {new_matches_count} new matches to monitoring")
@@ -251,8 +260,8 @@ class LateCornerMonitor:
             self.logger.info(f"FINISHED: Match {fixture_id} finished, removing from monitoring")
             return
         
-        # TEST ALERT: Send test notification at 2+ minutes (for QUICK testing)
-        if (match_stats.minute >= 2 and   # VERY LOW for immediate testing
+        # TEST ALERT: Send test notification at 11+ minutes (for QUICK testing)
+        if (match_stats.minute >= 11 and  # Set to 11 minutes for testing
             fixture_id not in self.alerted_matches and 
             fixture_id not in getattr(self, 'test_alerted_matches', set())):
             
