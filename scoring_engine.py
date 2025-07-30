@@ -287,20 +287,8 @@ class ScoringEngine:
             score += SCORING_MATRIX['attacking_sub_after_70min']
             conditions.append(f'{len(attacking_subs)} attacking subs after 70\'')
         
-        # Fouls drawn (15+)
-        fouls_drawn = stats.fouls_drawn.get(team_focus, 0)
-        if fouls_drawn >= 15:
-            score += SCORING_MATRIX['fouls_drawn_15plus']
-            conditions.append(f'{fouls_drawn} fouls drawn')
-        
         # Get second half stats for tactical indicators
         second_half_team_stats = stats.second_half_stats.get(team_focus, {})
-        
-        # High successful dribbles in 2nd half (attacking play)
-        second_half_dribbles = second_half_team_stats.get('successful_dribbles', 0)
-        if second_half_dribbles >= 5 and stats.minute >= 70:  # 5+ in 2nd half = attacking intent
-            score += SCORING_MATRIX['successful_dribbles_last_20min_5plus']
-            conditions.append(f'{second_half_dribbles} successful dribbles in 2nd half')
         
         # High offsides in 2nd half (desperate attacking)
         second_half_offsides = second_half_team_stats.get('offsides', 0)
@@ -314,11 +302,7 @@ class ScoringEngine:
             score += SCORING_MATRIX['throwins_last_20min_8plus']
             conditions.append(f'{second_half_throwins} throwins in 2nd half (pressure play)')
         
-        # Low pass accuracy (<75%) - using available pass accuracy data
-        pass_accuracy = stats.pass_accuracy.get(team_focus, 85)  # Default to 85% if not available
-        if pass_accuracy < 75:
-            score += SCORING_MATRIX['low_pass_accuracy_under_75percent']
-            conditions.append(f'{pass_accuracy}% pass accuracy (rushed play)')
+
         
         return score, conditions
     
