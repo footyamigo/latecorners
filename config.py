@@ -44,14 +44,14 @@ class Config:
 
 # Scoring Matrix Configuration
 SCORING_MATRIX = {
-    # High Priority Indicators (4-5 points) - Prioritizing reliable data
-    'favorite_losing_drawing_80plus': 5,
+    # High Priority Indicators (4-5 points) - Prioritizing game state + reliable data
+    'team_trailing_by_1_after_75min': 5,    # Enhanced: Prime corner scenario
+    'draw_situation_after_75min': 4,        # New: Both teams pushing for goals
     'shots_on_target_last_15min_5plus': 5,  # Enhanced: More reliable data
-    'shots_on_target_total_8plus': 4,       # New: Alternative threshold for total game
+    'shots_on_target_total_8plus': 4,       # Alternative threshold for total game
     'dangerous_attacks_last_10min_6plus': 4,
     'shots_blocked_total_6plus': 4,         # Reduced: Less reliable data
     'big_chances_created_last_15min_3plus': 4,
-    'team_trailing_by_1_after_75min': 4,
     
     # Medium Priority Indicators (2-4 points)
     'shots_total_second_half_10plus': 3,
@@ -73,7 +73,7 @@ SCORING_MATRIX = {
     
     # Negative Indicators
     'red_card_issued': -3,
-    'leading_by_3plus_goals': -5,
+    'leading_by_2_goals': -3,    # New: Comfortable lead reduces corner urgency
     'gk_making_8plus_saves': -1,
 }
 

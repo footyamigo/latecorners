@@ -143,49 +143,36 @@ class ScoringEngine:
     def _determine_team_focus(self, stats: MatchStats) -> str:
         """Determine which team is most likely to generate corners"""
         
-        # Check if we know the pre-match favorite
-        favorite_team_id = self.favorites_cache.get(stats.fixture_id)
-        
-        # Simple logic: focus on team that's behind or drawing (if favorite)
+        # Simple logic: focus on team that's behind, or home team if drawing
         if stats.home_score > stats.away_score:
             return 'away'  # Away team trailing, likely to attack
         elif stats.away_score > stats.home_score:
             return 'home'  # Home team trailing, likely to attack
         else:
-            # It's a draw - focus on favorite or home team
-            if favorite_team_id == stats.home_team_id:
-                return 'home'
-            elif favorite_team_id == stats.away_team_id:
-                return 'away'
-            else:
-                return 'home'  # Default to home team
+            # It's a draw - default to home team (slight home advantage)
+            return 'home'
     
     def _evaluate_high_priority_conditions(self, stats: MatchStats, team_focus: str) -> Tuple[float, List[str]]:
         """Evaluate high priority scoring conditions (3-5 points)"""
         score = 0.0
         conditions = []
         
-        # Favorite trailing by exactly 1 goal after 80 minutes (ENHANCED)
-        favorite_team_id = self.favorites_cache.get(stats.fixture_id)
-        if favorite_team_id:
-            goal_diff = abs(stats.home_score - stats.away_score)
-            favorite_score = stats.home_score if favorite_team_id == stats.home_team_id else stats.away_score
-            opponent_score = stats.away_score if favorite_team_id == stats.home_team_id else stats.home_score
-            
-            # Favorite trailing by exactly 1 goal (HIGH PRIORITY)
-            if opponent_score - favorite_score == 1:
-                score += SCORING_MATRIX['favorite_losing_drawing_80plus'] + 1  # Extra point for trailing by 1
-                conditions.append('Favorite trailing by 1 goal after 80\'')
-            # Favorite drawing (MEDIUM PRIORITY)  
-            elif favorite_score == opponent_score:
-                score += SCORING_MATRIX['favorite_losing_drawing_80plus'] - 1  # Slightly less for draw
-                conditions.append('Favorite drawing after 80\'')
+        # Note: Favorite team logic temporarily disabled due to team ID/name mapping issues
+        # Will be re-enabled when we have reliable team ID mapping from MatchStats
         
-        # Any team trailing by exactly 1 goal after 80 minutes (SECONDARY PRIORITY)
-        elif abs(stats.home_score - stats.away_score) == 1:
+        # Game state analysis (HIGH PRIORITY conditions)
+        goal_diff = abs(stats.home_score - stats.away_score)
+        
+        # Trailing by exactly 1 goal (PRIME corner scenario)
+        if goal_diff == 1:
             score += SCORING_MATRIX['team_trailing_by_1_after_75min']
             trailing_team = 'home' if stats.home_score < stats.away_score else 'away'
-            conditions.append(f'{trailing_team.title()} team trailing by 1 goal after 80\'')
+            conditions.append(f'{trailing_team.title()} team trailing by 1 goal after 75\'')
+        
+        # Draw situation (Both teams pushing for goals)
+        elif goal_diff == 0 and stats.minute >= 75:
+            score += SCORING_MATRIX['draw_situation_after_75min']
+            conditions.append(f'Draw {stats.home_score}-{stats.away_score} after 75\' (both teams attacking)')
         
         # Use second half stats for much better "recent activity" detection
         # This is a major improvement - we now have period-level granularity!
@@ -225,12 +212,7 @@ class ScoringEngine:
             score += SCORING_MATRIX['big_chances_created_last_15min_3plus']
             conditions.append(f'{second_half_big_chances} big chances in 2nd half')
         
-        # Team trailing by 1 goal after 75 minutes
-        if stats.minute >= 75:
-            goal_diff = abs(stats.home_score - stats.away_score)
-            if goal_diff == 1:
-                score += SCORING_MATRIX['team_trailing_by_1_after_75min']
-                conditions.append('Team trailing by 1 goal after 75\'')
+
         
         return score, conditions
     
@@ -370,11 +352,12 @@ class ScoringEngine:
             score += SCORING_MATRIX['red_card_issued']
             conditions.append(f'{len(stats.red_cards)} red card(s) issued')
         
-        # Leading by 3+ goals
+        # Leading by 2+ goals (comfortable lead reduces corner urgency)
         goal_diff = abs(stats.home_score - stats.away_score)
-        if goal_diff >= 3:
-            score += SCORING_MATRIX['leading_by_3plus_goals']
-            conditions.append(f'Leading by {goal_diff} goals (game over)')
+        if goal_diff >= 2:
+            score += SCORING_MATRIX['leading_by_2_goals']
+            leading_team = 'home' if stats.home_score > stats.away_score else 'away'
+            conditions.append(f'{leading_team.title()} team leading by {goal_diff} goals (comfortable lead)')
         
 
         
@@ -436,12 +419,12 @@ class ScoringEngine:
     def _count_high_priority_indicators(self, triggered_conditions: list) -> int:
         """Count how many high-priority indicators are present in the triggered conditions list"""
         high_priority_keywords = [
-            'favorite losing',
+            'trailing by 1',
+            'draw',
             'shots on target',
             'dangerous attacks',
             'shots blocked',
             'big chances created',
-            'trailing by 1',
         ]
         count = 0
         for cond in triggered_conditions:
