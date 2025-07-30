@@ -565,17 +565,54 @@ class SportmonksClient:
             stats = match_data.get('statistics', [])
             events = match_data.get('events', [])
             
-            # Initialize counters
+            # SportMonks type_id mapping for live data
+            stat_type_mapping = {
+                34: 'corners',
+                42: 'shots_total',
+                41: 'shots_on_goal',
+                44: 'dangerous_attacks',
+                60: 'crosses',
+                45: 'ball_possession',
+                54: 'offsides',
+                86: 'shots_on_target_official',  # Alternative shots on target
+                58: 'shots_blocked',
+                32: 'dangerous_attacks_alt',
+                49: 'shots_inside_box',
+                64: 'hit_woodwork',
+                98: 'crosses_alt',
+                117: 'key_passes',
+                96: 'fouls_drawn',
+                109: 'successful_dribbles',
+                51: 'throwins_alt',  # Fixed: changed from duplicate 60 to 51
+                82: 'pass_accuracy'
+            }
+            
+            # Initialize statistics dictionaries
+            home_stats = {}
+            away_stats = {}
             total_corners = 0
             
-            # Extract corner statistics
+            # Parse raw statistics with type_id mapping
             for stat in stats:
-                stat_type = stat.get('type', {}).get('name', '')
-                value = stat.get('value', 0)
+                type_id = stat.get('type_id')
+                value = stat.get('data', {}).get('value', 0)
+                location = stat.get('location', '')
                 
-                if stat_type == 'Corner Kicks':
-                    total_corners += value
+                if type_id in stat_type_mapping:
+                    stat_name = stat_type_mapping[type_id]
+                    
+                    if type_id == 34:  # Corners - special handling for total
+                        total_corners += value
+                    elif location == 'home':
+                        home_stats[stat_name] = value
+                    elif location == 'away':
+                        away_stats[stat_name] = value
             
+            # Debug logging for parsed statistics
+            if home_stats or away_stats:
+                self.logger.debug(f"🧪 PARSED STATS for {fixture_id}: Home={home_stats}, Away={away_stats}, Corners={total_corners}")
+            
+            # Map to MatchStats format with proper defaults
             return MatchStats(
                 fixture_id=fixture_id,
                 minute=minute,
@@ -584,23 +621,65 @@ class SportmonksClient:
                 home_score=home_score,
                 away_score=away_score,
                 total_corners=total_corners,
-                shots_on_target={'home': 0, 'away': 0},  # Will be filled by scoring engine
-                shots_total={'home': 0, 'away': 0},
-                shots_blocked={'home': 0, 'away': 0},
-                dangerous_attacks={'home': 0, 'away': 0},
-                big_chances_created={'home': 0, 'away': 0},
-                big_chances_missed={'home': 0, 'away': 0},
-                possession={'home': 0, 'away': 0},
-                shots_inside_box={'home': 0, 'away': 0},
-                hit_woodwork={'home': 0, 'away': 0},
-                crosses_total={'home': 0, 'away': 0},
-                key_passes={'home': 0, 'away': 0},
-                counter_attacks={'home': 0, 'away': 0},
-                fouls_drawn={'home': 0, 'away': 0},
-                successful_dribbles={'home': 0, 'away': 0},
-                offsides={'home': 0, 'away': 0},
-                throwins={'home': 0, 'away': 0},
-                pass_accuracy={'home': 0, 'away': 0},
+                shots_on_target={
+                    'home': home_stats.get('shots_on_goal', home_stats.get('shots_on_target_official', 0)),
+                    'away': away_stats.get('shots_on_goal', away_stats.get('shots_on_target_official', 0))
+                },
+                shots_total={
+                    'home': home_stats.get('shots_total', 0),
+                    'away': away_stats.get('shots_total', 0)
+                },
+                shots_blocked={
+                    'home': home_stats.get('shots_blocked', 0),
+                    'away': away_stats.get('shots_blocked', 0)
+                },
+                dangerous_attacks={
+                    'home': home_stats.get('dangerous_attacks', home_stats.get('dangerous_attacks_alt', 0)),
+                    'away': away_stats.get('dangerous_attacks', away_stats.get('dangerous_attacks_alt', 0))
+                },
+                big_chances_created={'home': 0, 'away': 0},  # Not available in live feed
+                big_chances_missed={'home': 0, 'away': 0},   # Not available in live feed
+                possession={
+                    'home': home_stats.get('ball_possession', 0),
+                    'away': away_stats.get('ball_possession', 0)
+                },
+                shots_inside_box={
+                    'home': home_stats.get('shots_inside_box', 0),
+                    'away': away_stats.get('shots_inside_box', 0)
+                },
+                hit_woodwork={
+                    'home': home_stats.get('hit_woodwork', 0),
+                    'away': away_stats.get('hit_woodwork', 0)
+                },
+                crosses_total={
+                    'home': home_stats.get('crosses', home_stats.get('crosses_alt', 0)),
+                    'away': away_stats.get('crosses', away_stats.get('crosses_alt', 0))
+                },
+                key_passes={
+                    'home': home_stats.get('key_passes', 0),
+                    'away': away_stats.get('key_passes', 0)
+                },
+                counter_attacks={'home': 0, 'away': 0},  # Not available in live feed
+                fouls_drawn={
+                    'home': home_stats.get('fouls_drawn', 0),
+                    'away': away_stats.get('fouls_drawn', 0)
+                },
+                successful_dribbles={
+                    'home': home_stats.get('successful_dribbles', 0),
+                    'away': away_stats.get('successful_dribbles', 0)
+                },
+                offsides={
+                    'home': home_stats.get('offsides', 0),
+                    'away': away_stats.get('offsides', 0)
+                },
+                throwins={
+                    'home': home_stats.get('throwins_alt', 0),
+                    'away': away_stats.get('throwins_alt', 0)
+                },
+                pass_accuracy={
+                    'home': home_stats.get('pass_accuracy', 0),
+                    'away': away_stats.get('pass_accuracy', 0)
+                },
                 
                 # Events
                 substitutions=[],

@@ -264,36 +264,7 @@ class LateCornerMonitor:
                     self.logger.info(f"🏁 REMOVED finished match {fixture_id} from monitoring")
                 return None
             
-            # TEST ALERT: Simple 85th minute + 6 corners test (NON-BLOCKING)
-            test_alert_sent = False
-            if match_stats.minute == 85 and match_stats.total_corners >= 6:
-                test_alert_key = f"test_{fixture_id}"
-                if test_alert_key not in self.alerted_matches:
-                    self.logger.info(f"🧪 TEST ALERT TRIGGERED: Match {fixture_id} at 85' with {match_stats.total_corners} corners")
-                    
-                    # Send simple test alert
-                    test_message = (
-                        f"🧪 <b>TEST ALERT - NOT MAIN SYSTEM</b> 🧪\n\n"
-                        f"⚽ <b>{match_stats.home_team} vs {match_stats.away_team}</b>\n"
-                        f"📊 Score: {match_stats.home_score}-{match_stats.away_score} (85')\n"
-                        f"🚩 Corners: {match_stats.total_corners} total\n\n"
-                        f"📱 <b>This is just a system test!</b>\n"
-                        f"✅ Telegram alerts are working\n"
-                        f"✅ 85th minute detection working\n"
-                        f"✅ Corner counting working\n\n"
-                        f"💡 <i>Real alerts use elite scoring system</i>\n"
-                        f"🔥 <i>Checking for real alert opportunity...</i>"
-                    )
-                    
-                    try:
-                        await self.telegram_bot.send_system_message(test_message)
-                        self.alerted_matches.add(test_alert_key)  # Use different key so real alerts can still fire
-                        self.logger.info(f"🧪 TEST ALERT SENT successfully for match {fixture_id}")
-                        test_alert_sent = True
-                    except Exception as e:
-                        self.logger.error(f"❌ TEST ALERT FAILED for match {fixture_id}: {e}")
-            
-            # Continue to elite scoring (even if test alert was sent)
+
             
             # Check if this match meets our alert criteria
             scoring_result = self.scoring_engine.evaluate_match(match_stats)

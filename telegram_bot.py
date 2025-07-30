@@ -129,42 +129,6 @@ class TelegramNotifier:
         
         return message
     
-    async def send_test_alert(self, match_info: Dict):
-        """Send a test alert for 85th minute (for bot testing purposes)"""
-        
-        try:
-            message = f"🧪 <b>TEST ALERT - 85TH MINUTE REACHED</b>\n\n"
-            message += f"⚠️ <i>This is NOT a corner bet alert!</i>\n"
-            message += f"📡 <i>Testing Telegram bot functionality</i>\n\n"
-            
-            message += f"<b>⚽ Match Details:</b>\n"
-            message += f"🏠 <b>{match_info['home_team']}</b> vs <b>{match_info['away_team']}</b>\n"
-            message += f"⏱️ <b>{match_info['minute']}'</b> | Score: <b>{match_info['home_score']}-{match_info['away_score']}</b>\n"
-            message += f"🏆 League: {match_info['league']}\n\n"
-            
-            message += f"<b>📊 Current Stats:</b>\n"
-            if match_info.get('corners'):
-                message += f"🚩 Corners: {match_info['corners']['home']} - {match_info['corners']['away']}\n"
-            if match_info.get('shots'):
-                message += f"⚽ Shots: {match_info['shots']['home']} - {match_info['shots']['away']}\n"
-            if match_info.get('attacks'):
-                message += f"⚡ Attacks: {match_info['attacks']['home']} - {match_info['attacks']['away']}\n"
-            
-            message += f"\n<i>🤖 Telegram Bot Test | Time: {match_info['minute']}'</i>"
-            
-            await self.bot.send_message(
-                chat_id=self.chat_id,
-                text=message,
-                parse_mode='HTML',
-                disable_web_page_preview=True
-            )
-            
-            self.logger.info(f"Test alert sent for match {match_info['home_team']} vs {match_info['away_team']}")
-            
-        except TelegramError as e:
-            self.logger.error(f"Failed to send test alert: {e}")
-        except Exception as e:
-            self.logger.error(f"Unexpected error sending test alert: {e}")
 
     async def send_system_message(self, message: str, level: str = "INFO"):
         """Send a system status message"""

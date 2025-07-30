@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sportmonks_client import MatchStats
-from config import SCORING_MATRIX, TIME_MULTIPLIERS, get_config
+from config import SCORING_MATRIX, get_config
 
 @dataclass
 class ScoringResult:
@@ -115,16 +115,20 @@ class ScoringEngine:
         total_score += score
         triggered_conditions.extend(conditions)
         
-        # Apply time multiplier
-        time_multiplier = self._get_time_multiplier(current_stats.minute)
-        total_score *= time_multiplier
-        
         # Count high-priority indicators
         high_priority_count = self._count_high_priority_indicators(triggered_conditions)
         self.logger.info(f"🧪 SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}, triggered={triggered_conditions}")
         
-        # Check if alert threshold is met
-        if total_score >= 10 and high_priority_count >= 2:
+        # MANDATORY: Check corner count range (7-12 corners required)
+        total_corners = current_stats.total_corners
+        if not (7 <= total_corners <= 12):
+            self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (need 7-12)")
+            return None
+        
+        # Check if alert threshold is met 
+        # Threshold set to 8 points after removing time multiplier and enhancing corner-focused scoring
+        # Plus MANDATORY corner range requirement (7-12 corners)
+        if total_score >= 8.0 and high_priority_count >= 2:
             return ScoringResult(
                 fixture_id=current_stats.fixture_id,
                 total_score=total_score,
@@ -195,17 +199,25 @@ class ScoringEngine:
             score += SCORING_MATRIX['shots_on_target_last_15min_5plus']
             conditions.append(f'{second_half_shots_on_target} shots on target in 2nd half')
         
+        # High total shots on target (reliable metric across all matches)
+        team_shots_on_target = stats.shots_on_target[team_focus]
+        if team_shots_on_target >= 8:
+            score += SCORING_MATRIX['shots_on_target_total_8plus']
+            conditions.append(f'{team_shots_on_target} total shots on target')
+        
         # High dangerous attacks in 2nd half
         second_half_attacks = second_half_team_stats.get('dangerous_attacks', 0)
         if second_half_attacks >= 6 and stats.minute >= 75:
             score += SCORING_MATRIX['dangerous_attacks_last_10min_6plus']
             conditions.append(f'{second_half_attacks} dangerous attacks in 2nd half')
         
-        # High shots blocked in 2nd half (shows pressure being applied)
-        second_half_blocked = second_half_team_stats.get('shots_blocked', 0)
-        if second_half_blocked >= 4 and stats.minute >= 75:
-            score += SCORING_MATRIX['shots_blocked_last_10min_4plus']
-            conditions.append(f'{second_half_blocked} shots blocked in 2nd half')
+
+        
+        # High total shots blocked (very high corner correlation)
+        team_shots_blocked = stats.shots_blocked[team_focus]
+        if team_shots_blocked >= 6:
+            score += SCORING_MATRIX['shots_blocked_total_6plus'] 
+            conditions.append(f'{team_shots_blocked} total shots blocked')
         
         # High big chances in 2nd half
         second_half_big_chances = second_half_team_stats.get('big_chances_created', 0)
@@ -245,11 +257,7 @@ class ScoringEngine:
             score += SCORING_MATRIX['shots_on_target_8plus_but_less_than_2_goals']
             conditions.append(f'{team_shots_on_target} shots on target but only {team_goals} goals')
         
-        # Possession in last 15 minutes (65%+)
-        current_possession = stats.possession[team_focus]
-        if current_possession >= 65:
-            score += SCORING_MATRIX['possession_last_15min_65plus']
-            conditions.append(f'{current_possession}% possession')
+
         
         # Get second half stats for the focused team (for medium priority)
         second_half_team_stats = stats.second_half_stats.get(team_focus, {})
@@ -333,27 +341,22 @@ class ScoringEngine:
         return score, conditions
     
     def _evaluate_corner_context(self, stats: MatchStats) -> Tuple[float, List[str]]:
-        """Evaluate corner count context at 85th minute"""
+        """Evaluate corner count context - 7-12 corners already verified as mandatory"""
         score = 0.0
         conditions = []
         
         total_corners = stats.total_corners
         
-        if self.config.CORNER_SWEET_SPOT_MIN <= total_corners <= self.config.CORNER_SWEET_SPOT_MAX:
+        # Note: 7-12 range already verified before this function is called
+        if 8 <= total_corners <= 11:
             score += SCORING_MATRIX['corners_8_to_11_sweet_spot']
             conditions.append(f'{total_corners} corners (SWEET SPOT)')
-        elif 6 <= total_corners <= 7:
-            score += SCORING_MATRIX['corners_6_to_7_positive']
-            conditions.append(f'{total_corners} corners (positive)')
-        elif 12 <= total_corners <= 14:
-            score += SCORING_MATRIX['corners_12_to_14_high_action']
-            conditions.append(f'{total_corners} corners (high action)')
-        elif total_corners <= 5:
-            score += SCORING_MATRIX['corners_5_or_less_red_flag']
-            conditions.append(f'{total_corners} corners (RED FLAG - too low)')
-        elif total_corners >= 15:
-            score += SCORING_MATRIX['corners_15plus_oversaturated']
-            conditions.append(f'{total_corners} corners (oversaturated)')
+        elif total_corners == 7:
+            score += SCORING_MATRIX['corners_7_baseline']
+            conditions.append(f'{total_corners} corners (baseline)')
+        elif total_corners == 12:
+            score += SCORING_MATRIX['corners_12_maximum']
+            conditions.append(f'{total_corners} corners (high but acceptable)')
         
         return score, conditions
     
@@ -373,13 +376,7 @@ class ScoringEngine:
             score += SCORING_MATRIX['leading_by_3plus_goals']
             conditions.append(f'Leading by {goal_diff} goals (game over)')
         
-        # Possession under 30%
-        home_possession = stats.possession['home']
-        away_possession = stats.possession['away']
-        
-        if home_possession < 30 or away_possession < 30:
-            score += SCORING_MATRIX['possession_under_30percent']
-            conditions.append('Team has <30% possession (no control)')
+
         
         # Goalkeeper making 8+ saves (shots from distance)
         # Note: saves data not available in current MatchStats, using shots_on_target as proxy
@@ -411,14 +408,7 @@ class ScoringEngine:
         
         return max(0, current_value - old_value)
     
-    def _get_time_multiplier(self, minute: int) -> float:
-        """Get time-based multiplier"""
-        if 90 <= minute:
-            return TIME_MULTIPLIERS['90plus_minutes']
-        elif 80 <= minute < 90:
-            return TIME_MULTIPLIERS['80_to_90_minutes']
-        else:
-            return TIME_MULTIPLIERS['70_to_80_minutes']
+
     
     def _is_in_alert_window(self, current_minute: int) -> bool:
         """Check if current minute is in the precise 85th minute alert window"""

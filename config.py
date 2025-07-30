@@ -44,43 +44,36 @@ class Config:
 
 # Scoring Matrix Configuration
 SCORING_MATRIX = {
-    # High Priority Indicators (3-5 points)
+    # High Priority Indicators (4-5 points) - Prioritizing reliable data
     'favorite_losing_drawing_80plus': 5,
-    'shots_on_target_last_15min_5plus': 4,
+    'shots_on_target_last_15min_5plus': 5,  # Enhanced: More reliable data
+    'shots_on_target_total_8plus': 4,       # New: Alternative threshold for total game
     'dangerous_attacks_last_10min_6plus': 4,
-    'shots_blocked_last_10min_4plus': 4,
+    'shots_blocked_total_6plus': 4,         # Reduced: Less reliable data
     'big_chances_created_last_15min_3plus': 4,
     'team_trailing_by_1_after_75min': 4,
     
-    # Medium Priority Indicators (2-3 points)
+    # Medium Priority Indicators (2-4 points)
     'shots_total_second_half_10plus': 3,
     'shots_on_target_8plus_but_less_than_2_goals': 4,
-    'possession_last_15min_65plus': 2,
-    'shots_inside_box_last_20min_5plus': 3,
-    'hit_woodwork_3plus': 3,
-    'crosses_last_15min_8plus': 2,
-    'key_passes_last_10min_4plus': 2,
+    'shots_inside_box_last_20min_5plus': 4,  # Enhanced: Very high corner correlation
+    'hit_woodwork_3plus': 4,  # Enhanced: Near misses create pressure
+    'crosses_last_15min_8plus': 3,  # Enhanced: Failed crosses → corners
     'counter_attacks_last_15min_2plus': 2,
     
-    # Tactical Indicators (1-2 points)
+    # Tactical Indicators (1-3 points) - Enhanced corner-focused
     'attacking_sub_after_70min': 2,
-    'fouls_drawn_15plus': 1,
-    'successful_dribbles_last_20min_5plus': 1,
-    'offsides_last_15min_3plus': 1,
-    'throwins_last_20min_8plus': 1,
-    'low_pass_accuracy_under_75percent': 1,
+    'offsides_last_15min_3plus': 2,  # Enhanced: Shows attacking urgency
+    'throwins_last_20min_8plus': 2,  # Enhanced: Territory pressure indicator
     
-    # Corner Count Context (at 85th minute)
-    'corners_8_to_11_sweet_spot': 3,
-    'corners_6_to_7_positive': 1,
-    'corners_12_to_14_high_action': 1,
-    'corners_5_or_less_red_flag': -2,
-    'corners_15plus_oversaturated': -1,
+    # Corner Count Context (7-12 corners now MANDATORY for elite alerts)
+    'corners_8_to_11_sweet_spot': 3,     # Peak corner generation range
+    'corners_7_baseline': 1,             # Minimum acceptable
+    'corners_12_maximum': 1,             # Still acceptable but getting high
     
     # Negative Indicators
     'red_card_issued': -3,
     'leading_by_3plus_goals': -5,
-    'possession_under_30percent': -2,
     'gk_making_8plus_saves': -1,
 }
 
@@ -92,12 +85,7 @@ HISTORICAL_MULTIPLIERS = {
     'derby_rivalry_match': 1.2,
 }
 
-# Time-based progression
-TIME_MULTIPLIERS = {
-    '70_to_80_minutes': 1.0,
-    '80_to_90_minutes': 1.5,
-    '90plus_minutes': 2.0,
-}
+
 
 def get_config() -> Config:
     """Get configuration instance with validation."""
