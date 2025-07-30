@@ -32,7 +32,7 @@ class LateCornerMonitor:
         self.match_discovery_counter = 0
         
         self.logger = self._setup_logging()
-    
+        
     def _setup_logging(self):
         """Setup logging configuration"""
         
@@ -76,7 +76,7 @@ class LateCornerMonitor:
         except ImportError:
             self.logger.error("❌ Cannot import dashboard data - dashboard not running?")
             return []
-        except Exception as e:
+            except Exception as e:
             self.logger.error(f"❌ Error reading shared dashboard data: {e}")
             return []
     
@@ -181,7 +181,7 @@ class LateCornerMonitor:
             'offsides': 54
         }
         return stat_mapping.get(stat_name)
-
+    
     async def _discover_new_matches(self):
         """Discover new live matches using shared dashboard data"""
         try:
@@ -395,8 +395,8 @@ class LateCornerMonitor:
             
             self.logger.debug(f"📊 No fresh corner odds available for match {fixture_id}")
             return None
-            
-        except Exception as e:
+                
+            except Exception as e:
             self.logger.error(f"❌ Error getting corner odds for match {fixture_id}: {e}")
             return None
 

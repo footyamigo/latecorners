@@ -94,24 +94,48 @@ def trigger_85_minute_alert(match):
     """Trigger alert for 85-minute corner betting opportunity"""
     match_id = match['match_id']
     
+    print(f"\n🔍 EVALUATING ALERT for Match {match_id}: {match['home_team']} vs {match['away_team']} ({match['minute']}')")
+    
     # Prevent duplicate alerts for the same match
     if match_id in alert_history:
+        print(f"❌ REJECTED: Duplicate alert prevention - match {match_id} already alerted")
         return False
     
     # Evaluate corner potential
     evaluation = evaluate_corner_potential(match)
     if not evaluation:
+        print(f"❌ REJECTED: No corner evaluation returned (likely wrong time window)")
         return False
     
-    # Only alert for actionable opportunities
-    if evaluation['recommendation']['action'] in ['AVOID', 'WEAK BUY']:
+    print(f"📊 CORNER EVALUATION:")
+    print(f"   • Final Score: {evaluation['final_score']:.1f}")
+    print(f"   • Corner Count: {evaluation['corner_count']}")
+    print(f"   • Corner Category: {evaluation['corner_category']}")
+    print(f"   • Psychology Score: {evaluation['psychology_score']:.1f}")
+    print(f"   • Recommendation: {evaluation['recommendation']['action']} ({evaluation['recommendation']['confidence']})")
+    print(f"   • Reason: {evaluation['recommendation']['reason']}")
+    
+    # UPDATED: Allow WEAK BUY alerts (removed from rejection list)
+    if evaluation['recommendation']['action'] == 'AVOID':
+        print(f"❌ REJECTED: Recommendation is AVOID - {evaluation['recommendation']['reason']}")
         return False
+    
+    print(f"✅ SCORING PASSED: Action '{evaluation['recommendation']['action']}' is actionable")
     
     # CRITICAL: Only alert if Asian corner odds are available
     odds_info = match.get('corner_odds', {})
+    print(f"🎯 ODDS CHECK:")
+    print(f"   • Odds Available: {odds_info.get('available', False)}")
+    print(f"   • Odds Count: {odds_info.get('count', 0)}")
+    print(f"   • Total Corner Markets: {odds_info.get('total_corner_markets', 0)}")
+    print(f"   • Cached: {odds_info.get('cached', False)}")
+    
     if not odds_info.get('available', False):
-        print(f"⚠️ Skipping alert for match {match_id} - no Asian corner odds available")
+        print(f"❌ REJECTED: No Asian corner odds available for match {match_id}")
+        print(f"   💡 This means bet365 Market 61 (Asian Total Corners) was not found")
         return False
+    
+    print(f"✅ ODDS PASSED: {odds_info['count']} Asian corner markets available from bet365")
     
     # Record alert
     alert_history[match_id] = {
@@ -126,6 +150,8 @@ def trigger_85_minute_alert(match):
             'minute': match['minute']
         }
     }
+    
+    print(f"🚨 ALERT TRIGGERED! All conditions met for {match['home_team']} vs {match['away_team']}")
     
     # Generate comprehensive alert
     alert_data = _generate_alert_message(match, evaluation, odds_info)
@@ -245,28 +271,33 @@ def _generate_telegram_message(match, evaluation, odds_info):
     return message
 
 def should_check_odds(match):
-    """Updated: Only check odds for matches 83-84 minutes, stop monitoring after 85"""
+    """Updated: Check odds for matches 83-86 minutes (extended window for 85th minute alerts)"""
     match_id = match['match_id']
     minute = match['minute']
     
-    # STOP MONITORING after 85 minutes - alerts already sent
-    if minute >= 85:
+    # EXTENDED WINDOW: Check odds from 83-86 minutes to ensure availability for 85th minute alerts
+    if minute < 83:
+        print(f"🕐 Match {match_id} ({minute}'): Too early for odds checking (need 83-86 minutes)")
         return False
     
-    # Only check matches approaching the alert window (83-84 minutes)
-    if minute < 83:
+    if minute > 86:
+        print(f"🕐 Match {match_id} ({minute}'): Beyond odds checking window (83-86 minutes)")
         return False
     
     # Only check odds for matches with corner statistics (essential for corner betting)
     if not match['statistics']['has_corners']:
+        print(f"📊 Match {match_id} ({minute}'): No corner statistics available - skipping odds check")
         return False
     
     # Rate limiting: Don't check same match more than once every 2 minutes
     last_check = last_odds_check_time.get(match_id, 0)
     current_time = time.time()
     if current_time - last_check < 120:
+        time_since_last = int(current_time - last_check)
+        print(f"⏱️ Match {match_id} ({minute}'): Rate limited - last check {time_since_last}s ago (need 120s)")
         return False
     
+    print(f"✅ Match {match_id} ({minute}'): Ready for odds checking")
     return True
 
 def get_live_matches():
@@ -566,39 +597,55 @@ def update_live_data():
             
             # Calculate stats focused on 85-minute corner alert system
             alert_ready_matches = [m for m in matches if m['minute'] >= 85]  # Matches at alert time
-            approaching_alert_matches = [m for m in matches if 83 <= m['minute'] < 85]  # Preparing for alerts
+            approaching_alert_matches = [m for m in matches if 83 <= m['minute'] < 87]  # Preparing for alerts (extended window)
             matches_with_stats = [m for m in matches if m['statistics']['total_stats_available'] > 0]
             
             print(f"🚨 Alert System Status:")
             print(f"   • {len(alert_ready_matches)} matches at 85+ minutes (alert time)")
-            print(f"   • {len(approaching_alert_matches)} matches approaching alerts (83-84 min)")
+            print(f"   • {len(approaching_alert_matches)} matches in alert window (83-86 min)")
             print(f"   • {len(matches_with_stats)} matches with live stats total")
             
             # STEP 1: Trigger 85-minute alerts for qualified matches
             alerts_triggered = 0
             for match in alert_ready_matches:
+                print(f"\n🎯 CHECKING ALERT ELIGIBILITY: {match['home_team']} vs {match['away_team']} ({match['minute']}')")
+                print(f"   • Has corner stats: {match['statistics']['has_corners']}")
+                print(f"   • Has corner odds: {match.get('corner_odds', {}).get('available', False)}")
+                
                 if match['statistics']['has_corners'] and match.get('corner_odds', {}).get('available', False):
                     if trigger_85_minute_alert(match):
                         alerts_triggered += 1
+                        print(f"✅ ALERT SENT for {match['home_team']} vs {match['away_team']}")
+                    else:
+                        print(f"❌ ALERT REJECTED for {match['home_team']} vs {match['away_team']}")
+                else:
+                    reasons = []
+                    if not match['statistics']['has_corners']:
+                        reasons.append("no corner stats")
+                    if not match.get('corner_odds', {}).get('available', False):
+                        reasons.append("no Asian corner odds")
+                    print(f"❌ SKIPPED: Missing requirements - {', '.join(reasons)}")
             
             if alerts_triggered > 0:
                 print(f"🚨 TRIGGERED {alerts_triggered} CORNER ALERTS!")
+            else:
+                print(f"📊 No alerts triggered this cycle")
             
-            # STEP 2: Check corner odds for matches approaching alert window (83-84 minutes)
+            # STEP 2: Check corner odds for matches in alert window (83-86 minutes)
             matches_with_odds = 0
             checked_count = 0
             
             for match in matches_with_stats:
-                if should_check_odds(match):  # Only 83-84 minute matches
+                if should_check_odds(match):  # Now checks 83-86 minute matches
                     checked_count += 1
-                    print(f"🎯 Checking odds for upcoming alert: {match['match_id']} ({match['minute']}' - {match['home_team']} vs {match['away_team']})")
+                    print(f"🎯 Checking odds for: {match['match_id']} ({match['minute']}' - {match['home_team']} vs {match['away_team']})")
                     odds_check = check_corner_odds_available(match['match_id'])
                     if odds_check['available']:
                         matches_with_odds += 1
                         match['corner_odds'] = odds_check
-                        print(f"✅ Corner odds ready for alert: {odds_check['count']} markets available")
+                        print(f"✅ Corner odds ready: {odds_check['count']} bet365 Asian corner markets available")
                     else:
-                        print(f"❌ No corner odds available - will not trigger alert")
+                        print(f"❌ No corner odds available - will not trigger alert at 85'")
                 else:
                     # Check cached odds for display purposes
                     if match['match_id'] in odds_cache:
@@ -612,7 +659,7 @@ def update_live_data():
             
             dashboard_stats = {
                 'total_live': len(matches),
-                'late_games': len(approaching_alert_matches),  # 83-84 minute matches (preparing)
+                'late_games': len(approaching_alert_matches),  # 83-86 minute matches (alert window)
                 'draws': len([m for m in matches if m['is_draw']]),
                 'close_games': len([m for m in matches if m['is_close']]),
                 'critical_games': len(alert_ready_matches),  # 85+ minute matches (alert time)
@@ -620,10 +667,13 @@ def update_live_data():
                 'with_corners': len([m for m in matches if m['statistics']['has_corners']]),
                 'with_odds': matches_with_odds,  # Matches with corner odds available
                 'alerts_triggered': alerts_triggered,  # New: Track alerts sent this cycle
+                'in_alert_window': len(approaching_alert_matches),  # Matches in 83-86 minute window
+                'ready_for_alerts': len([m for m in alert_ready_matches if m['statistics']['has_corners'] and m.get('corner_odds', {}).get('available', False)]),  # Matches that could trigger alerts
                 'last_update': datetime.now().strftime('%H:%M:%S')
             }
             
             print(f"📈 Dashboard updated: {dashboard_stats['total_live']} live matches, {dashboard_stats['with_odds']} with odds at {dashboard_stats['last_update']}")
+            print(f"🎯 ELITE FILTER: Only alerting for DRAWS and 1-GOAL DIFFERENCE games (no blowouts)")
             
         except Exception as e:
             print(f"❌ Error updating data: {e}")
@@ -653,9 +703,26 @@ def evaluate_corner_potential(match):
     stats = match.get('statistics', {})
     minute = match.get('minute', 0)
     
+    print(f"📊 EVALUATING CORNER POTENTIAL for match at {minute} minutes")
+    
     # Only evaluate matches in the 83-85 minute window
     if minute < 83:
+        print(f"❌ Too early: {minute} < 83 minutes")
         return None
+    
+    # ELITE FILTER: Only allow draws and close games (1 goal difference)
+    is_draw = match.get('is_draw', False)
+    is_close = match.get('is_close', False)
+    
+    if not is_draw and not is_close:
+        home_score = match.get('home_score', 0)
+        away_score = match.get('away_score', 0)
+        goal_diff = abs(home_score - away_score)
+        print(f"❌ REJECTED: Large goal difference ({home_score}-{away_score}, diff: {goal_diff})")
+        print(f"   💡 System only alerts for DRAWS or 1-GOAL DIFFERENCE games")
+        return None
+    
+    print(f"✅ SCORELINE PASSED: {'Draw' if is_draw else 'Close game'} - eligible for corner alert")
     
     home_stats = stats.get('home', {})
     away_stats = stats.get('away', {})
@@ -665,9 +732,19 @@ def evaluate_corner_potential(match):
     total_shots = home_stats.get('shots_total', 0) + away_stats.get('shots_total', 0)
     dangerous_attacks = home_stats.get('dangerous_attacks', 0) + away_stats.get('dangerous_attacks', 0)
     
+    print(f"📈 CORE STATS:")
+    print(f"   • Total Corners: {total_corners}")
+    print(f"   • Total Shots: {total_shots}")
+    print(f"   • Dangerous Attacks: {dangerous_attacks}")
+    
     # Premium statistics (if available)
     shots_inside_box = home_stats.get('shots_inside_box', 0) + away_stats.get('shots_inside_box', 0)
     crosses = home_stats.get('crosses', 0) + away_stats.get('crosses', 0)
+    
+    if shots_inside_box > 0 or crosses > 0:
+        print(f"🎯 PREMIUM STATS:")
+        print(f"   • Shots Inside Box: {shots_inside_box}")
+        print(f"   • Crosses: {crosses}")
     
     # Calculate base score using optimized corner count ranges
     base_score = 0
@@ -695,34 +772,67 @@ def evaluate_corner_potential(match):
         base_score += CORNER_COUNT_SCORING['corners_17plus_extreme_fatigue']
         corner_category = "EXTREME FATIGUE"
     
+    print(f"🏷️ CORNER CATEGORY: {corner_category} (base modifier: {base_score - (total_corners * 3 + total_shots * 1.5 + dangerous_attacks * 0.3):.1f})")
+    
     # Statistical activity scores
-    base_score += total_corners * 3  # Reduced from 5 to account for corner count scoring
-    base_score += total_shots * 1.5
-    base_score += dangerous_attacks * 0.3
+    activity_score = total_corners * 3 + total_shots * 1.5 + dangerous_attacks * 0.3
+    base_score += activity_score
+    
+    print(f"📊 ACTIVITY SCORING:")
+    print(f"   • Corners × 3: {total_corners * 3:.1f}")
+    print(f"   • Shots × 1.5: {total_shots * 1.5:.1f}")
+    print(f"   • Dangerous Attacks × 0.3: {dangerous_attacks * 0.3:.1f}")
+    print(f"   • Activity Subtotal: {activity_score:.1f}")
     
     # Premium bonuses (if available)
+    premium_bonus = 0
     if shots_inside_box > 0:
-        base_score += shots_inside_box * 4
+        box_bonus = shots_inside_box * 4
+        premium_bonus += box_bonus
         inside_ratio = shots_inside_box / max(total_shots, 1)
-        base_score += inside_ratio * 15
+        ratio_bonus = inside_ratio * 15
+        premium_bonus += ratio_bonus
+        print(f"🎯 PREMIUM BONUSES:")
+        print(f"   • Shots Inside Box × 4: {box_bonus:.1f}")
+        print(f"   • Inside Shot Ratio × 15: {ratio_bonus:.1f}")
     
     if crosses > 0:
-        base_score += crosses * 2
+        cross_bonus = crosses * 2
+        premium_bonus += cross_bonus
+        print(f"   • Crosses × 2: {cross_bonus:.1f}")
     
-    # Psychology scoring (placeholder for now - will be enhanced)
+    if premium_bonus > 0:
+        print(f"   • Premium Subtotal: {premium_bonus:.1f}")
+        base_score += premium_bonus
+    
+    # Psychology scoring - now guaranteed to be either draw or close game
     psychology_score = 0
-    if match.get('is_draw', False):
+    if is_draw:
         psychology_score += 12
-    elif match.get('is_close', False):
+        print(f"🧠 PSYCHOLOGY: Draw situation (+12)")
+    elif is_close:
         psychology_score += 8
+        print(f"🧠 PSYCHOLOGY: Close game (+8)")
     
     # Late game multiplier
     if minute >= 85:
+        original_psych = psychology_score
         psychology_score *= 1.8  # High desperation multiplier
+        print(f"⏰ LATE GAME MULTIPLIER (85+): {original_psych:.1f} × 1.8 = {psychology_score:.1f}")
     elif minute >= 83:
+        original_psych = psychology_score
         psychology_score *= 1.5  # Building desperation
+        print(f"⏰ LATE GAME MULTIPLIER (83+): {original_psych:.1f} × 1.5 = {psychology_score:.1f}")
     
     final_score = base_score + psychology_score
+    
+    print(f"🎯 FINAL CALCULATION:")
+    print(f"   • Base Score: {base_score:.1f}")
+    print(f"   • Psychology Score: {psychology_score:.1f}")
+    print(f"   • FINAL SCORE: {final_score:.1f}")
+    
+    recommendation = _get_recommendation(final_score, corner_category, minute)
+    print(f"💡 RECOMMENDATION: {recommendation['action']} ({recommendation['confidence']}) - {recommendation['reason']}")
     
     return {
         'final_score': final_score,
@@ -732,7 +842,7 @@ def evaluate_corner_potential(match):
         'psychology_score': psychology_score,
         'minute': minute,
         'has_premium_stats': shots_inside_box > 0 or crosses > 0,
-        'recommendation': _get_recommendation(final_score, corner_category, minute)
+        'recommendation': recommendation
     }
 
 def _get_recommendation(final_score, corner_category, minute):
@@ -1294,6 +1404,7 @@ if __name__ == "__main__":
     print("⚡ Smart rate limit monitoring per entity")
     print("🎯 PRECISION FEATURES:")
     print("   • 85-minute alerts with Asian corner odds")
+    print("   • ELITE FILTER: Only draws and 1-goal difference games")
     print("   • Optimized corner count ranges (7-9 = PRIME ZONE)")
     print("   • Stop monitoring after alerts sent")
     print("   • Psychological scoring integration")
