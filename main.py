@@ -76,7 +76,7 @@ class LateCornerMonitor:
         except ImportError:
             self.logger.error("❌ Cannot import dashboard data - dashboard not running?")
             return []
-            except Exception as e:
+        except Exception as e:
             self.logger.error(f"❌ Error reading shared dashboard data: {e}")
             return []
     
@@ -396,7 +396,7 @@ class LateCornerMonitor:
             self.logger.debug(f"📊 No fresh corner odds available for match {fixture_id}")
             return None
                 
-            except Exception as e:
+        except Exception as e:
             self.logger.error(f"❌ Error getting corner odds for match {fixture_id}: {e}")
             return None
 
