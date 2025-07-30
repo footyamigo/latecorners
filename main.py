@@ -379,10 +379,10 @@ class LateCornerMonitor:
             return None
 
     async def _get_corner_odds(self, fixture_id: int) -> Optional[Dict]:
-        """Get corner odds from dashboard's cached data"""
+        """Get corner odds from dashboard's cached data or fetch directly from SportMonks"""
         try:
-            # Import dashboard's odds cache
-            from web_dashboard import odds_cache
+            # Import dashboard's odds cache and checking function
+            from web_dashboard import odds_cache, check_corner_odds_available
             
             # Check if we have cached corner odds for this match
             if fixture_id in odds_cache:
@@ -393,8 +393,18 @@ class LateCornerMonitor:
                         self.logger.info(f"💰 Using cached corner odds for match {fixture_id}")
                         return cache_data
             
-            self.logger.debug(f"📊 No fresh corner odds available for match {fixture_id}")
-            return None
+            # If no fresh cached odds, actively fetch from SportMonks
+            self.logger.info(f"🔍 No cached odds found, fetching corner odds directly for elite match {fixture_id}")
+            
+            # Use the dashboard's odds checking function to get fresh odds
+            odds_data = check_corner_odds_available(fixture_id)
+            
+            if odds_data and odds_data.get('available', False):
+                self.logger.info(f"✅ Successfully fetched corner odds for elite match {fixture_id}: {odds_data['count']} bet365 Asian corner markets")
+                return odds_data
+            else:
+                self.logger.warning(f"❌ No corner odds available for elite match {fixture_id} from SportMonks")
+                return None
                 
         except Exception as e:
             self.logger.error(f"❌ Error getting corner odds for match {fixture_id}: {e}")

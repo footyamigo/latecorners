@@ -271,17 +271,17 @@ def _generate_telegram_message(match, evaluation, odds_info):
     return message
 
 def should_check_odds(match):
-    """Updated: Check odds for matches 83-86 minutes (extended window for 85th minute alerts)"""
+    """Updated: Check odds for matches 80-90 minutes (expanded window for better elite coverage)"""
     match_id = match['match_id']
     minute = match['minute']
     
-    # EXTENDED WINDOW: Check odds from 83-86 minutes to ensure availability for 85th minute alerts
-    if minute < 83:
-        print(f"🕐 Match {match_id} ({minute}'): Too early for odds checking (need 83-86 minutes)")
+    # EXPANDED WINDOW: Check odds from 80-90 minutes to ensure maximum availability for elite scoring
+    if minute < 80:
+        print(f"🕐 Match {match_id} ({minute}'): Too early for odds checking (need 80-90 minutes)")
         return False
     
-    if minute > 86:
-        print(f"🕐 Match {match_id} ({minute}'): Beyond odds checking window (83-86 minutes)")
+    if minute > 90:
+        print(f"🕐 Match {match_id} ({minute}'): Beyond odds checking window (80-90 minutes)")
         return False
     
     # Only check odds for matches with corner statistics (essential for corner betting)
@@ -597,12 +597,12 @@ def update_live_data():
             
             # Calculate stats focused on 85-minute corner alert system
             alert_ready_matches = [m for m in matches if m['minute'] >= 85]  # Matches at alert time
-            approaching_alert_matches = [m for m in matches if 83 <= m['minute'] < 87]  # Preparing for alerts (extended window)
+            approaching_alert_matches = [m for m in matches if 80 <= m['minute'] <= 90]  # Preparing for alerts (expanded window)
             matches_with_stats = [m for m in matches if m['statistics']['total_stats_available'] > 0]
             
             print(f"🚨 Alert System Status:")
             print(f"   • {len(alert_ready_matches)} matches at 85+ minutes (alert time)")
-            print(f"   • {len(approaching_alert_matches)} matches in alert window (83-86 min)")
+            print(f"   • {len(approaching_alert_matches)} matches in alert window (80-90 min)")
             print(f"   • {len(matches_with_stats)} matches with live stats total")
             
             # STEP 1: Trigger 85-minute alerts for qualified matches
@@ -631,12 +631,12 @@ def update_live_data():
             else:
                 print(f"📊 No alerts triggered this cycle")
             
-            # STEP 2: Check corner odds for matches in alert window (83-86 minutes)
+            # STEP 2: Check corner odds for matches in alert window (80-90 minutes)
             matches_with_odds = 0
             checked_count = 0
             
             for match in matches_with_stats:
-                if should_check_odds(match):  # Now checks 83-86 minute matches
+                if should_check_odds(match):  # Now checks 80-90 minute matches
                     checked_count += 1
                     print(f"🎯 Checking odds for: {match['match_id']} ({match['minute']}' - {match['home_team']} vs {match['away_team']})")
                     odds_check = check_corner_odds_available(match['match_id'])
@@ -659,7 +659,7 @@ def update_live_data():
             
             dashboard_stats = {
                 'total_live': len(matches),
-                'late_games': len(approaching_alert_matches),  # 83-86 minute matches (alert window)
+                'late_games': len(approaching_alert_matches),  # 80-90 minute matches (alert window)
                 'draws': len([m for m in matches if m['is_draw']]),
                 'close_games': len([m for m in matches if m['is_close']]),
                 'critical_games': len(alert_ready_matches),  # 85+ minute matches (alert time)
@@ -667,7 +667,7 @@ def update_live_data():
                 'with_corners': len([m for m in matches if m['statistics']['has_corners']]),
                 'with_odds': matches_with_odds,  # Matches with corner odds available
                 'alerts_triggered': alerts_triggered,  # New: Track alerts sent this cycle
-                'in_alert_window': len(approaching_alert_matches),  # Matches in 83-86 minute window
+                'in_alert_window': len(approaching_alert_matches),  # Matches in 80-90 minute window
                 'ready_for_alerts': len([m for m in alert_ready_matches if m['statistics']['has_corners'] and m.get('corner_odds', {}).get('available', False)]),  # Matches that could trigger alerts
                 'last_update': datetime.now().strftime('%H:%M:%S')
             }
