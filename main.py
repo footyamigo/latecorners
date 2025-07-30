@@ -264,9 +264,11 @@ class LateCornerMonitor:
                     self.logger.info(f"🏁 REMOVED finished match {fixture_id} from monitoring")
                 return None
             
-            # TEST ALERT: Simple 85th minute + 6 corners test (bypass scoring system)
+            # TEST ALERT: Simple 85th minute + 6 corners test (NON-BLOCKING)
+            test_alert_sent = False
             if match_stats.minute == 85 and match_stats.total_corners >= 6:
-                if fixture_id not in self.alerted_matches:
+                test_alert_key = f"test_{fixture_id}"
+                if test_alert_key not in self.alerted_matches:
                     self.logger.info(f"🧪 TEST ALERT TRIGGERED: Match {fixture_id} at 85' with {match_stats.total_corners} corners")
                     
                     # Send simple test alert
@@ -279,25 +281,38 @@ class LateCornerMonitor:
                         f"✅ Telegram alerts are working\n"
                         f"✅ 85th minute detection working\n"
                         f"✅ Corner counting working\n\n"
-                        f"💡 <i>Real alerts use elite scoring system</i>"
+                        f"💡 <i>Real alerts use elite scoring system</i>\n"
+                        f"🔥 <i>Checking for real alert opportunity...</i>"
                     )
                     
                     try:
                         await self.telegram_bot.send_system_message(test_message)
-                        self.alerted_matches.add(fixture_id)
+                        self.alerted_matches.add(test_alert_key)  # Use different key so real alerts can still fire
                         self.logger.info(f"🧪 TEST ALERT SENT successfully for match {fixture_id}")
-                        return None  # Don't continue to main scoring
+                        test_alert_sent = True
                     except Exception as e:
                         self.logger.error(f"❌ TEST ALERT FAILED for match {fixture_id}: {e}")
+            
+            # Continue to elite scoring (even if test alert was sent)
             
             # Check if this match meets our alert criteria
             scoring_result = self.scoring_engine.evaluate_match(match_stats)
             
-            # Log scoring result for debugging
+            # ENHANCED DEBUG: Log ALL scoring attempts
             if scoring_result:
                 total_score = scoring_result.get('total_score', 0)
                 high_priority_count = scoring_result.get('high_priority_indicators', 0)
-                self.logger.info(f"🧪 DEBUG: Match {fixture_id} scoring - Total: {total_score}, High Priority: {high_priority_count}")
+                triggered_conditions = scoring_result.get('triggered_conditions', [])
+                self.logger.info(f"🎯 ELITE SCORING: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
+                self.logger.info(f"   📊 Total Score: {total_score}/10 | High Priority: {high_priority_count}/2")
+                self.logger.info(f"   🏆 Conditions: {triggered_conditions}")
+                
+                if total_score >= 10 and high_priority_count >= 2:
+                    self.logger.info(f"   ✅ ELITE THRESHOLDS MET! Checking corner odds...")
+                else:
+                    self.logger.info(f"   ❌ Elite thresholds NOT met (need 10+ score AND 2+ high priority)")
+            else:
+                self.logger.info(f"📊 ELITE SCORING: Match {fixture_id} - Minute {match_stats.minute} not in alert window (85') OR no scoring result")
             
             # ELITE ALERT LOGIC: Check if conditions are met for alert
             if scoring_result and fixture_id not in self.alerted_matches:
