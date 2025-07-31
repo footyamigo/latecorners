@@ -525,8 +525,9 @@ class LateCornerMonitor:
                                             minute=85,  # We know it's 85th minute from our logic
                                             total_score=10,  # Elite threshold met
                                             high_priority_indicators=2,  # Elite threshold met
-                                            conditions_met=[],  # Can be empty for now
-                                            detailed_breakdown={}  # Can be empty for now
+                                            triggered_conditions=[],  # Fixed parameter name
+                                            team_focus="home",  # Required parameter
+                                            match_context="Alert triggered manually"  # Required parameter
                                         )
                                         
                                         # Get corner odds from alert_info or use placeholder
