@@ -14,6 +14,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import get_config
 from telegram_bot import TelegramNotifier
 from new_telegram_system import send_corner_alert_new
+from alert_tracker import track_elite_alert
+from result_checker import check_pending_results
 from scoring_engine import ScoringEngine
 from startup_flag import is_first_startup, mark_startup
 
@@ -31,6 +33,7 @@ class LateCornerMonitor:
         
         # Track discovery cycles
         self.match_discovery_counter = 0
+        self.result_check_counter = 0  # For hourly result checking
         
         self.logger = self._setup_logging()
         
@@ -269,7 +272,7 @@ class LateCornerMonitor:
             
             # PRE-SCORING DEBUG: Check basic requirements
             self.logger.info(f"🔍 PRE-CHECKS: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
-            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85 for ELITE, 82-87 for PREMIUM)")
+            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85 for ELITE alert)")
             self.logger.info(f"   ⚽ Corners: {match_stats.total_corners} (need 7-12)")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
@@ -290,9 +293,9 @@ class LateCornerMonitor:
                 else:
                     self.logger.info(f"   ❌ Elite thresholds NOT met (need 8+ score AND 2+ high priority)")
             else:
-                self.logger.info(f"📊 ELITE SCORING: Match {fixture_id} - Minute {match_stats.minute} not in alert window (85' for ELITE, 82-87' for PREMIUM) OR no scoring result")
+                self.logger.info(f"📊 ELITE SCORING: Match {fixture_id} - Minute {match_stats.minute} not in alert window (85') OR no scoring result")
             
-            # DUAL-TIER ALERT LOGIC: Check ELITE first, then PREMIUM
+            # ELITE-ONLY ALERT LOGIC: Ultra-selective alerts
             if scoring_result and fixture_id not in self.alerted_matches:
                 total_score = scoring_result.total_score
                 high_priority_count = scoring_result.high_priority_indicators
@@ -315,26 +318,8 @@ class LateCornerMonitor:
                     else:
                         self.logger.info(f"⏰ Elite match {fixture_id} waiting for alert window (need 85', currently {match_stats.minute}')")
                 
-                # PREMIUM TIER: More accessible (6.0+ score, 1+ high priority, 82-87 minutes)
-                elif total_score >= 6.0 and high_priority_count >= 1:
-                    self.logger.info(f"💎 PREMIUM MATCH DETECTED: {fixture_id} - Score: {total_score}, High Priority: {high_priority_count}")
-                    
-                    # Check if we're in the premium alert window (82-87th minute)
-                    if 82 <= match_stats.minute <= 87:
-                        self.logger.info(f"💎 PREMIUM ALERT WINDOW! Match {fixture_id} at minute {match_stats.minute} - proceeding to odds check")
-                        
-                        corner_odds = await self._get_corner_odds(fixture_id)
-                        if corner_odds:
-                            self.logger.info(f"🚀 SENDING PREMIUM ALERT: All conditions met for match {fixture_id}")
-                            match_info = self._extract_match_info(match_stats, scoring_result, corner_odds, tier="PREMIUM")
-                            return match_info
-                        else:
-                            self.logger.warning(f"🚫 PREMIUM ALERT BLOCKED: No odds available for match {fixture_id}")
-                    else:
-                        self.logger.info(f"⏰ Premium match {fixture_id} waiting for alert window (need 82-87', currently {match_stats.minute}')")
-                
                 else:
-                    self.logger.debug(f"📊 Match {fixture_id} below thresholds - Score: {total_score}/6.0, High Priority: {high_priority_count}/1")
+                    self.logger.debug(f"📊 Match {fixture_id} below ELITE thresholds - Score: {total_score}/8.0, High Priority: {high_priority_count}/2")
             
             return None
             
@@ -431,7 +416,7 @@ class LateCornerMonitor:
                 'home_score': match_stats.home_score,
                 'away_score': match_stats.away_score,
                 'minute': match_stats.minute,
-                'tier': tier,  # ELITE or PREMIUM
+                'tier': tier,  # ELITE only
                 
                 # Live statistics for Telegram message
                 'total_corners': match_stats.total_corners if hasattr(match_stats, 'total_corners') else 0,  # ✅ CRITICAL: Total corners for display
@@ -579,6 +564,16 @@ class LateCornerMonitor:
                                             self.logger.info(f"🎉 TELEGRAM ALERT SENT SUCCESSFULLY for match {match_id}")
                                             self.logger.info(f"   ✅ {actual_tier} tier alert delivered")
                                             self.logger.info(f"   ✅ Match added to alerted list")
+                                            
+                                            # TRACK ELITE ALERT FOR PERFORMANCE ANALYSIS
+                                            try:
+                                                track_success = track_elite_alert(alert_info, actual_tier, actual_score, actual_conditions)
+                                                if track_success:
+                                                    self.logger.info(f"💾 ALERT TRACKED: {actual_tier} alert saved to database")
+                                                else:
+                                                    self.logger.warning(f"⚠️ Alert tracking failed (alert still sent)")
+                                            except Exception as e:
+                                                self.logger.error(f"❌ Alert tracking error: {e}")
                                         else:
                                             self.logger.error(f"❌ TELEGRAM ALERT FAILED for match {match_id}")
                                             self.logger.error(f"   ❌ Check Telegram configuration and network")
@@ -591,6 +586,18 @@ class LateCornerMonitor:
                         self.logger.info("📊 No live matches available from shared data source")
                     
                     self.match_discovery_counter += 1
+                    self.result_check_counter += 1
+                    
+                    # HOURLY RESULT CHECKING (every ~1 hour = 120 cycles * 30s)
+                    if self.result_check_counter >= 120:  
+                        self.logger.info("🔍 HOURLY CHECK: Checking pending alert results...")
+                        try:
+                            await check_pending_results()
+                            self.logger.info("✅ HOURLY CHECK: Result checking completed")
+                        except Exception as e:
+                            self.logger.error(f"❌ HOURLY CHECK: Error checking results: {e}")
+                        finally:
+                            self.result_check_counter = 0  # Reset counter
                     
                     # Wait before next cycle
                     await asyncio.sleep(self.config.LIVE_POLL_INTERVAL)
