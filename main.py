@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config import get_config
 from telegram_bot import TelegramNotifier
+from new_telegram_system import send_corner_alert_new
 from scoring_engine import ScoringEngine
 from startup_flag import is_first_startup, mark_startup
 
@@ -564,10 +565,12 @@ class LateCornerMonitor:
                                         # ATTEMPT TO SEND TELEGRAM ALERT
                                         self.logger.info(f"📱 INITIATING TELEGRAM ALERT for {actual_tier} match {match_id}...")
                                         
-                                        success = await self.telegram_bot.send_corner_alert(
-                                            scoring_result=scoring_obj,
-                                            match_info=alert_info,
-                                            corner_odds=corner_odds
+                                        # USE NEW BULLETPROOF TELEGRAM SYSTEM
+                                        success = send_corner_alert_new(
+                                            match_data=alert_info,
+                                            tier=actual_tier,
+                                            score=actual_score,
+                                            conditions=actual_conditions
                                         )
                                         
                                         if success:
