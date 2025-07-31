@@ -12,8 +12,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config import get_config
-from telegram_bot import TelegramNotifier
-from new_telegram_system import send_corner_alert_new
+from new_telegram_system import send_corner_alert_new, send_system_message_new
 from alert_tracker import track_elite_alert
 from result_checker import check_pending_results
 from scoring_engine import ScoringEngine
@@ -24,7 +23,6 @@ class LateCornerMonitor:
     
     def __init__(self):
         self.config = get_config()
-        self.telegram_bot = TelegramNotifier()
         self.scoring_engine = ScoringEngine()
         
         # Track which matches we've already alerted on
@@ -475,7 +473,7 @@ class LateCornerMonitor:
                 )
                 
                 try:
-                    await self.telegram_bot.send_system_message(startup_message)
+                    send_system_message_new(startup_message)
                     mark_startup()
                     self.logger.info("📱 SUCCESS: Startup message sent")
                 except Exception as e:

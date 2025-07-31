@@ -183,6 +183,20 @@ class NewTelegramSystem:
 🚀 The new system is bulletproof!"""
         
         return self._send_http_message(test_message)
+    
+    def send_system_message(self, message: str) -> bool:
+        """Send a system message (startup, errors, etc.)"""
+        try:
+            logger.info(f"📢 SYSTEM MESSAGE: Sending...")
+            success = self._send_http_message(message)
+            if success:
+                logger.info("✅ SYSTEM MESSAGE: Sent successfully!")
+            else:
+                logger.error("❌ SYSTEM MESSAGE: Failed to send")
+            return success
+        except Exception as e:
+            logger.error(f"❌ SYSTEM MESSAGE ERROR: {e}")
+            return False
 
 # Global instance
 new_telegram = NewTelegramSystem()
@@ -190,6 +204,10 @@ new_telegram = NewTelegramSystem()
 def send_corner_alert_new(match_data: Dict, tier: str, score: float, conditions: list) -> bool:
     """Simple function to send alerts using the new system"""
     return new_telegram.send_alert(match_data, tier, score, conditions)
+
+def send_system_message_new(message: str) -> bool:
+    """Simple function to send system messages using the new system"""
+    return new_telegram.send_system_message(message)
 
 def test_new_system():
     """Test the new telegram system"""
