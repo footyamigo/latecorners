@@ -321,8 +321,9 @@ class SportmonksClient:
         self.logger.info(f"Fetching stats for fixture {fixture_id}")
         
         # 🎯 KEY FIX: Add includes to get detailed match data + periods for minute
+        # Using exact format from SportMonks documentation: statistics,periods with period-level stats
         params = {
-            'include': 'statistics;events;scores;participants;state;periods;periods.statistics'  # 🎯 ENHANCED: Added period-level statistics
+            'include': 'statistics,periods.statistics,events,scores,participants,state'  # 🎯 FIXED: Using comma separators + periods.statistics as per docs
         }
         
         data = self._make_request(f"/fixtures/{fixture_id}", params=params)
@@ -501,6 +502,21 @@ class SportmonksClient:
         
         # Parse periods and extract second half statistics
         periods = fixture_data.get('periods', [])
+        
+        # DEBUG: Log what periods data we're getting from SportMonks
+        self.logger.info(f"🔍 PERIODS DEBUG for {fixture_id}: Found {len(periods)} periods in API response")
+        if periods:
+            for i, period in enumerate(periods):
+                period_desc = period.get('description', 'Unknown')
+                period_stats_count = len(period.get('statistics', []))
+                self.logger.info(f"   Period {i+1}: {period_desc} - {period_stats_count} statistics")
+        else:
+            self.logger.warning(f"⚠️ PERIODS MISSING: No periods data in SportMonks response for {fixture_id}")
+            self.logger.warning(f"   API Include: 'statistics;events;scores;participants;state;periods;periods.statistics'")
+            # Log the actual fixture data keys to debug
+            fixture_keys = list(fixture_data.keys())
+            self.logger.warning(f"   Available keys in fixture_data: {fixture_keys}")
+        
         second_half_stats = self._extract_second_half_stats(periods, home_team_id, away_team_id, stat_id_mapping)
         
         return MatchStats(

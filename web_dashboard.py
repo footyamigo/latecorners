@@ -638,14 +638,20 @@ def update_live_data():
             for match in matches_with_stats:
                 if should_check_odds(match):  # Now checks 80-90 minute matches
                     checked_count += 1
-                    print(f"🎯 Checking odds for: {match['match_id']} ({match['minute']}' - {match['home_team']} vs {match['away_team']})")
+                    print(f"🎯 MINUTE {match['minute']}: Checking odds for match {match['match_id']} ({match['home_team']} vs {match['away_team']})")
                     odds_check = check_corner_odds_available(match['match_id'])
                     if odds_check['available']:
                         matches_with_odds += 1
                         match['corner_odds'] = odds_check
-                        print(f"✅ Corner odds ready: {odds_check['count']} bet365 Asian corner markets available")
+                        print(f"✅ MINUTE {match['minute']}: Corner odds available! {odds_check['count']} bet365 Asian corner markets")
+                        print(f"   📊 Elite system will fetch FRESH odds if this match qualifies at 85'")
+                        
+                        # Log specific odds details for debugging
+                        if 'odds_details' in odds_check:
+                            print(f"   💎 Current odds: {odds_check['odds_details']}")
                     else:
-                        print(f"❌ No corner odds available - will not trigger alert at 85'")
+                        print(f"❌ MINUTE {match['minute']}: No corner odds available for match {match['match_id']}")
+                        print(f"   ⚠️ Elite system will re-check for odds if this match qualifies at 85'")
                 else:
                     # Check cached odds for display purposes
                     if match['match_id'] in odds_cache:
