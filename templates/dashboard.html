@@ -117,6 +117,42 @@
         .match-card.normal::before { --status-color: #42a5f5; }
         .match-card.early::before { --status-color: #66bb6a; }
 
+        /* CRITICAL ALERT WINDOW: 84-86 minutes with odds */
+        .match-card.critical-alert {
+            background: linear-gradient(135deg, #2a0a0a 0%, #4a1a1a 100%);
+            border: 2px solid #ff4444;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.3);
+            animation: criticalPulse 2s infinite;
+        }
+
+        .match-card.critical-alert::before {
+            --status-color: #ff0000;
+            height: 5px;
+        }
+
+        /* ALERT READY: 82-87 minutes with odds */
+        .match-card.alert-ready {
+            background: linear-gradient(135deg, #2a1a0a 0%, #4a3a1a 100%);
+            border: 2px solid #ffaa00;
+            box-shadow: 0 0 15px rgba(255, 170, 0, 0.2);
+        }
+
+        .match-card.alert-ready::before {
+            --status-color: #ffaa00;
+            height: 4px;
+        }
+
+        @keyframes criticalPulse {
+            0%, 100% { 
+                box-shadow: 0 0 20px rgba(255, 68, 68, 0.3);
+                border-color: #ff4444;
+            }
+            50% { 
+                box-shadow: 0 0 30px rgba(255, 68, 68, 0.6);
+                border-color: #ff6666;
+            }
+        }
+
         .match-header {
             display: flex;
             justify-content: space-between;
@@ -603,17 +639,36 @@
             const homeStats = stats.home || {};
             const awayStats = stats.away || {};
             
+            // Determine special CSS classes for critical matches
+            let matchClasses = match.priority || 'normal';
+            
+            // CRITICAL ALERT WINDOW: 84-86 minutes with odds
+            if (match.minute >= 84 && match.minute <= 86 && match.corner_odds?.available) {
+                matchClasses += ' critical-alert';
+            }
+            // ALERT READY: 82-87 minutes with odds
+            else if (match.minute >= 82 && match.minute <= 87 && match.corner_odds?.available) {
+                matchClasses += ' alert-ready';
+            }
+            
             return `
-                <div class="match-card ${match.priority || 'normal'}">
+                <div class="match-card ${matchClasses}">
                     <div class="priority-indicator"></div>
                     
                     <div class="match-header">
-                        <div class="teams">${match.home_team} vs ${match.away_team}</div>
+                        <div class="teams">
+                            ${match.home_team} vs ${match.away_team}
+                            ${match.minute >= 84 && match.minute <= 86 && match.corner_odds?.available ? 
+                                '<span style="background: #ff4444; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.7em; margin-left: 8px; animation: criticalPulse 2s infinite;">🚨 CRITICAL WINDOW</span>' : 
+                                match.minute >= 82 && match.minute <= 87 && match.corner_odds?.available ? 
+                                '<span style="background: #ffaa00; color: black; padding: 4px 8px; border-radius: 12px; font-size: 0.7em; margin-left: 8px;">⚡ ALERT READY</span>' : 
+                                ''}
+                        </div>
                         <div class="match-time">
                             <span class="minute">${match.minute}'</span>
                             <span class="status-badge">${match.status}</span>
                         </div>
-                                    </div>
+                    </div>
                     
                     <div class="score">${match.home_score} - ${match.away_score}</div>
                     <div class="league">🏆 ${match.league}</div>
@@ -652,12 +707,39 @@
                 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
                 document.getElementById('lastUpdate').textContent = `${validMatches.length} matches with live stats | Updated: ${now}`;
                 
+                // PRIORITY SORTING: Critical alert window matches first
+                const sortedMatches = validMatches.sort((a, b) => {
+                    // Priority 1: Critical alert window (84-86 minutes) with odds
+                    const aCritical = (a.minute >= 84 && a.minute <= 86) && a.corner_odds?.available;
+                    const bCritical = (b.minute >= 84 && b.minute <= 86) && b.corner_odds?.available;
+                    
+                    if (aCritical && !bCritical) return -1;
+                    if (!aCritical && bCritical) return 1;
+                    
+                    // Priority 2: Alert ready window (82-87 minutes) with odds
+                    const aAlertReady = (a.minute >= 82 && a.minute <= 87) && a.corner_odds?.available;
+                    const bAlertReady = (b.minute >= 82 && b.minute <= 87) && b.corner_odds?.available;
+                    
+                    if (aAlertReady && !bAlertReady) return -1;
+                    if (!aAlertReady && bAlertReady) return 1;
+                    
+                    // Priority 3: Any match with odds (70-90 minute window)
+                    const aHasOdds = a.corner_odds?.available;
+                    const bHasOdds = b.corner_odds?.available;
+                    
+                    if (aHasOdds && !bHasOdds) return -1;
+                    if (!aHasOdds && bHasOdds) return 1;
+                    
+                    // Priority 4: Higher minute (closer to alert window)
+                    return b.minute - a.minute;
+                });
+
                 // Update matches
                 const matchesList = document.getElementById('matchesList');
-                if (validMatches.length === 0) {
+                if (sortedMatches.length === 0) {
                     matchesList.innerHTML = '<div class="loading">⚽ No live matches with statistics available</div>';
                 } else {
-                    const matchCards = validMatches.map(renderMatchCard).filter(card => card !== '');
+                    const matchCards = sortedMatches.map(renderMatchCard).filter(card => card !== '');
                     matchesList.innerHTML = matchCards.join('');
                 }
             } catch (error) {
