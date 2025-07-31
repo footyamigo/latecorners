@@ -11,13 +11,45 @@ class TelegramNotifier:
     """Handles Telegram notifications for corner betting alerts"""
     
     def __init__(self):
-        self.config = get_config()
-        self.bot = Bot(token=self.config.TELEGRAM_BOT_TOKEN)
-        self.chat_id = self.config.TELEGRAM_CHAT_ID
         self.logger = logging.getLogger(__name__)
+        self.logger.info(f"🤖 INITIALIZING TELEGRAM BOT...")
         
-        # Track sent alerts to avoid duplicates
-        self.sent_alerts = set()
+        try:
+            self.config = get_config()
+            
+            # Check bot token
+            bot_token = self.config.TELEGRAM_BOT_TOKEN
+            if not bot_token:
+                self.logger.error(f"❌ TELEGRAM_BOT_TOKEN not configured!")
+                self.bot = None
+            else:
+                self.logger.info(f"✅ Bot token configured (ending: ...{bot_token[-10:]})")
+                self.bot = Bot(token=bot_token)
+                self.logger.info(f"✅ Telegram Bot object created")
+            
+            # Check chat ID
+            chat_id = self.config.TELEGRAM_CHAT_ID
+            if not chat_id:
+                self.logger.error(f"❌ TELEGRAM_CHAT_ID not configured!")
+                self.chat_id = None
+            else:
+                self.logger.info(f"✅ Chat ID configured: {chat_id}")
+                self.chat_id = chat_id
+            
+            # Track sent alerts to avoid duplicates
+            self.sent_alerts = set()
+            
+            if self.bot and self.chat_id:
+                self.logger.info(f"🎉 TELEGRAM BOT READY FOR ALERTS!")
+            else:
+                self.logger.warning(f"⚠️ TELEGRAM BOT NOT FULLY CONFIGURED")
+                
+        except Exception as e:
+            self.logger.error(f"❌ TELEGRAM BOT INITIALIZATION FAILED:")
+            self.logger.error(f"   Error: {type(e).__name__}: {str(e)}")
+            self.bot = None
+            self.chat_id = None
+            self.sent_alerts = set()
     
     async def send_corner_alert(self, scoring_result: ScoringResult, 
                                match_info: Dict, corner_odds: Optional[Dict] = None):
@@ -26,29 +58,73 @@ class TelegramNotifier:
         # Create unique alert ID to prevent duplicates
         alert_id = f"{scoring_result.fixture_id}_{scoring_result.minute}_{int(scoring_result.total_score)}"
         
+        self.logger.info(f"🚀 TELEGRAM ALERT ATTEMPT: {alert_id}")
+        self.logger.info(f"   Match: {match_info.get('home_team')} vs {match_info.get('away_team')}")
+        self.logger.info(f"   Tier: {match_info.get('tier', 'UNKNOWN')}")
+        self.logger.info(f"   Score: {scoring_result.total_score}")
+        
         if alert_id in self.sent_alerts:
-            self.logger.debug(f"Alert {alert_id} already sent, skipping")
-            return
+            self.logger.warning(f"📵 ALERT DUPLICATE: {alert_id} already sent, skipping")
+            return True  # Already sent successfully
+        
+        # Configuration verification
+        if not self.bot:
+            self.logger.error(f"❌ TELEGRAM BOT NOT INITIALIZED")
+            return False
+            
+        if not self.chat_id:
+            self.logger.error(f"❌ TELEGRAM CHAT_ID NOT SET")
+            return False
+        
+        self.logger.info(f"📱 TELEGRAM CONFIG: Bot initialized, Chat ID: {self.chat_id}")
         
         try:
+            # Format message with detailed logging
+            self.logger.info(f"📝 FORMATTING MESSAGE...")
             message = self._format_alert_message(scoring_result, match_info, corner_odds)
             
-            await self.bot.send_message(
+            # Log message preview (first 200 chars)
+            preview = message[:200] + "..." if len(message) > 200 else message
+            self.logger.info(f"📄 MESSAGE PREVIEW: {preview}")
+            self.logger.info(f"📊 MESSAGE LENGTH: {len(message)} characters")
+            
+            # Attempt to send
+            self.logger.info(f"📤 SENDING TO TELEGRAM...")
+            self.logger.info(f"   Chat ID: {self.chat_id}")
+            self.logger.info(f"   Parse mode: HTML")
+            
+            response = await self.bot.send_message(
                 chat_id=self.chat_id,
                 text=message,
                 parse_mode='HTML',
                 disable_web_page_preview=True
             )
             
+            # Log successful response
+            self.logger.info(f"✅ TELEGRAM SUCCESS!")
+            self.logger.info(f"   Message ID: {response.message_id}")
+            self.logger.info(f"   Date: {response.date}")
+            
             # Mark as sent
             self.sent_alerts.add(alert_id)
             
-            self.logger.info(f"Corner alert sent for fixture {scoring_result.fixture_id}")
+            self.logger.info(f"🎉 CORNER ALERT SENT SUCCESSFULLY for fixture {scoring_result.fixture_id}")
+            return True  # Success
             
         except TelegramError as e:
-            self.logger.error(f"Failed to send Telegram alert: {e}")
+            self.logger.error(f"❌ TELEGRAM API ERROR:")
+            self.logger.error(f"   Error type: {type(e).__name__}")
+            self.logger.error(f"   Error message: {str(e)}")
+            self.logger.error(f"   Error code: {getattr(e, 'error_code', 'N/A')}")
+            self.logger.error(f"   Description: {getattr(e, 'description', 'N/A')}")
+            return False  # Failed
         except Exception as e:
-            self.logger.error(f"Unexpected error sending alert: {e}")
+            self.logger.error(f"❌ UNEXPECTED ERROR SENDING ALERT:")
+            self.logger.error(f"   Error type: {type(e).__name__}")
+            self.logger.error(f"   Error message: {str(e)}")
+            import traceback
+            self.logger.error(f"   Traceback: {traceback.format_exc()}")
+            return False  # Failed
     
     def _format_alert_message(self, scoring_result: ScoringResult, 
                              match_info: Dict, corner_odds: Optional[Dict]) -> str:

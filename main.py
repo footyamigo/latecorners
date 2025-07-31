@@ -517,21 +517,52 @@ class LateCornerMonitor:
                                     alert_info = await self._monitor_single_match(match)
                                     
                                     if alert_info:
-                                        # Send alert using the correct method
-                                        # Create a proper scoring result object
+                                        self.logger.info(f"🎯 ALERT QUALIFIED: Match {match_id} met all criteria!")
+                                        self.logger.info(f"   ✅ Alert info received from monitoring: {alert_info.keys()}")
+                                        
+                                        # Extract actual values from alert_info instead of hardcoding
+                                        actual_minute = alert_info.get('minute', 85)
+                                        actual_score = alert_info.get('elite_score', 0)
+                                        actual_priority = alert_info.get('high_priority_count', 0)
+                                        actual_conditions = alert_info.get('triggered_conditions', [])
+                                        actual_tier = alert_info.get('tier', 'UNKNOWN')
+                                        
+                                        self.logger.info(f"🔍 ALERT DETAILS:")
+                                        self.logger.info(f"   Minute: {actual_minute}")
+                                        self.logger.info(f"   Score: {actual_score}")
+                                        self.logger.info(f"   Priority: {actual_priority}")
+                                        self.logger.info(f"   Tier: {actual_tier}")
+                                        self.logger.info(f"   Conditions: {len(actual_conditions)} met")
+                                        
+                                        # Create proper scoring result object with ACTUAL data
                                         from scoring_engine import ScoringResult
                                         scoring_obj = ScoringResult(
                                             fixture_id=match_id,
-                                            minute=85,  # We know it's 85th minute from our logic
-                                            total_score=10,  # Elite threshold met
-                                            high_priority_indicators=2,  # Elite threshold met
-                                            triggered_conditions=[],  # Fixed parameter name
-                                            team_focus="home",  # Required parameter
-                                            match_context="Alert triggered manually"  # Required parameter
+                                            minute=actual_minute,
+                                            total_score=actual_score,
+                                            high_priority_indicators=actual_priority,
+                                            triggered_conditions=actual_conditions,
+                                            team_focus="home",  # This could be extracted from alert_info if needed
+                                            match_context=f"{actual_tier} tier alert - {len(actual_conditions)} conditions met"
                                         )
                                         
-                                        # Get corner odds from alert_info or use placeholder
-                                        corner_odds = {'available': True}  # Placeholder
+                                        # Extract corner odds from alert_info
+                                        corner_odds_available = alert_info.get('odds_available', False)
+                                        corner_odds = {
+                                            'available': corner_odds_available,
+                                            'count': alert_info.get('odds_count', 0),
+                                            'active_count': alert_info.get('active_odds_count', 0),
+                                            'odds_details': alert_info.get('odds_details', []),
+                                            'active_odds': alert_info.get('active_odds', [])
+                                        }
+                                        
+                                        self.logger.info(f"💰 ODDS INFO:")
+                                        self.logger.info(f"   Available: {corner_odds['available']}")
+                                        self.logger.info(f"   Total markets: {corner_odds['count']}")
+                                        self.logger.info(f"   Active markets: {corner_odds['active_count']}")
+                                        
+                                        # ATTEMPT TO SEND TELEGRAM ALERT
+                                        self.logger.info(f"📱 INITIATING TELEGRAM ALERT for {actual_tier} match {match_id}...")
                                         
                                         success = await self.telegram_bot.send_corner_alert(
                                             scoring_result=scoring_obj,
@@ -541,9 +572,13 @@ class LateCornerMonitor:
                                         
                                         if success:
                                             self.alerted_matches.add(match_id)
-                                            self.logger.info(f"🚨 ALERT SENT for match {match_id}")
+                                            self.logger.info(f"🎉 TELEGRAM ALERT SENT SUCCESSFULLY for match {match_id}")
+                                            self.logger.info(f"   ✅ {actual_tier} tier alert delivered")
+                                            self.logger.info(f"   ✅ Match added to alerted list")
                                         else:
-                                            self.logger.error(f"❌ Failed to send alert for match {match_id}")
+                                            self.logger.error(f"❌ TELEGRAM ALERT FAILED for match {match_id}")
+                                            self.logger.error(f"   ❌ Check Telegram configuration and network")
+                                            self.logger.error(f"   ❌ Alert will be retried next cycle")
                                             
                             except Exception as e:
                                 self.logger.error(f"❌ Error processing match {match.get('id', 'unknown')}: {e}")
