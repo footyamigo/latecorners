@@ -277,9 +277,9 @@ class LateCornerMonitor:
             
             # ENHANCED DEBUG: Log ALL scoring attempts
             if scoring_result:
-                total_score = scoring_result.get('total_score', 0)
-                high_priority_count = scoring_result.get('high_priority_indicators', 0)
-                triggered_conditions = scoring_result.get('triggered_conditions', [])
+                total_score = scoring_result.total_score
+                high_priority_count = scoring_result.high_priority_indicators
+                triggered_conditions = scoring_result.triggered_conditions
                 self.logger.info(f"🎯 ELITE SCORING: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
                 self.logger.info(f"   📊 Total Score: {total_score}/8.0 | High Priority: {high_priority_count}/2")
                 self.logger.info(f"   🏆 Conditions: {triggered_conditions}")
@@ -291,41 +291,49 @@ class LateCornerMonitor:
             else:
                 self.logger.info(f"📊 ELITE SCORING: Match {fixture_id} - Minute {match_stats.minute} not in alert window (85') OR no scoring result")
             
-            # ELITE ALERT LOGIC: Check if conditions are met for alert
+            # DUAL-TIER ALERT LOGIC: Check ELITE first, then PREMIUM
             if scoring_result and fixture_id not in self.alerted_matches:
-                total_score = scoring_result.get('total_score', 0)
-                high_priority_count = scoring_result.get('high_priority_indicators', 0)
+                total_score = scoring_result.total_score
+                high_priority_count = scoring_result.high_priority_indicators
                 
-                # Elite thresholds: minimum 8.0 points AND at least 2 high-priority indicators
+                # ELITE TIER: Ultra-selective (8.0+ score, 2+ high priority, 84-85 minutes)
                 if total_score >= 8.0 and high_priority_count >= 2:
-                    self.logger.info(f"🎯 ELITE MATCH DETECTED: {fixture_id} - Score: {total_score}, High Priority: {high_priority_count}")
+                    self.logger.info(f"🏆 ELITE MATCH DETECTED: {fixture_id} - Score: {total_score}, High Priority: {high_priority_count}")
                     
-                    # Check if we're in the exact alert window (85th minute)
-                    if self.scoring_engine._is_in_alert_window(match_stats.minute):
-                        self.logger.info(f"🎯 ALERT WINDOW HIT! Match {fixture_id} at minute {match_stats.minute} - proceeding to odds check")
+                    # Check if we're in the exact elite alert window (84-85th minute)
+                    if 84 <= match_stats.minute <= 85:
+                        self.logger.info(f"🏆 ELITE ALERT WINDOW! Match {fixture_id} at minute {match_stats.minute} - proceeding to odds check")
                         
-                        # Check corner odds availability
-                        self.logger.info(f"💰 ODDS CHECK PHASE: Starting odds retrieval for elite match {fixture_id}")
                         corner_odds = await self._get_corner_odds(fixture_id)
-                        
                         if corner_odds:
-                            self.logger.info(f"🚀 SENDING ALERT: All conditions met for match {fixture_id}")
-                            self.logger.info(f"   ✅ Score: {total_score}/8.0, High Priority: {high_priority_count}/2")
-                            self.logger.info(f"   ✅ Minute: {match_stats.minute} (in alert window)")
-                            self.logger.info(f"   ✅ Odds: {corner_odds.get('count', 0)} bet365 markets available")
-                            
-                            # Extract match info for alert
-                            match_info = self._extract_match_info(match_stats, scoring_result, corner_odds)
+                            self.logger.info(f"🚀 SENDING ELITE ALERT: All conditions met for match {fixture_id}")
+                            match_info = self._extract_match_info(match_stats, scoring_result, corner_odds, tier="ELITE")
                             return match_info
                         else:
-                            self.logger.warning(f"🚫 ALERT BLOCKED: Elite match {fixture_id} qualifies but NO ODDS available")
-                            self.logger.warning(f"   ✅ Score: {total_score}/8.0, High Priority: {high_priority_count}/2")
-                            self.logger.warning(f"   ✅ Minute: {match_stats.minute} (in alert window)")
-                            self.logger.warning(f"   ❌ Odds: None available from SportMonks")
+                            self.logger.warning(f"🚫 ELITE ALERT BLOCKED: No odds available for match {fixture_id}")
                     else:
-                        self.logger.info(f"⏰ Elite match {fixture_id} not in alert window yet (minute {match_stats.minute}) - will check again when it reaches 84-85'")
+                        self.logger.info(f"⏰ Elite match {fixture_id} waiting for alert window (need 84-85', currently {match_stats.minute}')")
+                
+                # PREMIUM TIER: More accessible (6.0+ score, 1+ high priority, 82-87 minutes)
+                elif total_score >= 6.0 and high_priority_count >= 1:
+                    self.logger.info(f"💎 PREMIUM MATCH DETECTED: {fixture_id} - Score: {total_score}, High Priority: {high_priority_count}")
+                    
+                    # Check if we're in the premium alert window (82-87th minute)
+                    if 82 <= match_stats.minute <= 87:
+                        self.logger.info(f"💎 PREMIUM ALERT WINDOW! Match {fixture_id} at minute {match_stats.minute} - proceeding to odds check")
+                        
+                        corner_odds = await self._get_corner_odds(fixture_id)
+                        if corner_odds:
+                            self.logger.info(f"🚀 SENDING PREMIUM ALERT: All conditions met for match {fixture_id}")
+                            match_info = self._extract_match_info(match_stats, scoring_result, corner_odds, tier="PREMIUM")
+                            return match_info
+                        else:
+                            self.logger.warning(f"🚫 PREMIUM ALERT BLOCKED: No odds available for match {fixture_id}")
+                    else:
+                        self.logger.info(f"⏰ Premium match {fixture_id} waiting for alert window (need 82-87', currently {match_stats.minute}')")
+                
                 else:
-                    self.logger.debug(f"📊 Match {fixture_id} below elite thresholds - Score: {total_score}/8.0, High Priority: {high_priority_count}/2")
+                    self.logger.debug(f"📊 Match {fixture_id} below thresholds - Score: {total_score}/6.0, High Priority: {high_priority_count}/1")
             
             return None
             
@@ -381,10 +389,27 @@ class LateCornerMonitor:
             odds_data = check_corner_odds_available(fixture_id)
             
             if odds_data and odds_data.get('available', False):
-                self.logger.info(f"✅ LIVE ODDS @ 85': {odds_data['count']} bet365 Asian corner markets - CURRENT PRICING!")
-                if 'odds_details' in odds_data:
-                    self.logger.info(f"   💎 Real-time odds: {odds_data['odds_details']}")
-                self.logger.info(f"   ⚡ These are actionable odds fetched at alert time - not cached/stale data")
+                total_count = odds_data.get('count', 0)
+                active_count = odds_data.get('active_count', 0)
+                suspended_count = total_count - active_count
+                
+                self.logger.info(f"✅ LIVE ODDS @ 85': {total_count} bet365 Asian corner markets found!")
+                self.logger.info(f"   🟢 ACTIVE (bettable): {active_count} markets")
+                self.logger.info(f"   🔶 SUSPENDED: {suspended_count} markets")
+                
+                # Show active odds (the ones you can actually bet on)
+                if 'active_odds' in odds_data and odds_data['active_odds']:
+                    self.logger.info(f"   💎 ACTIVE ODDS (bettable now):")
+                    for odds_str in odds_data['active_odds']:
+                        self.logger.info(f"      • {odds_str}")
+                
+                # Show all odds details if needed
+                if 'odds_details' in odds_data and len(odds_data['odds_details']) > active_count:
+                    self.logger.info(f"   📊 ALL ODDS (including suspended):")
+                    for odds_str in odds_data['odds_details']:
+                        self.logger.info(f"      • {odds_str}")
+                
+                self.logger.info(f"   ⚡ These are LIVE odds fetched at alert time - actionable now!")
                 return odds_data
             else:
                 self.logger.warning(f"❌ NO ODDS @ 85': SportMonks has no corner odds for elite match {fixture_id}")
@@ -395,7 +420,7 @@ class LateCornerMonitor:
             self.logger.error(f"❌ Error getting corner odds for match {fixture_id}: {e}")
             return None
 
-    def _extract_match_info(self, match_stats, scoring_result: Dict, corner_odds: Dict) -> Dict:
+    def _extract_match_info(self, match_stats, scoring_result: Dict, corner_odds: Dict, tier: str = "ELITE") -> Dict:
         """Extract match information for alert"""
         try:
             match_info = {
@@ -405,6 +430,7 @@ class LateCornerMonitor:
                 'home_score': match_stats.home_score,
                 'away_score': match_stats.away_score,
                 'minute': match_stats.minute,
+                'tier': tier,  # ELITE or PREMIUM
                 
                 # Live statistics for Telegram message
                 'home_corners': match_stats.total_corners // 2 if hasattr(match_stats, 'total_corners') else 0,  # Rough split
@@ -415,6 +441,18 @@ class LateCornerMonitor:
                 'away_shots_on_target': match_stats.shots_on_target.get('away', 0) if hasattr(match_stats, 'shots_on_target') else 0,
                 'home_attacks': match_stats.dangerous_attacks.get('home', 0) if hasattr(match_stats, 'dangerous_attacks') else 0,
                 'away_attacks': match_stats.dangerous_attacks.get('away', 0) if hasattr(match_stats, 'dangerous_attacks') else 0,
+                
+                # Corner odds information for alert
+                'odds_available': corner_odds.get('available', False),
+                'odds_count': corner_odds.get('count', 0),
+                'active_odds_count': corner_odds.get('active_count', 0),
+                'odds_details': corner_odds.get('odds_details', []),
+                'active_odds': corner_odds.get('active_odds', []),
+                
+                # Scoring information for alert
+                'elite_score': scoring_result.total_score,
+                'high_priority_count': scoring_result.high_priority_indicators,
+                'triggered_conditions': scoring_result.triggered_conditions
             }
             
             self.logger.info(f"🧪 DEBUG: Extracted match_info: {match_info}")

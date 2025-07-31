@@ -267,6 +267,92 @@
             margin-top: 2px;
         }
 
+        .odds-section {
+            background: #111;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            margin-top: 16px;
+        }
+        
+        .odds-title {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 12px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .odds-status {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .odds-available {
+            background: #00ff88;
+            color: #000;
+        }
+        
+        .odds-none {
+            background: #666;
+            color: #fff;
+        }
+        
+        .odds-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+        
+        .odds-item {
+            background: #1a1a1a;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .odds-item.active {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .odds-item.suspended {
+            opacity: 0.6;
+            border-color: #666;
+        }
+        
+        .odds-label {
+            font-size: 0.85em;
+            color: #ccc;
+            font-weight: 500;
+        }
+        
+        .odds-value {
+            font-size: 0.95em;
+            font-weight: 700;
+            color: #00ccff;
+        }
+        
+        .odds-item.active .odds-value {
+            color: #00ff88;
+        }
+        
+        .odds-summary {
+            text-align: center;
+            font-size: 0.8em;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
         .loading {
             text-align: center;
             color: #666;
@@ -410,6 +496,85 @@
             `;
         }
 
+        function renderCornerOdds(match) {
+            const cornerOdds = match.corner_odds;
+            
+            // Only show odds section for matches in the 70-90 minute window
+            if (match.minute < 70 || match.minute > 90) {
+                return '';
+            }
+            
+            if (!cornerOdds || !cornerOdds.available) {
+                return `
+                    <div class="odds-section">
+                        <div class="odds-title">
+                            💰 Corner Odds
+                            <span class="odds-status odds-none">NO ODDS</span>
+                        </div>
+                        <div class="odds-summary">No bet365 Asian corner markets available</div>
+                    </div>
+                `;
+            }
+            
+            const totalCount = cornerOdds.count || 0;
+            const activeCount = cornerOdds.active_count || 0;
+            const suspendedCount = totalCount - activeCount;
+            
+            let oddsHtml = `
+                <div class="odds-section">
+                    <div class="odds-title">
+                        💰 Corner Odds
+                        <span class="odds-status odds-available">LIVE</span>
+                    </div>
+                    <div class="odds-summary">${totalCount} markets • ${activeCount} active • ${suspendedCount} suspended</div>
+                    <div class="odds-grid">
+            `;
+            
+            // Show active odds first (prioritize bettable odds)
+            if (cornerOdds.active_odds && cornerOdds.active_odds.length > 0) {
+                cornerOdds.active_odds.forEach(oddsStr => {
+                    // Parse "Over 10.5 = 2.02" format
+                    const [label, value] = oddsStr.split(' = ');
+                    oddsHtml += `
+                        <div class="odds-item active">
+                            <span class="odds-label">🟢 ${label}</span>
+                            <span class="odds-value">${value}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Show suspended odds (if any)
+            if (cornerOdds.odds_details && suspendedCount > 0) {
+                const suspendedOdds = cornerOdds.odds_details.filter(oddsStr => oddsStr.includes('(suspended)'));
+                const maxSuspended = Math.min(3, suspendedOdds.length); // Limit to 3 suspended odds
+                
+                for (let i = 0; i < maxSuspended; i++) {
+                    const oddsStr = suspendedOdds[i];
+                    const [label, value] = oddsStr.replace(' (suspended)', '').split(' = ');
+                    oddsHtml += `
+                        <div class="odds-item suspended">
+                            <span class="odds-label">⏸️ ${label}</span>
+                            <span class="odds-value">${value}</span>
+                        </div>
+                    `;
+                }
+                
+                if (suspendedCount > 3) {
+                    oddsHtml += `
+                        <div class="odds-summary">+${suspendedCount - 3} more suspended odds</div>
+                    `;
+                }
+            }
+            
+            oddsHtml += `
+                    </div>
+                </div>
+            `;
+            
+            return oddsHtml;
+        }
+
         function isMatchValid(match) {
             // Filter out matches without live stats
             if (!match.statistics || match.statistics.total_stats_available === 0) {
@@ -462,6 +627,7 @@
                         </div>
                         
                         ${renderMatchTotals(homeStats, awayStats)}
+                        ${renderCornerOdds(match)}
                         </div>
                     </div>
                 `;

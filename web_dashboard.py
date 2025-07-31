@@ -271,17 +271,17 @@ def _generate_telegram_message(match, evaluation, odds_info):
     return message
 
 def should_check_odds(match):
-    """Updated: Check odds for matches 80-90 minutes (expanded window for better elite coverage)"""
+    """Updated: Check odds for matches 70-90 minutes (extended window for comprehensive odds tracking)"""
     match_id = match['match_id']
     minute = match['minute']
     
-    # EXPANDED WINDOW: Check odds from 80-90 minutes to ensure maximum availability for elite scoring
-    if minute < 80:
-        print(f"🕐 Match {match_id} ({minute}'): Too early for odds checking (need 80-90 minutes)")
+    # EXTENDED WINDOW: Check odds from 70-90 minutes for comprehensive live odds tracking
+    if minute < 70:
+        print(f"🕐 Match {match_id} ({minute}'): Too early for odds checking (need 70-90 minutes)")
         return False
     
     if minute > 90:
-        print(f"🕐 Match {match_id} ({minute}'): Beyond odds checking window (80-90 minutes)")
+        print(f"🕐 Match {match_id} ({minute}'): Beyond odds checking window (70-90 minutes)")
         return False
     
     # Only check odds for matches with corner statistics (essential for corner betting)
@@ -542,8 +542,8 @@ def check_corner_odds_available(match_id):
         if response.status_code == 200:
             all_odds = response.json().get('data', [])
             
-            # Quick check for Market 61 (Asian Total Corners) and Bookmaker 2 (bet365)
-            corner_odds_count = 0
+            # Extract bet365 Asian corner odds with detailed values
+            bet365_corner_odds = []
             total_corner_markets = 0
             
             for odds in all_odds:
@@ -554,13 +554,49 @@ def check_corner_odds_available(match_id):
                 if market_id == 61:  # Only Asian Total Corners, not Asian Handicap (62)
                     total_corner_markets += 1
                     if bookmaker_id == 2:  # bet365 specifically
-                        corner_odds_count += 1
+                        # Extract detailed odds info
+                        odds_info = {
+                            'label': odds.get('label', 'Unknown'),
+                            'value': odds.get('value', 'N/A'),
+                            'total': odds.get('total', 'N/A'),
+                            'probability': odds.get('probability', 'N/A'),
+                            'suspended': odds.get('suspended', False),
+                            'stopped': odds.get('stopped', False)
+                        }
+                        bet365_corner_odds.append(odds_info)
+            
+            # Create readable odds details for logging/display
+            odds_details = []
+            active_odds = []
+            
+            for odds in bet365_corner_odds:
+                total = odds['total']
+                label = odds['label']
+                value = odds['value']
+                suspended = odds['suspended']
+                stopped = odds['stopped']
+                
+                # Format: "Over 10.5 = 2.02" or "Under 9 = 1.77 (suspended)"
+                status = ""
+                if suspended or stopped:
+                    status = " (suspended)"
+                    
+                odds_str = f"{label} {total} = {value}{status}"
+                odds_details.append(odds_str)
+                
+                # Track active (non-suspended) odds
+                if not suspended and not stopped:
+                    active_odds.append(odds_str)
             
             result = {
-                'available': corner_odds_count > 0,
-                'count': corner_odds_count,
+                'available': len(bet365_corner_odds) > 0,
+                'count': len(bet365_corner_odds),
+                'active_count': len(active_odds),
                 'total_corner_markets': total_corner_markets,
-                'total_odds': len(all_odds)
+                'total_odds': len(all_odds),
+                'odds_details': odds_details,
+                'active_odds': active_odds,
+                'corner_odds_data': bet365_corner_odds  # Full data for alerts
             }
             
             # Cache the result
@@ -597,12 +633,12 @@ def update_live_data():
             
             # Calculate stats focused on 85-minute corner alert system
             alert_ready_matches = [m for m in matches if m['minute'] >= 85]  # Matches at alert time
-            approaching_alert_matches = [m for m in matches if 80 <= m['minute'] <= 90]  # Preparing for alerts (expanded window)
+            approaching_alert_matches = [m for m in matches if 70 <= m['minute'] <= 90]  # Preparing for alerts (extended window)
             matches_with_stats = [m for m in matches if m['statistics']['total_stats_available'] > 0]
             
             print(f"🚨 Alert System Status:")
             print(f"   • {len(alert_ready_matches)} matches at 85+ minutes (alert time)")
-            print(f"   • {len(approaching_alert_matches)} matches in alert window (80-90 min)")
+            print(f"   • {len(approaching_alert_matches)} matches in extended odds window (70-90 min)")
             print(f"   • {len(matches_with_stats)} matches with live stats total")
             
             # STEP 1: Trigger 85-minute alerts for qualified matches
@@ -631,27 +667,51 @@ def update_live_data():
             else:
                 print(f"📊 No alerts triggered this cycle")
             
-            # STEP 2: Check corner odds for matches in alert window (80-90 minutes)
+            # STEP 2: Check corner odds for matches in extended window (70-90 minutes)
             matches_with_odds = 0
             checked_count = 0
             
             for match in matches_with_stats:
-                if should_check_odds(match):  # Now checks 80-90 minute matches
+                if should_check_odds(match):  # Now checks 70-90 minute matches
                     checked_count += 1
                     print(f"🎯 MINUTE {match['minute']}: Checking odds for match {match['match_id']} ({match['home_team']} vs {match['away_team']})")
                     odds_check = check_corner_odds_available(match['match_id'])
                     if odds_check['available']:
                         matches_with_odds += 1
                         match['corner_odds'] = odds_check
-                        print(f"✅ MINUTE {match['minute']}: Corner odds available! {odds_check['count']} bet365 Asian corner markets")
-                        print(f"   📊 Elite system will fetch FRESH odds if this match qualifies at 85'")
                         
-                        # Log specific odds details for debugging
-                        if 'odds_details' in odds_check:
-                            print(f"   💎 Current odds: {odds_check['odds_details']}")
+                        total_count = odds_check.get('count', 0)
+                        active_count = odds_check.get('active_count', 0)
+                        suspended_count = total_count - active_count
+                        
+                        print(f"✅ MINUTE {match['minute']}: Corner odds available! {total_count} bet365 Asian corner markets")
+                        print(f"   🟢 ACTIVE (bettable): {active_count} markets | 🔶 SUSPENDED: {suspended_count} markets")
+                        
+                        # Show active odds first (the important ones)
+                        if 'active_odds' in odds_check and odds_check['active_odds']:
+                            print(f"   💎 ACTIVE ODDS (bettable now):")
+                            for odds_str in odds_check['active_odds']:
+                                print(f"      • {odds_str}")
+                        
+                        # Show all odds if there are suspended ones too
+                        if 'odds_details' in odds_check and len(odds_check['odds_details']) > active_count:
+                            print(f"   📊 ALL ODDS (including suspended): {', '.join(odds_check['odds_details'])}")
+                            
+                        print(f"   ⚡ Elite system will use these LIVE odds if match qualifies at 85'")
                     else:
                         print(f"❌ MINUTE {match['minute']}: No corner odds available for match {match['match_id']}")
                         print(f"   ⚠️ Elite system will re-check for odds if this match qualifies at 85'")
+                        
+                        # Attach "no odds" data so dashboard can show NO ODDS section
+                        match['corner_odds'] = {
+                            'available': False,
+                            'count': 0,
+                            'active_count': 0,
+                            'total_corner_markets': 0,
+                            'total_odds': 0,
+                            'odds_details': [],
+                            'active_odds': []
+                        }
                 else:
                     # Check cached odds for display purposes
                     if match['match_id'] in odds_cache:
@@ -663,9 +723,23 @@ def update_live_data():
             
             print(f"📊 Pre-alert preparation: checked {checked_count} matches, {matches_with_odds} with corner odds ready")
             
+            # Ensure all matches in 70-90 minute window have corner_odds data for dashboard display
+            for match in matches:
+                if 70 <= match['minute'] <= 90 and 'corner_odds' not in match:
+                    # Add default "no odds" data for dashboard display
+                    match['corner_odds'] = {
+                        'available': False,
+                        'count': 0,
+                        'active_count': 0,
+                        'total_corner_markets': 0,
+                        'total_odds': 0,
+                        'odds_details': [],
+                        'active_odds': []
+                    }
+            
             dashboard_stats = {
                 'total_live': len(matches),
-                'late_games': len(approaching_alert_matches),  # 80-90 minute matches (alert window)
+                'late_games': len(approaching_alert_matches),  # 70-90 minute matches (extended odds window)
                 'draws': len([m for m in matches if m['is_draw']]),
                 'close_games': len([m for m in matches if m['is_close']]),
                 'critical_games': len(alert_ready_matches),  # 85+ minute matches (alert time)
@@ -673,7 +747,7 @@ def update_live_data():
                 'with_corners': len([m for m in matches if m['statistics']['has_corners']]),
                 'with_odds': matches_with_odds,  # Matches with corner odds available
                 'alerts_triggered': alerts_triggered,  # New: Track alerts sent this cycle
-                'in_alert_window': len(approaching_alert_matches),  # Matches in 80-90 minute window
+                'in_alert_window': len(approaching_alert_matches),  # Matches in 70-90 minute window
                 'ready_for_alerts': len([m for m in alert_ready_matches if m['statistics']['has_corners'] and m.get('corner_odds', {}).get('available', False)]),  # Matches that could trigger alerts
                 'last_update': datetime.now().strftime('%H:%M:%S')
             }

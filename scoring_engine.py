@@ -13,6 +13,7 @@ class ScoringResult:
     total_score: float
     minute: int
     triggered_conditions: List[str]
+    high_priority_indicators: int  # Count of high-priority indicators met
     team_focus: str  # 'home' or 'away' - which team is most likely to get corners
     match_context: str
     
@@ -119,24 +120,42 @@ class ScoringEngine:
         high_priority_count = self._count_high_priority_indicators(triggered_conditions)
         self.logger.info(f"🧪 SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}, triggered={triggered_conditions}")
         
-        # MANDATORY: Check corner count range (7-12 corners required)
+        # FLEXIBLE CORNER FILTER: Support different tiers
         total_corners = current_stats.total_corners
-        if not (7 <= total_corners <= 12):
-            self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (need 7-12)")
-            return None
         
-        # Check if alert threshold is met 
-        # Threshold set to 8 points after removing time multiplier and enhancing corner-focused scoring
-        # Plus MANDATORY corner range requirement (7-12 corners)
-        if total_score >= 8.0 and high_priority_count >= 2:
+        # ELITE tier: 7-12 corners (ultra-selective)
+        elite_corner_ok = 7 <= total_corners <= 12
+        # PREMIUM tier: 6-14 corners (more accessible)  
+        premium_corner_ok = 6 <= total_corners <= 14
+        
+        # Check if any tier threshold is met
+        elite_qualified = total_score >= 8.0 and high_priority_count >= 2 and elite_corner_ok
+        premium_qualified = total_score >= 6.0 and high_priority_count >= 1 and premium_corner_ok
+        
+        if elite_qualified or premium_qualified:
+            # Log which tier(s) qualified
+            if elite_qualified:
+                self.logger.info(f"🏆 ELITE QUALIFIED: Match {current_stats.fixture_id} - Score: {total_score}/8.0, High Priority: {high_priority_count}/2, Corners: {total_corners}")
+            elif premium_qualified:
+                self.logger.info(f"💎 PREMIUM QUALIFIED: Match {current_stats.fixture_id} - Score: {total_score}/6.0, High Priority: {high_priority_count}/1, Corners: {total_corners}")
+            
             return ScoringResult(
                 fixture_id=current_stats.fixture_id,
                 total_score=total_score,
                 minute=current_stats.minute,
                 triggered_conditions=triggered_conditions,
+                high_priority_indicators=high_priority_count,
                 team_focus=team_focus,
                 match_context=self._generate_match_context(current_stats, triggered_conditions)
             )
+        else:
+            # Log why it didn't qualify for any tier
+            if total_corners < 6:
+                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (need 6+ for Premium, 7+ for Elite)")
+            elif total_corners > 14:
+                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (max 14 for Premium, 12 for Elite)")
+            else:
+                self.logger.info(f"🚫 SCORE FILTER: Match {current_stats.fixture_id} rejected - Score: {total_score} (need 6+ for Premium, 8+ for Elite), High Priority: {high_priority_count}")
         
         return None
     

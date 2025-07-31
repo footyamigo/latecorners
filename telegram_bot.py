@@ -59,18 +59,28 @@ class TelegramNotifier:
         away_team = match_info.get('away_team', 'Away Team')
         league = match_info.get('league', 'Unknown League')
         score = f"{match_info.get('home_score', 0)}-{match_info.get('away_score', 0)}"
+        tier = match_info.get('tier', 'ELITE')
         
-        # Header with emoji
-        message = f"🚨 <b>LATE CORNER ALERT</b> 🚨\n\n"
+        # Header with tier-specific emoji and title
+        if tier == "ELITE":
+            message = f"🏆 <b>ELITE CORNER ALERT</b> 🏆\n\n"
+        else:
+            message = f"💎 <b>PREMIUM CORNER ALERT</b> 💎\n\n"
         
         # Match details
         message += f"<b>{home_team} vs {away_team}</b>\n"
         message += f"📊 Score: {score} | ⏱️ {scoring_result.minute}'\n"
         message += f"🏆 {league}\n\n"
         
-        # Scoring details
-        message += f"<b>🎯 ALERT SCORE: {scoring_result.total_score:.1f}</b>\n"
-        message += f"(Threshold: {self.config.ALERT_THRESHOLD})\n\n"
+        # Scoring details with tier-specific thresholds
+        if tier == "ELITE":
+            message += f"<b>🎯 ELITE SCORE: {scoring_result.total_score:.1f}/8.0</b>\n"
+            message += f"⭐ High Priority: {match_info.get('high_priority_count', 0)}/2\n"
+            message += f"(Ultra-selective: 8+ score, 2+ priority, 84-85')\n\n"
+        else:
+            message += f"<b>🎯 PREMIUM SCORE: {scoring_result.total_score:.1f}/6.0</b>\n"
+            message += f"⭐ High Priority: {match_info.get('high_priority_count', 0)}/1\n"
+            message += f"(Accessible: 6+ score, 1+ priority, 82-87')\n\n"
         
         # Live match statistics
         message += f"<b>📊 Live Stats:</b>\n"
