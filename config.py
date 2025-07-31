@@ -71,10 +71,11 @@ SCORING_MATRIX = {
     'corners_7_baseline': 1,             # Minimum acceptable
     'corners_12_maximum': 1,             # Still acceptable but getting high
     
-    # Negative Indicators
-    'red_card_issued': -3,
-    'leading_by_2_goals': -3,    # New: Comfortable lead reduces corner urgency
-    'gk_making_8plus_saves': -1,
+    # REMOVED ALL NEGATIVE INDICATORS - ONLY POSITIVE SCORING
+    # We filter by time/corners already, no need for penalties
+    'red_card_issued': 0,        # No penalty - rare and doesn't affect corner potential
+    'leading_by_2_goals': 0,     # No penalty - 10 corners at 85' speaks for itself
+    'gk_making_8plus_saves': 0,  # No penalty - actually shows active game
 }
 
 # Historical multipliers
