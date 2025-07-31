@@ -269,7 +269,7 @@ class LateCornerMonitor:
             
             # PRE-SCORING DEBUG: Check basic requirements
             self.logger.info(f"🔍 PRE-CHECKS: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
-            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 84-85 for alert)")
+            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85 for ELITE, 82-87 for PREMIUM)")
             self.logger.info(f"   ⚽ Corners: {match_stats.total_corners} (need 7-12)")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
@@ -290,19 +290,19 @@ class LateCornerMonitor:
                 else:
                     self.logger.info(f"   ❌ Elite thresholds NOT met (need 8+ score AND 2+ high priority)")
             else:
-                self.logger.info(f"📊 ELITE SCORING: Match {fixture_id} - Minute {match_stats.minute} not in alert window (85') OR no scoring result")
+                self.logger.info(f"📊 ELITE SCORING: Match {fixture_id} - Minute {match_stats.minute} not in alert window (85' for ELITE, 82-87' for PREMIUM) OR no scoring result")
             
             # DUAL-TIER ALERT LOGIC: Check ELITE first, then PREMIUM
             if scoring_result and fixture_id not in self.alerted_matches:
                 total_score = scoring_result.total_score
                 high_priority_count = scoring_result.high_priority_indicators
                 
-                # ELITE TIER: Ultra-selective (8.0+ score, 2+ high priority, 84-85 minutes)
+                # ELITE TIER: Ultra-selective (8.0+ score, 2+ high priority, 85th minute ONLY)
                 if total_score >= 8.0 and high_priority_count >= 2:
                     self.logger.info(f"🏆 ELITE MATCH DETECTED: {fixture_id} - Score: {total_score}, High Priority: {high_priority_count}")
                     
-                    # Check if we're in the exact elite alert window (84-85th minute)
-                    if 84 <= match_stats.minute <= 85:
+                    # Check if we're in the exact elite alert window (85th minute ONLY)
+                    if match_stats.minute == 85:
                         self.logger.info(f"🏆 ELITE ALERT WINDOW! Match {fixture_id} at minute {match_stats.minute} - proceeding to odds check")
                         
                         corner_odds = await self._get_corner_odds(fixture_id)
@@ -313,7 +313,7 @@ class LateCornerMonitor:
                         else:
                             self.logger.warning(f"🚫 ELITE ALERT BLOCKED: No odds available for match {fixture_id}")
                     else:
-                        self.logger.info(f"⏰ Elite match {fixture_id} waiting for alert window (need 84-85', currently {match_stats.minute}')")
+                        self.logger.info(f"⏰ Elite match {fixture_id} waiting for alert window (need 85', currently {match_stats.minute}')")
                 
                 # PREMIUM TIER: More accessible (6.0+ score, 1+ high priority, 82-87 minutes)
                 elif total_score >= 6.0 and high_priority_count >= 1:
@@ -421,7 +421,7 @@ class LateCornerMonitor:
             self.logger.error(f"❌ Error getting corner odds for match {fixture_id}: {e}")
             return None
 
-    def _extract_match_info(self, match_stats, scoring_result: Dict, corner_odds: Dict, tier: str = "ELITE") -> Dict:
+    def _extract_match_info(self, match_stats, scoring_result, corner_odds: Dict, tier: str = "ELITE") -> Dict:
         """Extract match information for alert"""
         try:
             match_info = {
@@ -434,6 +434,7 @@ class LateCornerMonitor:
                 'tier': tier,  # ELITE or PREMIUM
                 
                 # Live statistics for Telegram message
+                'total_corners': match_stats.total_corners if hasattr(match_stats, 'total_corners') else 0,  # ✅ CRITICAL: Total corners for display
                 'home_corners': match_stats.total_corners // 2 if hasattr(match_stats, 'total_corners') else 0,  # Rough split
                 'away_corners': match_stats.total_corners // 2 if hasattr(match_stats, 'total_corners') else 0,  # Rough split
                 'home_shots': match_stats.shots_total.get('home', 0) if hasattr(match_stats, 'shots_total') else 0,
