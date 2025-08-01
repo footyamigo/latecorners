@@ -20,7 +20,7 @@ class ResultChecker:
     
     def __init__(self):
         self.db = get_database()
-        self.api_token = os.getenv('SPORTMONKS_API_TOKEN')
+        self.api_token = os.getenv('SPORTMONKS_API_KEY')
         self.base_url = "https://api.sportmonks.com/v3/football"
     
     async def check_all_pending_results(self):
@@ -65,9 +65,17 @@ class ResultChecker:
                 logger.warning(f"⚠️ No data for fixture {fixture_id}")
                 return
             
-            # Check if match is finished
-            if match_data.get('state') != 'FT':
-                logger.info(f"⏳ Match {fixture_id} not finished yet (Status: {match_data.get('state')})")
+            # Check if match is finished (empty response means not finished)
+            if not match_data:
+                logger.info(f"⏳ Match {fixture_id} not finished yet")
+                return
+            
+            # Double-check state if available
+            state = match_data.get('state', {})
+            match_state = state.get('state') if isinstance(state, dict) else state
+            
+            if match_state and match_state != 'FT':
+                logger.info(f"⏳ Match {fixture_id} not finished yet (Status: {match_state})")
                 return
             
             # Get final corner count
@@ -92,23 +100,74 @@ class ResultChecker:
             logger.error(f"❌ Error checking fixture {fixture_id}: {e}")
     
     async def _get_fixture_final_stats(self, fixture_id: int) -> Dict:
-        """Get fixture final statistics from SportMonks"""
+        """Get fixture final statistics using correct SportMonks API approach"""
         
-        url = f"{self.base_url}/fixtures/{fixture_id}"
-        params = {
+        # Method 1: Check if fixture is in finished fixtures list (fixtureStates:5)
+        finished_url = f"{self.base_url}/fixtures"
+        finished_params = {
             'api_token': self.api_token,
-            'include': 'scores;statistics',
-            'filters': 'fixtureStatisticTypes:34'  # 34 = corner statistics
+            'filters': f'fixtureStates:5;fixtures:{fixture_id}',  # State 5 = finished
+            'include': 'statistics'
         }
         
         try:
-            response = requests.get(url, params=params, timeout=10)
+            logger.info(f"🔍 Checking if fixture {fixture_id} is in finished fixtures list...")
+            response = requests.get(finished_url, params=finished_params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if data.get('data') and len(data['data']) > 0:
+                logger.info("✅ Match found in finished fixtures list!")
+                # Don't return finished fixtures data - get individual fixture for accurate stats
+                logger.info("🔄 Getting individual fixture for accurate statistics...")
+                
+                individual_url = f"{self.base_url}/fixtures/{fixture_id}"
+                individual_params = {
+                    'api_token': self.api_token,
+                    'include': 'statistics'
+                }
+                
+                response = requests.get(individual_url, params=individual_params, timeout=10)
+                response.raise_for_status()
+                
+                individual_data = response.json()
+                
+                if individual_data.get('data'):
+                    logger.info("✅ Individual fixture data retrieved for accurate corner count")
+                    return individual_data['data']
+                else:
+                    logger.warning("⚠️ Individual fixture data not found, using finished fixtures data")
+                    return data['data'][0]
+            
+            # Method 2: Check individual fixture with statistics
+            logger.info(f"📊 Checking individual fixture {fixture_id}...")
+            individual_url = f"{self.base_url}/fixtures/{fixture_id}"
+            individual_params = {
+                'api_token': self.api_token,
+                'include': 'statistics'
+            }
+            
+            response = requests.get(individual_url, params=individual_params, timeout=10)
             response.raise_for_status()
             
             data = response.json()
             
             if data.get('data'):
-                return data['data']
+                fixture_data = data['data']
+                
+                # Check if match is finished using state
+                state = fixture_data.get('state', {})
+                match_state = state.get('state')
+                
+                logger.info(f"📊 Match state: {match_state}")
+                
+                if match_state == 'FT':  # Full Time
+                    logger.info("✅ Match confirmed as finished (FT state)")
+                    return fixture_data
+                else:
+                    logger.info(f"⏳ Match not finished yet (Status: {match_state})")
+                    return {}
             else:
                 logger.warning(f"⚠️ No data returned for fixture {fixture_id}")
                 return {}
@@ -126,23 +185,41 @@ class ResultChecker:
             home_corners = 0
             away_corners = 0
             
-            for stat in statistics:
+            logger.info(f"🔍 Analyzing {len(statistics)} statistics for corner data...")
+            
+            for i, stat in enumerate(statistics):
                 if stat.get('type_id') == 34:  # Corner statistic
                     location = stat.get('location')
                     value = stat.get('data', {}).get('value', 0)
+                    participant_id = stat.get('participant_id')
+                    
+                    logger.info(f"   📊 Corner stat {i}: location='{location}', value={value}, participant={participant_id}")
                     
                     if location == 'home':
                         home_corners = int(value)
+                        logger.info(f"   ✅ Home corners updated to: {home_corners}")
                     elif location == 'away':
                         away_corners = int(value)
+                        logger.info(f"   ✅ Away corners updated to: {away_corners}")
+                    else:
+                        logger.warning(f"   ⚠️ Unknown location: '{location}'")
             
             total_corners = home_corners + away_corners
-            logger.info(f"📊 Final corners: {home_corners} + {away_corners} = {total_corners}")
+            logger.info(f"📊 FINAL EXTRACTION: {home_corners} (home) + {away_corners} (away) = {total_corners} total")
+            
+            if total_corners == 0:
+                logger.warning("⚠️ Zero corners detected - possible data extraction issue")
+                # Log first few non-corner stats for debugging
+                logger.info("🔍 Sample of other statistics:")
+                for i, stat in enumerate(statistics[:5]):
+                    logger.info(f"   Stat {i}: type_id={stat.get('type_id')}, location={stat.get('location')}")
             
             return total_corners
             
         except Exception as e:
-            logger.error(f"❌ Error extracting corners: {e}")
+            logger.error(f"❌ Error extracting corner count: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
     
     def _calculate_over_result(self, over_line: str, final_corners: int) -> str:

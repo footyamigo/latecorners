@@ -80,13 +80,18 @@ class NewTelegramSystem:
         minute = match_data.get('minute', 85)
         corners = match_data.get('total_corners', 0)
         
-        # Tier-specific header
+        # Get actual high priority count from scoring result
+        high_priority_count = match_data.get('high_priority_count', 0)
+        
+        # Tier-specific header and requirements
         if tier == "ELITE":
             header = "🏆 ELITE CORNER ALERT 🏆"
-            threshold = "8.0+ score, 2+ priority"
+            score_threshold = "8.0"
+            priority_required = 2
         else:
             header = "💎 PREMIUM CORNER ALERT 💎"
-            threshold = "6.0+ score, 1+ priority"
+            score_threshold = "6.0"
+            priority_required = 1
         
         # Active odds
         active_odds = match_data.get('active_odds', [])
@@ -98,8 +103,8 @@ class NewTelegramSystem:
 📊 Score: {home_score}-{away_score} | ⏱️ {minute}'
 🏆 Corners: {corners}
 
-<b>🎯 {tier} SCORE: {score}/{threshold.split(',')[0].split('+')[0]}</b>
-⭐ High Priority: {len([c for c in conditions if 'HIGH PRIORITY' in str(c)])}/{threshold.split(',')[1].split('+')[0].strip()}
+<b>🎯 {tier} SCORE: {score}/{score_threshold}</b>
+⭐ High Priority: {high_priority_count}/{priority_required}
 
 📈 <b>LIVE CORNER ODDS:</b>
 {odds_text}
