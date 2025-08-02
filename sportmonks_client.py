@@ -492,21 +492,20 @@ class SportmonksClient:
             'pass_accuracy': {'home': 0, 'away': 0},        # Type 82
         }
         
-        # Map Sportmonks stat IDs to our stat names (CORRECTED based on official documentation)
+        # Map Sportmonks stat IDs to our stat names (REVERTED to original working system)
         stat_id_mapping = {
-            # OFFICIAL MAPPINGS - https://docs.sportmonks.com/football/definitions/types/statistics/fixture-statistics
-            33: 'corners',                # ✅ CORNERS (official)
-            34: 'possession',             # ✅ POSSESSION (official) - NOT corners!
-            41: 'shots_off_target',       # ✅ SHOTS_OFF_TARGET (official) - NOT shots on target!
+            # ORIGINAL WORKING MAPPINGS - restored from documentation
+            34: 'corners',                # ✅ CORNERS (Type 34 - confirmed by original docs + official Sportmonks)
+            45: 'ball_possession',        # ✅ BALL POSSESSION % (Type 45 - confirmed by original docs)
+            41: 'shots_off_target',       # ✅ SHOTS_OFF_TARGET (Type 41 - confirmed by original docs)
             42: 'shots_total',            # ✅ SHOTS_TOTAL (confirmed)
             44: 'dangerous_attacks',      # ✅ DANGEROUS_ATTACKS (confirmed)
-            45: 'attacks',                # ✅ ATTACKS (official) - general attacking moves
             47: 'penalties',              # ✅ PENALTIES
             49: 'shots_inside_box',       # ✅ SHOTS_INSIDEBOX
             50: 'shots_outside_box',      # ✅ SHOTS_OUTSIDEBOX
             51: 'offsides',               # ✅ OFFSIDES (confirmed)
             52: 'goals',                  # ✅ GOALS
-            54: 'goal_attempts',          # ✅ GOAL_ATTEMPTS (official) - NOT offsides!
+            54: 'goal_attempts',          # ✅ GOAL_ATTEMPTS
             55: 'free_kicks',             # ✅ FREE_KICKS
             56: 'fouls',                  # ✅ FOULS
             57: 'saves',                  # ✅ SAVES

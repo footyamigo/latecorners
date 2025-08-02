@@ -76,7 +76,7 @@ def check_match_status(fixture_id):
                         total_corners = 0
                         
                         for stat in statistics:
-                            if stat.get('type', {}).get('id') == 33:  # Corner kicks (corrected from 34 to 33)
+                            if stat.get('type', {}).get('id') == 34:  # Corner kicks (reverted to correct Type 34)
                                 total_corners += stat.get('value', 0)
                         
                         print(f"🏆 Total Corners: {total_corners}")

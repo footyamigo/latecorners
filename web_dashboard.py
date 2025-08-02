@@ -460,17 +460,16 @@ def extract_live_statistics(match):
     try:
         statistics = match.get('statistics', [])
         
-        # Key stat type IDs for corner betting (CORRECTED to match official Sportmonks API)
+        # Key stat type IDs for corner betting (REVERTED to original working system)
         stat_mapping = {
-            33: 'corners',            # Corners ✅ (Type 33 - official) - MOST IMPORTANT
-            42: 'shots_total',        # Shots Total ✅ (Type 42 - confirmed) - High attacking intent
-            86: 'shots_on_target',    # Shots on Target ✅ (Type 86 - official) - Quality attacks
-            44: 'dangerous_attacks',  # Dangerous Attacks ✅ (Type 44 - confirmed) - Pressure indicator
-            98: 'crosses_total',      # Total Crosses ✅ (Type 98 - official) - Direct corner correlation
-            34: 'possession',         # Possession % ✅ (Type 34 - official) - Dominance indicator
-            45: 'attacks',            # Attacks ✅ (Type 45 - official) - General attacking moves
-            41: 'shots_off_target',   # Shots Off Target ✅ (Type 41 - official) - Shooting activity
-            51: 'offsides'            # Offsides ✅ (Type 51 - confirmed) - Attacking activity
+            34: 'corners',            # Corners ✅ (Type 34 - original working system + official docs)
+            42: 'shots_total',        # Shots Total ✅ (Type 42 - confirmed)
+            86: 'shots_on_target',    # Shots on Target ✅ (Type 86 - confirmed)
+            44: 'dangerous_attacks',  # Dangerous Attacks ✅ (Type 44 - confirmed)
+            98: 'crosses_total',      # Total Crosses ✅ (Type 98 - official)
+            45: 'ball_possession',    # Ball Possession % ✅ (Type 45 - original working system)
+            41: 'shots_off_target',   # Shots Off Target ✅ (Type 41 - confirmed)
+            51: 'offsides'            # Offsides ✅ (Type 51 - confirmed)
         }
         
         home_stats = {}

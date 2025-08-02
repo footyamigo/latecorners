@@ -172,19 +172,18 @@ class LateCornerMonitor:
             return []
     
     def _get_stat_type_id(self, stat_name: str) -> Optional[int]:
-        """Map dashboard stat names to SportMonks type IDs - CORRECTED to match official API"""
+        """Map dashboard stat names to SportMonks type IDs - REVERTED to original working system"""
         stat_mapping = {
-            'corners': 33,                # ✅ CORNERS (Type 33 - official)
-            'possession': 34,             # ✅ POSSESSION (Type 34 - official)  
-            'shots_off_target': 41,       # ✅ SHOTS_OFF_TARGET (Type 41 - official)
+            'corners': 34,                # ✅ CORNERS (Type 34 - original working + official Sportmonks)
+            'ball_possession': 45,        # ✅ BALL POSSESSION (Type 45 - original working system)
+            'shots_off_target': 41,       # ✅ SHOTS_OFF_TARGET (Type 41 - confirmed)
             'shots_total': 42,            # ✅ SHOTS_TOTAL (Type 42 - confirmed)
             'dangerous_attacks': 44,      # ✅ DANGEROUS_ATTACKS (Type 44 - confirmed)
-            'attacks': 45,                # ✅ ATTACKS (Type 45 - official)
             'offsides': 51,               # ✅ OFFSIDES (Type 51 - confirmed)
-            'goal_attempts': 54,          # ✅ GOAL_ATTEMPTS (Type 54 - official)
-            'throwins': 60,               # ✅ THROWINS (Type 60 - official)
+            'goal_attempts': 54,          # ✅ GOAL_ATTEMPTS (Type 54 - confirmed)
+            'throwins': 60,               # ✅ THROWINS (Type 60 - confirmed)
             'shots_on_target': 86,        # ✅ SHOTS_ON_TARGET (Type 86 - confirmed)
-            'crosses_total': 98,          # ✅ TOTAL_CROSSES (Type 98 - official)
+            'crosses_total': 98,          # ✅ TOTAL_CROSSES (Type 98 - confirmed)
         }
         return stat_mapping.get(stat_name)
     
@@ -342,9 +341,9 @@ class LateCornerMonitor:
                 home_corners = 0
                 away_corners = 0
                 
-                # Look for type_id 33 (corners) in statistics - CORRECTED from 34 to 33
+                # Look for type_id 34 (corners) in statistics - REVERTED to correct official type_id
                 for stat in match_stats.statistics:
-                    if stat.get('type_id') == 33:  # Corners (official type_id)
+                    if stat.get('type_id') == 34:  # Corners (official type_id from Sportmonks docs)
                         value = stat.get('data', {}).get('value', 0)
                         location = stat.get('location', '')
                         
