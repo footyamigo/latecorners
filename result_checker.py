@@ -188,7 +188,7 @@ class ResultChecker:
             logger.info(f"🔍 Analyzing {len(statistics)} statistics for corner data...")
             
             for i, stat in enumerate(statistics):
-                if stat.get('type_id') == 34:  # Corner statistic
+                if stat.get('type_id') == 33:  # Corner statistic (corrected from 34 to 33)
                     location = stat.get('location')
                     value = stat.get('data', {}).get('value', 0)
                     participant_id = stat.get('participant_id')

@@ -481,7 +481,7 @@
                             <div class="stat-name">Shots</div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-value">${formatStatValue(stats.shots_on_goal)}</div>
+                            <div class="stat-value">${formatStatValue(stats.shots_on_target)}</div>
                             <div class="stat-name">On Target</div>
                         </div>
                         <div class="stat-item">
@@ -489,7 +489,7 @@
                             <div class="stat-name">Attacks</div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-value">${formatStatValue(stats.crosses)}</div>
+                            <div class="stat-value">${formatStatValue(stats.crosses_total)}</div>
                             <div class="stat-name">Crosses</div>
                         </div>
                         <div class="stat-item">
@@ -504,7 +504,7 @@
         function renderMatchTotals(homeStats, awayStats) {
             const totalCorners = (homeStats.corners || 0) + (awayStats.corners || 0);
             const totalShots = (homeStats.shots_total || 0) + (awayStats.shots_total || 0);
-            const totalOnTarget = (homeStats.shots_on_goal || 0) + (awayStats.shots_on_goal || 0);
+            const totalOnTarget = (homeStats.shots_on_target || 0) + (awayStats.shots_on_target || 0);
             const totalAttacks = (homeStats.dangerous_attacks || 0) + (awayStats.dangerous_attacks || 0);
             
             return `

@@ -178,9 +178,10 @@ class LiveDataCollector:
         
         # Key stat type IDs we need
         stat_mapping = {
-            34: 'corners',          # Corners
-            42: 'shots_total',      # Shots Total  
-            41: 'shots_on_goal',    # Shots on Goal
+            33: 'corners',          # Corners ✅ (Type 33 - official) - CORRECTED from 34
+            42: 'shots_total',      # Shots Total
+            86: 'shots_on_target',  # Shots on Target ✅ (Type 86 - official) - CORRECTED
+            41: 'shots_off_target', # Shots off Target ✅ (Type 41 - official) - CORRECTED  
             44: 'dangerous_attacks', # Dangerous Attacks
             49: 'shots_inside_box', # Shots Inside Box (premium)
             60: 'crosses',          # Crosses (premium)

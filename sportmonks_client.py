@@ -528,22 +528,48 @@ class SportmonksClient:
         
         total_corners = 0
         
+        # Parse statistics for each team
+        self.logger.info(f"📊 PARSING MAIN STATISTICS: {len(statistics)} total stats")
+        
+        parsed_stats_count = 0
+        unknown_types = []
+        zero_value_count = 0
+        
         for stat in statistics:
             stat_id = stat.get('type_id')
             stat_name = stat_id_mapping.get(stat_id)
             
-            if stat_name:
-                # Handle both legacy format (participant_id + value) and live format (location + data.value)
-                participant_id = stat.get('participant_id')
-                location = stat.get('location')  # Live data format
-                value = stat.get('value', stat.get('data', {}).get('value', 0))  # Support both formats
+            if not stat_name:
+                unknown_types.append(stat_id)
+                continue
                 
-                if stat_name == 'corners':
-                    total_corners += value
-                elif participant_id == home_team_id or location == 'home':
-                    stats_dict[stat_name]['home'] = value
-                elif participant_id == away_team_id or location == 'away':
-                    stats_dict[stat_name]['away'] = value
+            # Handle both legacy format (participant_id + value) and live format (location + data.value)
+            participant_id = stat.get('participant_id')
+            location = stat.get('location')  # Live data format
+            value = stat.get('value', stat.get('data', {}).get('value', 0))  # Support both formats
+            
+            if value == 0:
+                zero_value_count += 1
+                
+            # Debug logging for important stats
+            if stat_name in ['possession', 'dangerous_attacks', 'shots_on_target', 'corners']:
+                self.logger.info(f"   🎯 {stat_name}: type_id={stat_id}, location={location}, value={value}")
+            
+            if stat_name == 'corners':
+                total_corners += value
+                self.logger.info(f"   ⚽ CORNER: +{value} (total: {total_corners})")
+            elif participant_id == home_team_id or location == 'home':
+                stats_dict[stat_name]['home'] = value
+                parsed_stats_count += 1
+            elif participant_id == away_team_id or location == 'away':
+                stats_dict[stat_name]['away'] = value  
+                parsed_stats_count += 1
+        
+        self.logger.info(f"📈 MAIN STATS SUMMARY:")
+        self.logger.info(f"   ✅ Parsed: {parsed_stats_count} statistics")
+        self.logger.info(f"   ❌ Unknown type_ids: {unknown_types}")
+        self.logger.info(f"   ⚪ Zero values: {zero_value_count}")
+        self.logger.info(f"   ⚽ Total corners: {total_corners}")
         
         # Parse events (substitutions, red cards)
         events = fixture_data.get('events', [])
@@ -597,6 +623,11 @@ class SportmonksClient:
         """Extract statistics for the second half period"""
         second_half_stats = {'home': {}, 'away': {}}
         
+        self.logger.info(f"🔍 EXTRACTING 2ND HALF STATS:")
+        self.logger.info(f"   Periods count: {len(periods) if periods else 0}")
+        self.logger.info(f"   Live stats count: {len(live_statistics) if live_statistics else 0}")
+        self.logger.info(f"   Match state: {match_state}")
+        
         # Method 1: Try to extract from periods data (historical/finished matches)
         second_half_period = None
         for period in periods:
@@ -606,6 +637,7 @@ class SportmonksClient:
                 break
         
         if second_half_period:
+            self.logger.info(f"📊 FOUND 2ND HALF PERIOD: Extracting from periods data")
             # Extract statistics from the second half period
             period_statistics = second_half_period.get('statistics', [])
             
@@ -623,28 +655,48 @@ class SportmonksClient:
                         second_half_stats['away'][stat_name] = value
         
         # Method 2: If we're in a live second half match, use live statistics
-        elif live_statistics and match_state and ('2nd' in match_state.lower() or 'inplay_2nd_half' in match_state.lower()):
-            self.logger.info(f"🔴 LIVE 2ND HALF DETECTED: Parsing live statistics as second half data")
+        elif live_statistics and match_state:
+            is_second_half = ('2nd' in match_state.lower() or 'inplay_2nd_half' in match_state.lower())
+            self.logger.info(f"🔴 LIVE STATS AVAILABLE: match_state='{match_state}', is_2nd_half={is_second_half}")
             
-            # Parse live statistics for second half
-            for stat in live_statistics:
-                stat_id = stat.get('type_id')
-                stat_name = stat_id_mapping.get(stat_id)
+            if is_second_half:
+                self.logger.info(f"🔴 LIVE 2ND HALF DETECTED: Parsing live statistics as second half data")
                 
-                if stat_name and stat_name != 'corners':  # Skip corners as they're handled separately
-                    location = stat.get('location')  # 'home' or 'away'
-                    value = stat.get('data', {}).get('value', 0)
+                # Parse live statistics for second half
+                stats_parsed = 0
+                for stat in live_statistics:
+                    stat_id = stat.get('type_id')
+                    stat_name = stat_id_mapping.get(stat_id)
                     
-                    if location in ['home', 'away']:
-                        second_half_stats[location][stat_name] = value
-            
-            # Log what we extracted
-            home_stats_count = len(second_half_stats['home'])
-            away_stats_count = len(second_half_stats['away'])
-            self.logger.info(f"   ✅ Extracted {home_stats_count} home stats, {away_stats_count} away stats from live data")
-            
-            if second_half_stats['home'] or second_half_stats['away']:
-                self.logger.info(f"   🎯 Live 2nd half stats: {dict(second_half_stats)}")
+                    if stat_name and stat_name != 'corners':  # Skip corners as they're handled separately
+                        location = stat.get('location')  # 'home' or 'away'
+                        value = stat.get('data', {}).get('value', 0)
+                        
+                        # Special validation for possession (should be percentage 0-100)
+                        if stat_name == 'possession':
+                            if value < 0 or value > 100:
+                                self.logger.warning(f"⚠️ SUSPICIOUS POSSESSION: {location} {stat_name}={value}% (Type {stat_id})")
+                                # Don't skip, but log the issue
+                            self.logger.info(f"   🎯 POSSESSION: {location} = {value}%")
+                        
+                        if location in ['home', 'away'] and value > 0:
+                            second_half_stats[location][stat_name] = value
+                            stats_parsed += 1
+                            self.logger.info(f"   ✅ {location} {stat_name}: {value}")
+                
+                self.logger.info(f"   📊 TOTAL PARSED: {stats_parsed} live statistics")
+        
+        # Final verification
+        home_stats_count = len(second_half_stats['home'])
+        away_stats_count = len(second_half_stats['away'])
+        
+        if home_stats_count > 0 or away_stats_count > 0:
+            self.logger.info(f"✅ 2ND HALF STATS EXTRACTED: {home_stats_count} home, {away_stats_count} away")
+            self.logger.info(f"   🏠 Home stats: {list(second_half_stats['home'].keys())}")
+            self.logger.info(f"   🚌 Away stats: {list(second_half_stats['away'].keys())}")
+        else:
+            self.logger.warning(f"⚠️ NO 2ND HALF STATS EXTRACTED!")
+            self.logger.warning(f"   Debug: periods={len(periods)}, live_stats={len(live_statistics) if live_statistics else 0}")
         
         return second_half_stats
 

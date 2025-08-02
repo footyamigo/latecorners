@@ -212,8 +212,8 @@ def test_premium_corner_prediction(match_data):
             pressure_score = 0
             
             # Core corner stats
-            if 34 in home_stats or 34 in away_stats:  # Corners
-                corners_total = home_stats.get(34, 0) + away_stats.get(34, 0)
+            if 33 in home_stats or 33 in away_stats:  # Corners (corrected from 34 to 33)
+                corners_total = home_stats.get(33, 0) + away_stats.get(33, 0)
                 corner_score += corners_total * 4  # Weight corners heavily
                 print(f"✅ Corners: {corners_total} total")
             

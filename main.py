@@ -342,9 +342,9 @@ class LateCornerMonitor:
                 home_corners = 0
                 away_corners = 0
                 
-                # Look for type_id 34 (corners) in statistics
+                # Look for type_id 33 (corners) in statistics - CORRECTED from 34 to 33
                 for stat in match_stats.statistics:
-                    if stat.get('type_id') == 34:  # Corners
+                    if stat.get('type_id') == 33:  # Corners (official type_id)
                         value = stat.get('data', {}).get('value', 0)
                         location = stat.get('location', '')
                         
