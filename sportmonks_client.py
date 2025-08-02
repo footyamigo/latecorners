@@ -54,24 +54,42 @@ class MatchStats:
     away_score: int
     total_corners: int
     
-    # Team statistics (total for the match)
-    shots_on_target: Dict[str, int]  # {'home': x, 'away': y}
-    shots_total: Dict[str, int]
-    shots_blocked: Dict[str, int]
-    dangerous_attacks: Dict[str, int]
-    big_chances_created: Dict[str, int]
-    big_chances_missed: Dict[str, int]
-    possession: Dict[str, int]
-    shots_inside_box: Dict[str, int]
-    hit_woodwork: Dict[str, int]
-    crosses_total: Dict[str, int]
-    key_passes: Dict[str, int]
-    counter_attacks: Dict[str, int]
-    fouls_drawn: Dict[str, int]
-    successful_dribbles: Dict[str, int]
-    offsides: Dict[str, int]
-    throwins: Dict[str, int]
-    pass_accuracy: Dict[str, int]
+    # Team statistics (total for the match) - UPDATED to match official Sportmonks API
+    shots_on_target: Dict[str, int]      # Type 86: Shots that hit the goal
+    shots_off_target: Dict[str, int]     # Type 41: Shots that missed the goal  
+    shots_total: Dict[str, int]          # Type 42: All shots attempted
+    shots_blocked: Dict[str, int]        # Type 58: Shots blocked by defense
+    shots_inside_box: Dict[str, int]     # Type 49: Shots from inside penalty area
+    shots_outside_box: Dict[str, int]    # Type 50: Shots from outside penalty area
+    
+    dangerous_attacks: Dict[str, int]    # Type 44: High-threat attacking moves
+    attacks: Dict[str, int]              # Type 45: General attacking moves
+    counter_attacks: Dict[str, int]      # Type 1527: Counter-attack situations
+    
+    big_chances_created: Dict[str, int]  # Type 580: Clear scoring opportunities created
+    big_chances_missed: Dict[str, int]   # Type 581: Clear scoring opportunities missed
+    
+    possession: Dict[str, int]           # Type 34: Ball possession percentage
+    
+    hit_woodwork: Dict[str, int]         # Type 64: Shots hitting post/crossbar
+    crosses_total: Dict[str, int]        # Type 98: Total crosses attempted
+    key_passes: Dict[str, int]           # Type 117: Passes leading to shots
+    successful_dribbles: Dict[str, int]  # Type 109: Successful dribbling attempts
+    
+    offsides: Dict[str, int]             # Type 51: Offside violations
+    fouls: Dict[str, int]                # Type 56: Fouls committed
+    free_kicks: Dict[str, int]           # Type 55: Free kicks awarded
+    throwins: Dict[str, int]             # Type 60: Throw-ins taken
+    
+    penalties: Dict[str, int]            # Type 47: Penalty situations
+    goals: Dict[str, int]                # Type 52: Goals scored
+    goal_attempts: Dict[str, int]        # Type 54: Goal attempts made
+    
+    saves: Dict[str, int]                # Type 57: Goalkeeper saves
+    tackles: Dict[str, int]              # Type 78: Defensive tackles
+    assists: Dict[str, int]              # Type 79: Goal assists
+    passes: Dict[str, int]               # Type 80: Total passes attempted
+    pass_accuracy: Dict[str, int]        # Type 82: Pass success percentage
     
     # Events
     substitutions: List[Dict]
@@ -378,7 +396,7 @@ class SportmonksClient:
             crosses_total={'home': 0, 'away': 0},
             key_passes={'home': 0, 'away': 0},
             counter_attacks={'home': 0, 'away': 0},
-            fouls_drawn={'home': 0, 'away': 0},
+            fouls={'home': 0, 'away': 0},
             successful_dribbles={'home': 0, 'away': 0},
             offsides={'home': 0, 'away': 0},
             throwins={'home': 0, 'away': 0},
@@ -400,6 +418,7 @@ class SportmonksClient:
         # Basic match info
         fixture_id = fixture_data['id']
         minute = fixture_data.get('minute', 0)
+        match_state = fixture_data.get('state', {}).get('state', '') if isinstance(fixture_data.get('state'), dict) else fixture_data.get('state', '')
         
         # Team IDs
         participants = fixture_data.get('participants', [])
@@ -426,49 +445,85 @@ class SportmonksClient:
         # Statistics parsing
         statistics = fixture_data.get('statistics', [])
         
-        # Initialize stat dictionaries
+        # Initialize stat dictionaries - UPDATED to match official Sportmonks API
         stats_dict = {
-            'shots_on_target': {'home': 0, 'away': 0},
-            'shots_total': {'home': 0, 'away': 0},
-            'shots_blocked': {'home': 0, 'away': 0},
-            'dangerous_attacks': {'home': 0, 'away': 0},
-            'big_chances_created': {'home': 0, 'away': 0},
-            'big_chances_missed': {'home': 0, 'away': 0},
-            'possession': {'home': 0, 'away': 0},
-            'shots_inside_box': {'home': 0, 'away': 0},
-            'hit_woodwork': {'home': 0, 'away': 0},
-            'crosses_total': {'home': 0, 'away': 0},
-            'key_passes': {'home': 0, 'away': 0},
-            'counter_attacks': {'home': 0, 'away': 0},
-            'fouls_drawn': {'home': 0, 'away': 0},
-            'successful_dribbles': {'home': 0, 'away': 0},
-            'offsides': {'home': 0, 'away': 0},
-            'throwins': {'home': 0, 'away': 0},
-            'successful_passes_percentage': {'home': 0, 'away': 0},
-            'saves': {'home': 0, 'away': 0},
+            # Shooting statistics
+            'shots_on_target': {'home': 0, 'away': 0},      # Type 86
+            'shots_off_target': {'home': 0, 'away': 0},     # Type 41  
+            'shots_total': {'home': 0, 'away': 0},          # Type 42
+            'shots_blocked': {'home': 0, 'away': 0},        # Type 58
+            'shots_inside_box': {'home': 0, 'away': 0},     # Type 49
+            'shots_outside_box': {'home': 0, 'away': 0},    # Type 50
+            
+            # Attacking statistics
+            'dangerous_attacks': {'home': 0, 'away': 0},    # Type 44
+            'attacks': {'home': 0, 'away': 0},              # Type 45
+            'counter_attacks': {'home': 0, 'away': 0},      # Type 1527
+            
+            # Chances statistics
+            'big_chances_created': {'home': 0, 'away': 0},  # Type 580
+            'big_chances_missed': {'home': 0, 'away': 0},   # Type 581
+            
+            # Possession statistics
+            'possession': {'home': 0, 'away': 0},           # Type 34
+            
+            # Technical statistics
+            'hit_woodwork': {'home': 0, 'away': 0},         # Type 64
+            'crosses_total': {'home': 0, 'away': 0},        # Type 98
+            'key_passes': {'home': 0, 'away': 0},           # Type 117
+            'successful_dribbles': {'home': 0, 'away': 0},  # Type 109
+            
+            # Disciplinary statistics  
+            'offsides': {'home': 0, 'away': 0},             # Type 51
+            'fouls': {'home': 0, 'away': 0},                # Type 56
+            'free_kicks': {'home': 0, 'away': 0},           # Type 55
+            'throwins': {'home': 0, 'away': 0},             # Type 60
+            
+            # Goal-related statistics
+            'penalties': {'home': 0, 'away': 0},            # Type 47
+            'goals': {'home': 0, 'away': 0},                # Type 52
+            'goal_attempts': {'home': 0, 'away': 0},        # Type 54
+            
+            # Defensive statistics
+            'saves': {'home': 0, 'away': 0},                # Type 57
+            'tackles': {'home': 0, 'away': 0},              # Type 78
+            'assists': {'home': 0, 'away': 0},              # Type 79
+            'passes': {'home': 0, 'away': 0},               # Type 80
+            'pass_accuracy': {'home': 0, 'away': 0},        # Type 82
         }
         
-        # Map Sportmonks stat IDs to our stat names
+        # Map Sportmonks stat IDs to our stat names (CORRECTED based on official documentation)
         stat_id_mapping = {
-            86: 'shots_on_target',
-            42: 'shots_total', 
-            58: 'shots_blocked',
-            32: 'dangerous_attacks',
-            580: 'big_chances_created',
-            581: 'big_chances_missed',
-            34: 'possession',
-            49: 'shots_inside_box',
-            64: 'hit_woodwork',
-            98: 'crosses_total',
-            117: 'key_passes',
-            1527: 'counter_attacks',
-            96: 'fouls_drawn',
-            109: 'successful_dribbles',
-            51: 'offsides',
-            60: 'throwins',
-            82: 'successful_passes_percentage',
-            57: 'saves',
-            33: 'corners',  # Special handling for total corners
+            # OFFICIAL MAPPINGS - https://docs.sportmonks.com/football/definitions/types/statistics/fixture-statistics
+            33: 'corners',                # ✅ CORNERS (official)
+            34: 'possession',             # ✅ POSSESSION (official) - NOT corners!
+            41: 'shots_off_target',       # ✅ SHOTS_OFF_TARGET (official) - NOT shots on target!
+            42: 'shots_total',            # ✅ SHOTS_TOTAL (confirmed)
+            44: 'dangerous_attacks',      # ✅ DANGEROUS_ATTACKS (confirmed)
+            45: 'attacks',                # ✅ ATTACKS (official) - general attacking moves
+            47: 'penalties',              # ✅ PENALTIES
+            49: 'shots_inside_box',       # ✅ SHOTS_INSIDEBOX
+            50: 'shots_outside_box',      # ✅ SHOTS_OUTSIDEBOX
+            51: 'offsides',               # ✅ OFFSIDES (confirmed)
+            52: 'goals',                  # ✅ GOALS
+            54: 'goal_attempts',          # ✅ GOAL_ATTEMPTS (official) - NOT offsides!
+            55: 'free_kicks',             # ✅ FREE_KICKS
+            56: 'fouls',                  # ✅ FOULS
+            57: 'saves',                  # ✅ SAVES
+            58: 'shots_blocked',          # ✅ SHOTS_BLOCKED
+            60: 'throwins',               # ✅ THROWINS
+            64: 'hit_woodwork',           # ✅ HIT_WOODWORK
+            78: 'tackles',                # ✅ TACKLES
+            79: 'assists',                # ✅ ASSISTS
+            80: 'passes',                 # ✅ PASSES
+            82: 'pass_accuracy',          # ✅ SUCCESSFUL_PASSES_PERCENTAGE
+            86: 'shots_on_target',        # ✅ SHOTS_ON_TARGET (confirmed)
+            98: 'crosses_total',          # ✅ TOTAL_CROSSES
+            109: 'successful_dribbles',   # ✅ SUCCESSFUL_DRIBBLES
+            117: 'key_passes',            # ✅ KEY_PASSES
+            580: 'big_chances_created',   # ✅ BIG_CHANCES_CREATED
+            581: 'big_chances_missed',    # ✅ BIG_CHANCES_MISSED
+            1527: 'counter_attacks',      # ✅ COUNTER_ATTACKS
         }
         
         total_corners = 0
@@ -478,14 +533,16 @@ class SportmonksClient:
             stat_name = stat_id_mapping.get(stat_id)
             
             if stat_name:
+                # Handle both legacy format (participant_id + value) and live format (location + data.value)
                 participant_id = stat.get('participant_id')
-                value = stat.get('value', 0)
+                location = stat.get('location')  # Live data format
+                value = stat.get('value', stat.get('data', {}).get('value', 0))  # Support both formats
                 
                 if stat_name == 'corners':
                     total_corners += value
-                elif participant_id == home_team_id:
+                elif participant_id == home_team_id or location == 'home':
                     stats_dict[stat_name]['home'] = value
-                elif participant_id == away_team_id:
+                elif participant_id == away_team_id or location == 'away':
                     stats_dict[stat_name]['away'] = value
         
         # Parse events (substitutions, red cards)
@@ -517,7 +574,8 @@ class SportmonksClient:
             fixture_keys = list(fixture_data.keys())
             self.logger.warning(f"   Available keys in fixture_data: {fixture_keys}")
         
-        second_half_stats = self._extract_second_half_stats(periods, home_team_id, away_team_id, stat_id_mapping)
+        second_half_stats = self._extract_second_half_stats(periods, home_team_id, away_team_id, stat_id_mapping, 
+                                                             fixture_data.get('statistics', []), match_state)
         
         return MatchStats(
             fixture_id=fixture_id,
@@ -534,11 +592,12 @@ class SportmonksClient:
             second_half_stats=second_half_stats
         )
     
-    def _extract_second_half_stats(self, periods: List[Dict], home_team_id: int, away_team_id: int, stat_id_mapping: Dict) -> Dict[str, Dict[str, int]]:
+    def _extract_second_half_stats(self, periods: List[Dict], home_team_id: int, away_team_id: int, stat_id_mapping: Dict, 
+                                  live_statistics: List[Dict] = None, match_state: str = None) -> Dict[str, Dict[str, int]]:
         """Extract statistics for the second half period"""
         second_half_stats = {'home': {}, 'away': {}}
         
-        # Find the second half period
+        # Method 1: Try to extract from periods data (historical/finished matches)
         second_half_period = None
         for period in periods:
             description = period.get('description', '').lower()
@@ -546,10 +605,7 @@ class SportmonksClient:
                 second_half_period = period
                 break
         
-        if not second_half_period:
-            # Return empty stats if no second half period found
-            return second_half_stats
-        
+        if second_half_period:
         # Extract statistics from the second half period
         period_statistics = second_half_period.get('statistics', [])
         
@@ -566,6 +622,30 @@ class SportmonksClient:
                 elif participant_id == away_team_id:
                     second_half_stats['away'][stat_name] = value
         
+        # Method 2: If we're in a live second half match, use live statistics
+        elif live_statistics and match_state and ('2nd' in match_state.lower() or 'inplay_2nd_half' in match_state.lower()):
+            self.logger.info(f"🔴 LIVE 2ND HALF DETECTED: Parsing live statistics as second half data")
+            
+            # Parse live statistics for second half
+            for stat in live_statistics:
+                stat_id = stat.get('type_id')
+                stat_name = stat_id_mapping.get(stat_id)
+                
+                if stat_name and stat_name != 'corners':  # Skip corners as they're handled separately
+                    location = stat.get('location')  # 'home' or 'away'
+                    value = stat.get('data', {}).get('value', 0)
+                    
+                    if location in ['home', 'away']:
+                        second_half_stats[location][stat_name] = value
+            
+            # Log what we extracted
+            home_stats_count = len(second_half_stats['home'])
+            away_stats_count = len(second_half_stats['away'])
+            self.logger.info(f"   ✅ Extracted {home_stats_count} home stats, {away_stats_count} away stats from live data")
+            
+            if second_half_stats['home'] or second_half_stats['away']:
+                self.logger.info(f"   🎯 Live 2nd half stats: {dict(second_half_stats)}")
+        
         return second_half_stats
 
     def _parse_live_match_data(self, match_data: Dict) -> Optional[MatchStats]:
@@ -581,26 +661,18 @@ class SportmonksClient:
             stats = match_data.get('statistics', [])
             events = match_data.get('events', [])
             
-            # SportMonks type_id mapping for live data
+            # SportMonks type_id mapping for live data - REMOVED OLD INCONSISTENT MAPPINGS
+            # Using only the official corrected mappings now
             stat_type_mapping = {
-                34: 'corners',
-                42: 'shots_total',
-                41: 'shots_on_goal',
-                44: 'dangerous_attacks',
-                60: 'crosses',
-                45: 'ball_possession',
-                54: 'offsides',
-                86: 'shots_on_target_official',  # Alternative shots on target
-                58: 'shots_blocked',
-                32: 'dangerous_attacks_alt',
-                49: 'shots_inside_box',
-                64: 'hit_woodwork',
-                98: 'crosses_alt',
-                117: 'key_passes',
-                96: 'fouls_drawn',
-                109: 'successful_dribbles',
-                51: 'throwins_alt',  # Fixed: changed from duplicate 60 to 51
-                82: 'pass_accuracy'
+                33: 'corners',                # ✅ CORNERS (official)
+                34: 'possession',             # ✅ POSSESSION (official)
+                41: 'shots_off_target',       # ✅ SHOTS_OFF_TARGET (official)
+                42: 'shots_total',            # ✅ SHOTS_TOTAL (confirmed)
+                44: 'dangerous_attacks',      # ✅ DANGEROUS_ATTACKS (confirmed)
+                45: 'attacks',                # ✅ ATTACKS (official)
+                51: 'offsides',               # ✅ OFFSIDES (confirmed)
+                54: 'goal_attempts',          # ✅ GOAL_ATTEMPTS (official)
+                86: 'shots_on_target',        # ✅ SHOTS_ON_TARGET (confirmed)
             }
             
             # Initialize statistics dictionaries
@@ -617,7 +689,7 @@ class SportmonksClient:
                 if type_id in stat_type_mapping:
                     stat_name = stat_type_mapping[type_id]
                     
-                    if type_id == 34:  # Corners - special handling for total
+                    if type_id == 33:  # Corners - special handling for total
                         total_corners += value
                     elif location == 'home':
                         home_stats[stat_name] = value
@@ -638,8 +710,12 @@ class SportmonksClient:
                 away_score=away_score,
                 total_corners=total_corners,
                 shots_on_target={
-                    'home': home_stats.get('shots_on_goal', home_stats.get('shots_on_target_official', 0)),
-                    'away': away_stats.get('shots_on_goal', away_stats.get('shots_on_target_official', 0))
+                    'home': home_stats.get('shots_on_target', 0),
+                    'away': away_stats.get('shots_on_target', 0)
+                },
+                shots_off_target={
+                    'home': home_stats.get('shots_off_target', 0),
+                    'away': away_stats.get('shots_off_target', 0)
                 },
                 shots_total={
                     'home': home_stats.get('shots_total', 0),
@@ -649,36 +725,40 @@ class SportmonksClient:
                     'home': home_stats.get('shots_blocked', 0),
                     'away': away_stats.get('shots_blocked', 0)
                 },
-                dangerous_attacks={
-                    'home': home_stats.get('dangerous_attacks', home_stats.get('dangerous_attacks_alt', 0)),
-                    'away': away_stats.get('dangerous_attacks', away_stats.get('dangerous_attacks_alt', 0))
-                },
-                big_chances_created={'home': 0, 'away': 0},  # Not available in live feed
-                big_chances_missed={'home': 0, 'away': 0},   # Not available in live feed
-                possession={
-                    'home': home_stats.get('ball_possession', 0),
-                    'away': away_stats.get('ball_possession', 0)
-                },
                 shots_inside_box={
                     'home': home_stats.get('shots_inside_box', 0),
                     'away': away_stats.get('shots_inside_box', 0)
+                },
+                shots_outside_box={
+                    'home': home_stats.get('shots_outside_box', 0),
+                    'away': away_stats.get('shots_outside_box', 0)
+                },
+                dangerous_attacks={
+                    'home': home_stats.get('dangerous_attacks', 0),
+                    'away': away_stats.get('dangerous_attacks', 0)
+                },
+                attacks={
+                    'home': home_stats.get('attacks', 0),
+                    'away': away_stats.get('attacks', 0)
+                },
+                counter_attacks={'home': 0, 'away': 0},  # Not available in live feed
+                big_chances_created={'home': 0, 'away': 0},  # Not available in live feed
+                big_chances_missed={'home': 0, 'away': 0},   # Not available in live feed
+                possession={
+                    'home': home_stats.get('possession', 0),
+                    'away': away_stats.get('possession', 0)
                 },
                 hit_woodwork={
                     'home': home_stats.get('hit_woodwork', 0),
                     'away': away_stats.get('hit_woodwork', 0)
                 },
                 crosses_total={
-                    'home': home_stats.get('crosses', home_stats.get('crosses_alt', 0)),
-                    'away': away_stats.get('crosses', away_stats.get('crosses_alt', 0))
+                    'home': home_stats.get('crosses_total', 0),
+                    'away': away_stats.get('crosses_total', 0)
                 },
                 key_passes={
                     'home': home_stats.get('key_passes', 0),
                     'away': away_stats.get('key_passes', 0)
-                },
-                counter_attacks={'home': 0, 'away': 0},  # Not available in live feed
-                fouls_drawn={
-                    'home': home_stats.get('fouls_drawn', 0),
-                    'away': away_stats.get('fouls_drawn', 0)
                 },
                 successful_dribbles={
                     'home': home_stats.get('successful_dribbles', 0),
@@ -688,9 +768,45 @@ class SportmonksClient:
                     'home': home_stats.get('offsides', 0),
                     'away': away_stats.get('offsides', 0)
                 },
+                fouls={
+                    'home': home_stats.get('fouls', 0),
+                    'away': away_stats.get('fouls', 0)
+                },
+                free_kicks={
+                    'home': home_stats.get('free_kicks', 0),
+                    'away': away_stats.get('free_kicks', 0)
+                },
                 throwins={
-                    'home': home_stats.get('throwins_alt', 0),
-                    'away': away_stats.get('throwins_alt', 0)
+                    'home': home_stats.get('throwins', 0),
+                    'away': away_stats.get('throwins', 0)
+                },
+                penalties={
+                    'home': home_stats.get('penalties', 0),
+                    'away': away_stats.get('penalties', 0)
+                },
+                goals={
+                    'home': home_stats.get('goals', 0),
+                    'away': away_stats.get('goals', 0)
+                },
+                goal_attempts={
+                    'home': home_stats.get('goal_attempts', 0),
+                    'away': away_stats.get('goal_attempts', 0)
+                },
+                saves={
+                    'home': home_stats.get('saves', 0),
+                    'away': away_stats.get('saves', 0)
+                },
+                tackles={
+                    'home': home_stats.get('tackles', 0),
+                    'away': away_stats.get('tackles', 0)
+                },
+                assists={
+                    'home': home_stats.get('assists', 0),
+                    'away': away_stats.get('assists', 0)
+                },
+                passes={
+                    'home': home_stats.get('passes', 0),
+                    'away': away_stats.get('passes', 0)
                 },
                 pass_accuracy={
                     'home': home_stats.get('pass_accuracy', 0),

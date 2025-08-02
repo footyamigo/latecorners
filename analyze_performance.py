@@ -98,7 +98,13 @@ class PerformanceAnalyzer:
             timestamp = datetime.fromisoformat(alert['timestamp']).strftime('%m/%d %H:%M')
             
             print(f"   {status_emoji} {timestamp} | {alert['teams']}")
-            print(f"      📊 {alert['corners_at_alert']} corners @ 85' → Over {alert['over_line']} @ {alert['over_odds']}")
+            
+            # Show high priority count if available
+            priority_str = ""
+            if alert.get('high_priority_count') is not None:
+                priority_str = f" (Priority: {alert['high_priority_count']})"
+            
+            print(f"      📊 {alert['corners_at_alert']} corners @ 85'{priority_str} → Over {alert['over_line']} @ {alert['over_odds']}")
             
             if alert['final_corners'] is not None:
                 print(f"      🏁 Final: {alert['final_corners']} corners → {status}")
@@ -139,6 +145,20 @@ class PerformanceAnalyzer:
             print(f"   ⚽ Corner Patterns:")
             print(f"      ✅ Wins avg: {avg_win_corners:.1f} corners")
             print(f"      ❌ Losses avg: {avg_loss_corners:.1f} corners")
+        
+        # Analyze high priority patterns
+        if wins and losses:
+            # Filter alerts that have high_priority_count data (newer alerts)
+            wins_with_priority = [a for a in wins if a.get('high_priority_count') is not None]
+            losses_with_priority = [a for a in losses if a.get('high_priority_count') is not None]
+            
+            if wins_with_priority and losses_with_priority:
+                avg_win_priority = sum(a['high_priority_count'] for a in wins_with_priority) / len(wins_with_priority)
+                avg_loss_priority = sum(a['high_priority_count'] for a in losses_with_priority) / len(losses_with_priority)
+                
+                print(f"   ⭐ High Priority Patterns:")
+                print(f"      ✅ Wins avg: {avg_win_priority:.1f} indicators ({len(wins_with_priority)} alerts)")
+                print(f"      ❌ Losses avg: {avg_loss_priority:.1f} indicators ({len(losses_with_priority)} alerts)")
         
         # Analyze over line patterns
         line_performance = defaultdict(lambda: {'wins': 0, 'total': 0})

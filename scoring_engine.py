@@ -206,8 +206,8 @@ class ScoringEngine:
         
         # High dangerous attacks in 2nd half
         second_half_attacks = second_half_team_stats.get('dangerous_attacks', 0)
-        if second_half_attacks >= 6 and stats.minute >= 75:
-            score += SCORING_MATRIX['dangerous_attacks_last_10min_6plus']
+        if second_half_attacks >= 30 and stats.minute >= 75:
+            score += SCORING_MATRIX['dangerous_attacks_2nd_half_30plus']
             conditions.append(f'{second_half_attacks} dangerous attacks in 2nd half')
         
 

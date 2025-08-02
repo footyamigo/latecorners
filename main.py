@@ -171,16 +171,20 @@ class LateCornerMonitor:
             self.logger.error(f"❌ Error converting dashboard stats: {e}")
             return []
     
-    def _get_stat_type_id(self, stat_name):
-        """Map dashboard stat names to SportMonks type IDs"""
+    def _get_stat_type_id(self, stat_name: str) -> Optional[int]:
+        """Map dashboard stat names to SportMonks type IDs - CORRECTED to match official API"""
         stat_mapping = {
-            'corners': 34,
-            'shots_total': 42,
-            'shots_on_goal': 41,
-            'dangerous_attacks': 44,
-            'crosses': 60,
-            'ball_possession': 45,
-            'offsides': 54
+            'corners': 33,                # ✅ CORNERS (Type 33 - official)
+            'possession': 34,             # ✅ POSSESSION (Type 34 - official)  
+            'shots_off_target': 41,       # ✅ SHOTS_OFF_TARGET (Type 41 - official)
+            'shots_total': 42,            # ✅ SHOTS_TOTAL (Type 42 - confirmed)
+            'dangerous_attacks': 44,      # ✅ DANGEROUS_ATTACKS (Type 44 - confirmed)
+            'attacks': 45,                # ✅ ATTACKS (Type 45 - official)
+            'offsides': 51,               # ✅ OFFSIDES (Type 51 - confirmed)
+            'goal_attempts': 54,          # ✅ GOAL_ATTEMPTS (Type 54 - official)
+            'throwins': 60,               # ✅ THROWINS (Type 60 - official)
+            'shots_on_target': 86,        # ✅ SHOTS_ON_TARGET (Type 86 - confirmed)
+            'crosses_total': 98,          # ✅ TOTAL_CROSSES (Type 98 - official)
         }
         return stat_mapping.get(stat_name)
     
@@ -298,12 +302,12 @@ class LateCornerMonitor:
                 total_score = scoring_result.total_score
                 high_priority_count = scoring_result.high_priority_indicators
                 
-                # ELITE TIER: Ultra-selective (8.0+ score, 2+ high priority, 85th minute ONLY)
+                # ELITE TIER: Ultra-selective (8.0+ score, 2+ high priority, 85-87th minute)
                 if total_score >= 8.0 and high_priority_count >= 2:
                     self.logger.info(f"🏆 ELITE MATCH DETECTED: {fixture_id} - Score: {total_score}, High Priority: {high_priority_count}")
                     
-                    # Check if we're in the exact elite alert window (85th minute ONLY)
-                    if match_stats.minute == 85:
+                    # Check if we're in the elite alert window (85-87th minute)
+                    if 85 <= match_stats.minute <= 87:
                         self.logger.info(f"🏆 ELITE ALERT WINDOW! Match {fixture_id} at minute {match_stats.minute} - proceeding to odds check")
                         
                         corner_odds = await self._get_corner_odds(fixture_id)
@@ -314,7 +318,7 @@ class LateCornerMonitor:
                         else:
                             self.logger.warning(f"🚫 ELITE ALERT BLOCKED: No odds available for match {fixture_id}")
                     else:
-                        self.logger.info(f"⏰ Elite match {fixture_id} waiting for alert window (need 85', currently {match_stats.minute}')")
+                        self.logger.info(f"⏰ Elite match {fixture_id} waiting for alert window (need 85-87', currently {match_stats.minute}')")
                 
                 else:
                     self.logger.debug(f"📊 Match {fixture_id} below ELITE thresholds - Score: {total_score}/8.0, High Priority: {high_priority_count}/2")
@@ -362,14 +366,15 @@ class LateCornerMonitor:
     async def _get_corner_odds(self, fixture_id: int) -> Optional[Dict]:
         """Get corner odds directly from SportMonks - with detailed logging"""
         try:
-            self.logger.info(f"🔍 ELITE SYSTEM @ 85': Fetching corner odds for match {fixture_id}")
+            self.logger.info(f"🔍 ELITE SYSTEM @ 85-87': Fetching corner odds for match {fixture_id}")
             
             # Import the odds checking function
             from web_dashboard import check_corner_odds_available
             
             # ALWAYS fetch fresh, live odds at alert time - no caching!
-            self.logger.info(f"🌐 FETCHING LIVE ODDS @ 85': Getting current odds from SportMonks for {fixture_id}")
+            self.logger.info(f"🌐 FETCHING LIVE ODDS @ 85-87': Getting current odds from SportMonks for {fixture_id}")
             self.logger.info(f"   ⚡ Reason: Corner odds change every few seconds - only current odds are actionable!")
+            self.logger.info(f"   🎯 Filter: Only whole number corner totals (8, 9, 10...) for refund possibilities")
             odds_data = check_corner_odds_available(fixture_id)
             
             if odds_data and odds_data.get('available', False):
@@ -377,7 +382,7 @@ class LateCornerMonitor:
                 active_count = odds_data.get('active_count', 0)
                 suspended_count = total_count - active_count
                 
-                self.logger.info(f"✅ LIVE ODDS @ 85': {total_count} bet365 Asian corner markets found!")
+                self.logger.info(f"✅ LIVE ODDS @ 85-87': {total_count} bet365 Asian corner markets found (whole numbers only)!")
                 self.logger.info(f"   🟢 ACTIVE (bettable): {active_count} markets")
                 self.logger.info(f"   🔶 SUSPENDED: {suspended_count} markets")
                 
@@ -393,11 +398,11 @@ class LateCornerMonitor:
                     for odds_str in odds_data['odds_details']:
                         self.logger.info(f"      • {odds_str}")
                 
-                self.logger.info(f"   ⚡ These are LIVE odds fetched at alert time - actionable now!")
+                self.logger.info(f"   ⚡ These are LIVE whole number odds fetched at alert time - actionable now!")
                 return odds_data
             else:
-                self.logger.warning(f"❌ NO ODDS @ 85': SportMonks has no corner odds for elite match {fixture_id}")
-                self.logger.warning(f"   🚫 ALERT BLOCKED: Cannot send elite alert without current odds available")
+                self.logger.warning(f"❌ NO ODDS @ 85-87': SportMonks has no whole number corner odds for elite match {fixture_id}")
+                self.logger.warning(f"   🚫 ALERT BLOCKED: Cannot send elite alert without current whole number odds available")
                 return None
                 
         except Exception as e:

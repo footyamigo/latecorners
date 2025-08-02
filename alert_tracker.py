@@ -33,6 +33,17 @@ class AlertTracker:
             # Extract betting line and odds from active_odds
             over_line, over_odds = self._extract_over_bet(match_data.get('active_odds', []))
             
+            # Calculate high priority ratio based on tier
+            high_priority_count = match_data.get('high_priority_count', 0)
+            if tier == "ELITE":
+                priority_required = 2
+            elif tier == "PREMIUM":
+                priority_required = 1
+            else:
+                priority_required = 1  # Default fallback
+            
+            high_priority_ratio = f"{high_priority_count}/{priority_required}"
+            
             alert_data = {
                 'timestamp': datetime.now().isoformat(),
                 'fixture_id': match_data.get('fixture_id'),
@@ -41,6 +52,8 @@ class AlertTracker:
                 'minute_sent': match_data.get('minute'),
                 'corners_at_alert': match_data.get('total_corners', 0),
                 'elite_score': score,
+                'high_priority_count': high_priority_count,
+                'high_priority_ratio': high_priority_ratio,
                 'over_line': over_line,
                 'over_odds': over_odds
             }
@@ -48,7 +61,7 @@ class AlertTracker:
             success = self.db.save_alert(alert_data)
             
             if success:
-                logger.info(f"✅ ELITE ALERT TRACKED: {alert_data['teams']} - {alert_data['corners_at_alert']} corners at 85' (Over {over_line} @ {over_odds})")
+                logger.info(f"✅ ELITE ALERT TRACKED: {alert_data['teams']} - {alert_data['corners_at_alert']} corners at 85' (High Priority: {high_priority_ratio}) (Over {over_line} @ {over_odds})")
             else:
                 logger.error(f"❌ Failed to save elite alert: {alert_data['teams']}")
             

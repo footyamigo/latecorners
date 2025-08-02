@@ -460,15 +460,17 @@ def extract_live_statistics(match):
     try:
         statistics = match.get('statistics', [])
         
-        # Key stat type IDs for corner betting (only the most valuable)
+        # Key stat type IDs for corner betting (CORRECTED to match official Sportmonks API)
         stat_mapping = {
-            34: 'corners',          # Corners ✅ (53 instances) - MOST IMPORTANT
-            42: 'shots_total',      # Shots Total ✅ (66 instances) - High attacking intent
-            41: 'shots_on_goal',    # Shots on Goal ✅ (54 instances) - Quality attacks
-            44: 'dangerous_attacks', # Dangerous Attacks ✅ (68 instances) - Pressure indicator
-            60: 'crosses',          # Crosses ✅ (12 instances) - Direct corner correlation
-            45: 'ball_possession',  # Ball Possession % ✅ (56 instances) - Dominance indicator
-            54: 'offsides'         # Offsides ✅ (16 instances) - Attacking activity
+            33: 'corners',            # Corners ✅ (Type 33 - official) - MOST IMPORTANT
+            42: 'shots_total',        # Shots Total ✅ (Type 42 - confirmed) - High attacking intent
+            86: 'shots_on_target',    # Shots on Target ✅ (Type 86 - official) - Quality attacks
+            44: 'dangerous_attacks',  # Dangerous Attacks ✅ (Type 44 - confirmed) - Pressure indicator
+            98: 'crosses_total',      # Total Crosses ✅ (Type 98 - official) - Direct corner correlation
+            34: 'possession',         # Possession % ✅ (Type 34 - official) - Dominance indicator
+            45: 'attacks',            # Attacks ✅ (Type 45 - official) - General attacking moves
+            41: 'shots_off_target',   # Shots Off Target ✅ (Type 41 - official) - Shooting activity
+            51: 'offsides'            # Offsides ✅ (Type 51 - confirmed) - Attacking activity
         }
         
         home_stats = {}
@@ -576,7 +578,16 @@ def check_corner_odds_available(match_id):
                 suspended = odds['suspended']
                 stopped = odds['stopped']
                 
-                # Format: "Over 10.5 = 2.02" or "Under 9 = 1.77 (suspended)"
+                # WHOLE NUMBER FILTER: Only allow whole number corner totals (8, 9, 10, 11...)
+                # Reject .5 totals (8.5, 9.5, 10.5...) to enable refund possibilities
+                try:
+                    total_float = float(total)
+                    if total_float != int(total_float):  # If it's not a whole number
+                        continue  # Skip this odds entry
+                except (ValueError, TypeError):
+                    continue  # Skip if total can't be converted to number
+                
+                # Format: "Over 10 = 2.02" or "Under 9 = 1.77 (suspended)"
                 status = ""
                 if suspended or stopped:
                     status = " (suspended)"

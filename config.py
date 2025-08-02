@@ -18,7 +18,19 @@ class Config:
     
     # Scoring System Configuration
     ALERT_THRESHOLD: int = 6  # Minimum score to trigger alert
+    # Timing Configuration
     MIN_MINUTE_FOR_ALERT: int = 85  # Don't alert before 85th minute
+    MAX_MINUTE_FOR_ALERT: int = 87  # Don't alert after 87th minute
+
+    # Elite System Parameters
+    ELITE_SCORE_THRESHOLD: float = 8.0      # Minimum score for ELITE tier
+    ELITE_HIGH_PRIORITY_THRESHOLD: int = 2  # Minimum high priority count for ELITE tier
+    ELITE_MIN_CORNERS: int = 7              # Minimum corners for ELITE tier
+    ELITE_MAX_CORNERS: int = 12             # Maximum corners for ELITE tier
+
+    # Alert timing (extended window for better opportunity capture)
+    TARGET_ALERT_MINUTE_MIN: int = 85  # Start of alert window
+    TARGET_ALERT_MINUTE_MAX: int = 87  # End of alert window
     
     # Corner Count Sweet Spot (at 85th minute)
     CORNER_SWEET_SPOT_MIN: int = 8
@@ -49,7 +61,7 @@ SCORING_MATRIX = {
     'draw_situation_after_75min': 4,        # New: Both teams pushing for goals
     'shots_on_target_last_15min_5plus': 5,  # Enhanced: More reliable data
     'shots_on_target_total_8plus': 4,       # Alternative threshold for total game
-    'dangerous_attacks_last_10min_6plus': 4,
+    'dangerous_attacks_2nd_half_30plus': 4, # Updated: Realistic threshold based on live data analysis
     'shots_blocked_total_6plus': 4,         # Reduced: Less reliable data
     'big_chances_created_last_15min_3plus': 4,
     

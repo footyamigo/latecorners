@@ -70,6 +70,111 @@ class NewTelegramSystem:
             logger.error(f"❌ NEW TELEGRAM: Alert {alert_id} failed!")
             return False
     
+    def _generate_dynamic_action(self, corners: int, active_odds: list) -> str:
+        """Generate dynamic ACTION text based on current corners and available odds"""
+        
+        # Parse available over/under lines from odds
+        available_lines = []
+        
+        for odds_str in active_odds:
+            if "Over" in odds_str or "Under" in odds_str:
+                try:
+                    # Parse "Over 9 = 1.70" or "Under 9 = 2.10" (whole numbers only)
+                    if "Over" in odds_str:
+                        parts = odds_str.replace("Over ", "").split(" = ")
+                        if len(parts) == 2:
+                            line = float(parts[0])
+                            odds_value = float(parts[1])
+                            
+                            # Only accept whole number lines for refund possibilities
+                            if line == int(line):
+                                available_lines.append({
+                                    'type': 'Over',
+                                    'line': line,
+                                    'odds': odds_value,
+                                    'text': odds_str
+                                })
+                    elif "Under" in odds_str:
+                        parts = odds_str.replace("Under ", "").split(" = ")
+                        if len(parts) == 2:
+                            line = float(parts[0])
+                            odds_value = float(parts[1])
+                            
+                            # Only accept whole number lines for refund possibilities
+                            if line == int(line):
+                                available_lines.append({
+                                    'type': 'Under',
+                                    'line': line,
+                                    'odds': odds_value,
+                                    'text': odds_str
+                                })
+                except Exception as e:
+                    logger.debug(f"Error parsing odds '{odds_str}': {e}")
+                    continue
+        
+        if not available_lines:
+            return "Check available corner markets"
+        
+        # Find the best suggestion - prioritize achievable Over bets
+        best_over = None
+        best_under = None
+        
+        for line_data in available_lines:
+            line = line_data['line']
+            line_type = line_data['type']
+            
+            if line_type == 'Over':
+                # How many more corners needed?
+                needed = line - corners
+                if 0 < needed <= 3:  # Reasonable range (1-3 more corners needed)
+                    if not best_over or needed < best_over['needed']:
+                        best_over = {
+                            'action': f"Consider {line_data['text']}",
+                            'reason': f"Need {int(needed)} more corner{'s' if needed != 1 else ''}",
+                            'needed': needed,
+                            'line_data': line_data,
+                            'priority': 1  # High priority for achievable overs
+                        }
+            
+            elif line_type == 'Under':
+                # How many corners can we still have?
+                remaining = line - corners
+                if remaining >= 0:  # Under is still possible (including exactly on line)
+                    if not best_under or remaining < best_under['remaining']:
+                        best_under = {
+                            'action': f"Consider {line_data['text']}",
+                            'reason': f"Max {int(remaining)} more corner{'s' if remaining != 1 else ''} allowed" if remaining > 0 else "Must avoid any more corners",
+                            'remaining': remaining,
+                            'line_data': line_data,
+                            'priority': 2  # Lower priority than achievable overs
+                        }
+        
+        # Choose the best suggestion - prioritize achievable Over bets
+        best_suggestion = None
+        
+        if best_over:
+            # Prioritize Over bets that need 1-3 more corners
+            best_suggestion = best_over
+        elif best_under and best_under['remaining'] <= 2:
+            # Only suggest Under if it's close (0-2 more corners allowed)
+            best_suggestion = best_under
+        elif best_over:
+            # Fall back to any Over bet if no good Under available
+            best_suggestion = best_over
+        elif best_under:
+            # Last resort - any Under bet
+            best_suggestion = best_under
+        
+        if best_suggestion:
+            return f"{best_suggestion['action']} ({best_suggestion['reason']})"
+        
+        # Fallback - suggest closest line
+        if available_lines:
+            closest_line = min(available_lines, key=lambda x: abs(x['line'] - corners))
+            return f"Check {closest_line['type']} {closest_line['line']} market"
+        
+        return "Check available corner markets"
+    
     def _create_message(self, match_data: Dict, tier: str, score: float, conditions: list) -> str:
         """Create a simple, effective alert message"""
         
@@ -93,9 +198,37 @@ class NewTelegramSystem:
             score_threshold = "6.0"
             priority_required = 1
         
-        # Active odds
+        # Active odds - filter to only show whole number corner totals
         active_odds = match_data.get('active_odds', [])
-        odds_text = "\n".join(f"• {odd}" for odd in active_odds[:3]) if active_odds else "• Check your bookmaker"
+        
+        # Filter out .5 odds to only show whole number corner totals
+        filtered_active_odds = []
+        for odds_str in active_odds:
+            # Check if this is a corner odds string with a whole number
+            if "Over" in odds_str or "Under" in odds_str:
+                try:
+                    # Extract the number after "Over " or "Under "
+                    if "Over" in odds_str:
+                        parts = odds_str.replace("Over ", "").split(" = ")
+                    elif "Under" in odds_str:
+                        parts = odds_str.replace("Under ", "").split(" = ")
+                    
+                    if len(parts) >= 1:
+                        line = float(parts[0])
+                        # Only include if it's a whole number
+                        if line == int(line):
+                            filtered_active_odds.append(odds_str)
+                except (ValueError, TypeError):
+                    # If we can't parse it, include it anyway (might be a different format)
+                    filtered_active_odds.append(odds_str)
+            else:
+                # Non-corner odds, include as-is
+                filtered_active_odds.append(odds_str)
+        
+        odds_text = "\n".join(f"• {odd}" for odd in filtered_active_odds[:3]) if filtered_active_odds else "• Check your bookmaker"
+        
+        # Generate dynamic action based on current situation (also uses whole numbers only)
+        dynamic_action = self._generate_dynamic_action(corners, filtered_active_odds)
         
         message = f"""🚨 {header}
 
@@ -112,7 +245,7 @@ class NewTelegramSystem:
 💡 <b>WHY THIS ALERT:</b>
 {chr(10).join(f'• {condition}' for condition in conditions[:3])}
 
-⚡ <b>ACTION:</b> Check Over/Under 10.5 corners
+⚡ <b>ACTION:</b> {dynamic_action}
 🎯 <b>TIMING:</b> Live betting available now
 💰 <b>CONFIDENCE:</b> {tier} tier qualification
 

@@ -42,6 +42,8 @@ class PostgreSQLDatabase:
                     minute_sent INTEGER,
                     corners_at_alert INTEGER,
                     elite_score FLOAT,
+                    high_priority_count INTEGER DEFAULT 0,
+                    high_priority_ratio VARCHAR(20),
                     over_line VARCHAR(20),
                     over_odds VARCHAR(20),
                     final_corners INTEGER DEFAULT NULL,
@@ -51,6 +53,9 @@ class PostgreSQLDatabase:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            
+            # Run migrations for schema updates
+            self._run_migrations(cursor)
             
             # Create index on fixture_id for faster lookups
             cursor.execute("""
@@ -74,6 +79,47 @@ class PostgreSQLDatabase:
             logger.error(f"❌ Database initialization failed: {e}")
             raise
     
+    def _run_migrations(self, cursor):
+        """Run database migrations for schema updates"""
+        try:
+            # Migration: Add high_priority_count column if it doesn't exist
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'alerts' AND column_name = 'high_priority_count'
+            """)
+            
+            if not cursor.fetchone():
+                logger.info("🔄 MIGRATION: Adding high_priority_count column...")
+                cursor.execute("""
+                    ALTER TABLE alerts 
+                    ADD COLUMN high_priority_count INTEGER DEFAULT 0
+                """)
+                logger.info("✅ MIGRATION: high_priority_count column added")
+            else:
+                logger.debug("⏭️ MIGRATION: high_priority_count column already exists")
+            
+            # Migration: Add high_priority_ratio column if it doesn't exist
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'alerts' AND column_name = 'high_priority_ratio'
+            """)
+            
+            if not cursor.fetchone():
+                logger.info("🔄 MIGRATION: Adding high_priority_ratio column...")
+                cursor.execute("""
+                    ALTER TABLE alerts 
+                    ADD COLUMN high_priority_ratio VARCHAR(20)
+                """)
+                logger.info("✅ MIGRATION: high_priority_ratio column added")
+            else:
+                logger.debug("⏭️ MIGRATION: high_priority_ratio column already exists")
+                
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+            # Don't raise - migrations are non-critical for basic functionality
+    
     def save_alert(self, alert_data: Dict) -> bool:
         """Save alert to database"""
         try:
@@ -83,8 +129,9 @@ class PostgreSQLDatabase:
             cursor.execute("""
                 INSERT INTO alerts (
                     fixture_id, teams, score_at_alert, minute_sent,
-                    corners_at_alert, elite_score, over_line, over_odds
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    corners_at_alert, elite_score, high_priority_count, 
+                    high_priority_ratio, over_line, over_odds
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 alert_data['fixture_id'],
                 alert_data['teams'],
@@ -92,6 +139,8 @@ class PostgreSQLDatabase:
                 alert_data['minute_sent'],
                 alert_data['corners_at_alert'],
                 alert_data['elite_score'],
+                alert_data.get('high_priority_count', 0),
+                alert_data.get('high_priority_ratio', None),
                 alert_data['over_line'],
                 alert_data['over_odds']
             ))
