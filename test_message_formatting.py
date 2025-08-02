@@ -42,7 +42,9 @@ def test_message_formatting():
     
     # Test message creation
     try:
-        message = telegram._create_message(match_data, "ELITE", 19.0, conditions)
+        # Use the actual odds from match_data for testing
+        test_filtered_odds = match_data.get('active_odds', [])
+        message = telegram._create_message(match_data, "ELITE", 19.0, conditions, test_filtered_odds)
         
         logger.info("✅ MESSAGE FORMATTING SUCCESSFUL!")
         logger.info(f"📝 Message length: {len(message)} characters")

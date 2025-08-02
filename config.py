@@ -25,8 +25,8 @@ class Config:
     # Elite System Parameters
     ELITE_SCORE_THRESHOLD: float = 8.0      # Minimum score for ELITE tier
     ELITE_HIGH_PRIORITY_THRESHOLD: int = 2  # Minimum high priority count for ELITE tier
-    ELITE_MIN_CORNERS: int = 7              # Minimum corners for ELITE tier
-    ELITE_MAX_CORNERS: int = 12             # Maximum corners for ELITE tier
+    ELITE_MIN_CORNERS: int = 6              # Minimum corners for ELITE tier (expanded from 7)
+    ELITE_MAX_CORNERS: int = 14             # Maximum corners for ELITE tier (expanded from 12)
 
     # Alert timing (extended window for better opportunity capture)
     TARGET_ALERT_MINUTE_MIN: int = 85  # Start of alert window
@@ -78,10 +78,12 @@ SCORING_MATRIX = {
     'offsides_last_15min_3plus': 2,  # Enhanced: Shows attacking urgency
     'throwins_last_20min_8plus': 2,  # Enhanced: Territory pressure indicator
     
-    # Corner Count Context (7-12 corners now MANDATORY for elite alerts)
+    # Corner Count Context (6-14 corners now MANDATORY for elite alerts - EXPANDED RANGE)
+    'corners_6_low': 0.5,                # New minimum - still has potential but lower
+    'corners_7_baseline': 1,             # Previous minimum - solid potential
     'corners_8_to_11_sweet_spot': 3,     # Peak corner generation range
-    'corners_7_baseline': 1,             # Minimum acceptable
-    'corners_12_maximum': 1,             # Still acceptable but getting high
+    'corners_12_maximum': 1,             # Still good potential
+    'corners_13_14_high': 0.5,           # New maximum - high action but still possible
     
     # REMOVED ALL NEGATIVE INDICATORS - ONLY POSITIVE SCORING
     # We filter by time/corners already, no need for penalties

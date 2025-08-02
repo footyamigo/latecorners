@@ -82,7 +82,7 @@ class ScoringEngine:
         # Update state tracking
         self.state_tracker.update_match_state(current_stats)
         
-        # Precise 85th minute timing - only evaluate in the exact window
+        # Extended 85-87 minute timing - evaluate in the alert window for better opportunity capture
         if not self._is_in_alert_window(current_stats.minute):
             return None
         
@@ -123,8 +123,8 @@ class ScoringEngine:
         # FLEXIBLE CORNER FILTER: Support different tiers
         total_corners = current_stats.total_corners
         
-        # ELITE tier: 7-12 corners (ultra-selective, ONLY tier used)
-        elite_corner_ok = 7 <= total_corners <= 12
+        # ELITE tier: 6-14 corners (expanded range for more opportunities, ONLY tier used)
+        elite_corner_ok = self.config.ELITE_MIN_CORNERS <= total_corners <= self.config.ELITE_MAX_CORNERS
         
         # Check ELITE qualification only
         elite_qualified = total_score >= 8.0 and high_priority_count >= 2 and elite_corner_ok
@@ -143,10 +143,10 @@ class ScoringEngine:
             )
         else:
             # Log why it didn't qualify for ELITE tier
-            if total_corners < 7:
-                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (need 7+ for ELITE)")
-            elif total_corners > 12:
-                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (max 12 for ELITE)")
+            if total_corners < 6:
+                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (need 6+ for ELITE)")
+            elif total_corners > 14:
+                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (max 14 for ELITE)")
             else:
                 self.logger.info(f"🚫 SCORE FILTER: Match {current_stats.fixture_id} rejected - Score: {total_score} (need 8+ for ELITE), High Priority: {high_priority_count}")
         
@@ -319,22 +319,28 @@ class ScoringEngine:
         return score, conditions
     
     def _evaluate_corner_context(self, stats: MatchStats) -> Tuple[float, List[str]]:
-        """Evaluate corner count context - 7-12 corners already verified as mandatory"""
+        """Evaluate corner count context - 6-14 corners already verified as mandatory"""
         score = 0.0
         conditions = []
         
         total_corners = stats.total_corners
         
-        # Note: 7-12 range already verified before this function is called
+        # Note: 6-14 range already verified before this function is called
         if 8 <= total_corners <= 11:
             score += SCORING_MATRIX['corners_8_to_11_sweet_spot']
             conditions.append(f'{total_corners} corners (SWEET SPOT)')
+        elif total_corners == 6:
+            score += SCORING_MATRIX['corners_6_low']
+            conditions.append(f'{total_corners} corners (low but potential)')
         elif total_corners == 7:
             score += SCORING_MATRIX['corners_7_baseline']
             conditions.append(f'{total_corners} corners (baseline)')
         elif total_corners == 12:
             score += SCORING_MATRIX['corners_12_maximum']
-            conditions.append(f'{total_corners} corners (high but acceptable)')
+            conditions.append(f'{total_corners} corners (high but good)')
+        elif 13 <= total_corners <= 14:
+            score += SCORING_MATRIX['corners_13_14_high']
+            conditions.append(f'{total_corners} corners (very high but possible)')
         
         return score, conditions
     
@@ -390,16 +396,12 @@ class ScoringEngine:
 
     
     def _is_in_alert_window(self, current_minute: int) -> bool:
-        """Check if current minute is in the precise 85th minute alert window"""
-        # Primary target: Exactly 85 minutes
-        if current_minute == self.config.TARGET_ALERT_MINUTE:
-            return True  # Perfect timing!
+        """Check if current minute is in the 85-87 minute alert window"""
+        # Use the extended window (85-87 minutes) to capture more opportunities
+        if self.config.TARGET_ALERT_MINUTE_MIN <= current_minute <= self.config.TARGET_ALERT_MINUTE_MAX:
+            return True  # Within the 85-87 minute window!
         
-        # Small buffer for API timing variations (84:50-85:15 window)
-        if current_minute == (self.config.TARGET_ALERT_MINUTE - 1):
-            return True  # 84:xx - close enough for API delays
-        
-        return False  # Outside the precise window
+        return False  # Outside the alert window
     
     def _generate_match_context(self, stats: MatchStats, conditions: List[str]) -> str:
         """Generate human-readable match context"""

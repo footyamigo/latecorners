@@ -274,7 +274,7 @@ class LateCornerMonitor:
             # PRE-SCORING DEBUG: Check basic requirements
             self.logger.info(f"🔍 PRE-CHECKS: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
             self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85 for ELITE alert)")
-            self.logger.info(f"   ⚽ Corners: {match_stats.total_corners} (need 7-12)")
+            self.logger.info(f"   ⚽ Corners: {match_stats.total_corners} (need 6-14)")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
             # Check if this match meets our alert criteria

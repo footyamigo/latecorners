@@ -56,8 +56,45 @@ class NewTelegramSystem:
         logger.info(f"   Score: {score}")
         logger.info(f"   Alert ID: {alert_id}")
         
-        # Create message
-        message = self._create_message(match_data, tier, score, conditions)
+        # 🚨 CRITICAL CHECK: Only send alerts when whole number odds are available
+        active_odds = match_data.get('active_odds', [])
+        
+        # Pre-filter to check if we have whole number corner odds available
+        filtered_active_odds = []
+        for odds_str in active_odds:
+            # Check if this is a corner odds string with a whole number
+            if "Over" in odds_str or "Under" in odds_str:
+                try:
+                    # Extract the number after "Over " or "Under "
+                    if "Over" in odds_str:
+                        parts = odds_str.replace("Over ", "").split(" = ")
+                    elif "Under" in odds_str:
+                        parts = odds_str.replace("Under ", "").split(" = ")
+                    
+                    if len(parts) >= 1:
+                        line = float(parts[0])
+                        # Only include if it's a whole number
+                        if line == int(line):
+                            filtered_active_odds.append(odds_str)
+                except (ValueError, TypeError):
+                    # If we can't parse it, include it anyway (might be a different format)
+                    filtered_active_odds.append(odds_str)
+            else:
+                # Non-corner odds, include as-is
+                filtered_active_odds.append(odds_str)
+        
+        # 🚨 CRITICAL: Only send alert if we have whole number odds available
+        if not filtered_active_odds:
+            logger.info(f"📵 NEW TELEGRAM: No whole number odds available for {alert_id} - SKIPPING ALERT")
+            logger.info(f"   Raw odds available: {active_odds}")
+            logger.info(f"   Reason: Only sending alerts when whole number corner markets are available")
+            return False
+        
+        logger.info(f"✅ NEW TELEGRAM: {len(filtered_active_odds)} whole number odds found - PROCEEDING WITH ALERT")
+        logger.info(f"   Whole number odds: {filtered_active_odds}")
+        
+        # Create message (now guaranteed to have odds available)
+        message = self._create_message(match_data, tier, score, conditions, filtered_active_odds)
         
         # Send via HTTP
         success = self._send_http_message(message)
@@ -175,7 +212,7 @@ class NewTelegramSystem:
         
         return "Check available corner markets"
     
-    def _create_message(self, match_data: Dict, tier: str, score: float, conditions: list) -> str:
+    def _create_message(self, match_data: Dict, tier: str, score: float, conditions: list, active_odds: list) -> str:
         """Create a simple, effective alert message"""
         
         home_team = match_data.get('home_team', 'Home')
@@ -199,36 +236,12 @@ class NewTelegramSystem:
             priority_required = 1
         
         # Active odds - filter to only show whole number corner totals
-        active_odds = match_data.get('active_odds', [])
+        # This filtering is now done in send_alert, so we just pass the pre-filtered odds
         
-        # Filter out .5 odds to only show whole number corner totals
-        filtered_active_odds = []
-        for odds_str in active_odds:
-            # Check if this is a corner odds string with a whole number
-            if "Over" in odds_str or "Under" in odds_str:
-                try:
-                    # Extract the number after "Over " or "Under "
-                    if "Over" in odds_str:
-                        parts = odds_str.replace("Over ", "").split(" = ")
-                    elif "Under" in odds_str:
-                        parts = odds_str.replace("Under ", "").split(" = ")
-                    
-                    if len(parts) >= 1:
-                        line = float(parts[0])
-                        # Only include if it's a whole number
-                        if line == int(line):
-                            filtered_active_odds.append(odds_str)
-                except (ValueError, TypeError):
-                    # If we can't parse it, include it anyway (might be a different format)
-                    filtered_active_odds.append(odds_str)
-            else:
-                # Non-corner odds, include as-is
-                filtered_active_odds.append(odds_str)
-        
-        odds_text = "\n".join(f"• {odd}" for odd in filtered_active_odds[:3]) if filtered_active_odds else "• Check your bookmaker"
+        odds_text = "\n".join(f"• {odd}" for odd in active_odds[:3])  # No fallback needed - odds guaranteed
         
         # Generate dynamic action based on current situation (also uses whole numbers only)
-        dynamic_action = self._generate_dynamic_action(corners, filtered_active_odds)
+        dynamic_action = self._generate_dynamic_action(corners, active_odds)
         
         message = f"""🚨 {header}
 
