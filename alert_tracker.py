@@ -45,7 +45,6 @@ class AlertTracker:
             high_priority_ratio = f"{high_priority_count}/{priority_required}"
             
             alert_data = {
-                'timestamp': datetime.now().isoformat(),
                 'fixture_id': match_data.get('fixture_id'),
                 'teams': f"{match_data.get('home_team')} vs {match_data.get('away_team')}",
                 'score_at_alert': f"{match_data.get('home_score')}-{match_data.get('away_score')}",
@@ -54,6 +53,9 @@ class AlertTracker:
                 'elite_score': score,
                 'high_priority_count': high_priority_count,
                 'high_priority_ratio': high_priority_ratio,
+                'home_shots_on_target': match_data.get('home_shots_on_target', 0),
+                'away_shots_on_target': match_data.get('away_shots_on_target', 0),
+                'total_shots_on_target': match_data.get('home_shots_on_target', 0) + match_data.get('away_shots_on_target', 0),
                 'over_line': over_line,
                 'over_odds': over_odds
             }

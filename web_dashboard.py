@@ -445,7 +445,7 @@ def extract_match_data(match):
             'priority': priority,
             'status': status,
             'is_draw': home_score == away_score,
-            'is_close': abs(home_score - away_score) == 1,
+            'is_close': abs(home_score - away_score) <= 2,
             'goal_difference': abs(home_score - away_score),
             'statistics': statistics
         }
@@ -763,7 +763,7 @@ def update_live_data():
             }
             
             print(f"📈 Dashboard updated: {dashboard_stats['total_live']} live matches, {dashboard_stats['with_odds']} with odds at {dashboard_stats['last_update']}")
-            print(f"🎯 ELITE FILTER: Only alerting for DRAWS and 1-GOAL DIFFERENCE games (no blowouts)")
+            print(f"🎯 ELITE FILTER: Only alerting for DRAWS and UP TO 2-GOAL DIFFERENCE games (no blowouts)")
             
         except Exception as e:
             print(f"❌ Error updating data: {e}")
@@ -800,7 +800,7 @@ def evaluate_corner_potential(match):
         print(f"❌ Too early: {minute} < 83 minutes")
         return None
     
-    # ELITE FILTER: Only allow draws and close games (1 goal difference)
+    # ELITE FILTER: Only allow draws and close games (up to 2 goal difference)
     is_draw = match.get('is_draw', False)
     is_close = match.get('is_close', False)
     
@@ -809,10 +809,10 @@ def evaluate_corner_potential(match):
         away_score = match.get('away_score', 0)
         goal_diff = abs(home_score - away_score)
         print(f"❌ REJECTED: Large goal difference ({home_score}-{away_score}, diff: {goal_diff})")
-        print(f"   💡 System only alerts for DRAWS or 1-GOAL DIFFERENCE games")
+        print(f"   💡 System only alerts for DRAWS or UP TO 2-GOAL DIFFERENCE games")
         return None
     
-    print(f"✅ SCORELINE PASSED: {'Draw' if is_draw else 'Close game'} - eligible for corner alert")
+    print(f"✅ SCORELINE PASSED: {'Draw' if is_draw else 'Close game (≤2 goals)'} - eligible for corner alert")
     
     home_stats = stats.get('home', {})
     away_stats = stats.get('away', {})
@@ -1494,7 +1494,7 @@ if __name__ == "__main__":
     print("⚡ Smart rate limit monitoring per entity")
     print("🎯 PRECISION FEATURES:")
     print("   • 85-minute alerts with Asian corner odds")
-    print("   • ELITE FILTER: Only draws and 1-goal difference games")
+    print("   • ELITE FILTER: Only draws and up to 2-goal difference games")
     print("   • Optimized corner count ranges (7-9 = PRIME ZONE)")
     print("   • Stop monitoring after alerts sent")
     print("   • Psychological scoring integration")

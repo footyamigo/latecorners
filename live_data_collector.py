@@ -294,7 +294,9 @@ class LiveDataCollector:
                 scenario = 'favorite_trailing'
             else:
                 scenario = 'underdog_trailing'
-        elif goal_diff >= 2:
+        elif goal_diff == 2:
+            scenario = 'two_goal_difference'
+        elif goal_diff >= 3:
             scenario = 'large_difference'
         
         return {

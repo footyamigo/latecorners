@@ -67,12 +67,12 @@ def show_live_dashboard():
         # Quick stats
         late_games = len([m for m in live_matches if m['minute'] >= 75])
         draws = len([m for m in live_matches if m['home_score'] == m['away_score']])
-        close_games = len([m for m in live_matches if abs(m['home_score'] - m['away_score']) == 1])
+        close_games = len([m for m in live_matches if abs(m['home_score'] - m['away_score']) <= 2])
         
         print(f"\n📊 QUICK STATS:")
         print(f"   🔥 Late games (75+ min): {late_games}")
         print(f"   🤝 Draws: {draws}")
-        print(f"   🎯 Close games (1 goal diff): {close_games}")
+        print(f"   🎯 Close games (≤2 goal diff): {close_games}")
         
         return live_matches
         

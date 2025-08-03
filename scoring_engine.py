@@ -186,6 +186,13 @@ class ScoringEngine:
             score += SCORING_MATRIX['draw_situation_after_75min']
             conditions.append(f'Draw {stats.home_score}-{stats.away_score} after 75\' (both teams attacking)')
         
+        # 2-goal difference (still competitive but less urgent)
+        elif goal_diff == 2:
+            score += SCORING_MATRIX['leading_by_2_goals']  # Currently 0 (neutral)
+            leading_team = 'home' if stats.home_score > stats.away_score else 'away'
+            trailing_team = 'away' if leading_team == 'home' else 'home'
+            conditions.append(f'{trailing_team.title()} team trailing by 2 goals (testing competitive threshold)')
+        
         # Use second half stats for much better "recent activity" detection
         # This is a major improvement - we now have period-level granularity!
         
@@ -354,10 +361,10 @@ class ScoringEngine:
             score += SCORING_MATRIX['red_card_issued']
             conditions.append(f'{len(stats.red_cards)} red card(s) issued')
         
-        # Leading by 2+ goals (comfortable lead reduces corner urgency)
+        # Leading by 3+ goals (comfortable lead reduces corner urgency)
         goal_diff = abs(stats.home_score - stats.away_score)
-        if goal_diff >= 2:
-            score += SCORING_MATRIX['leading_by_2_goals']
+        if goal_diff >= 3:
+            score += SCORING_MATRIX['leading_by_2_goals']  # Using same scoring value
             leading_team = 'home' if stats.home_score > stats.away_score else 'away'
             conditions.append(f'{leading_team.title()} team leading by {goal_diff} goals (comfortable lead)')
         

@@ -44,6 +44,9 @@ class PostgreSQLDatabase:
                     elite_score FLOAT,
                     high_priority_count INTEGER DEFAULT 0,
                     high_priority_ratio VARCHAR(20),
+                    home_shots_on_target INTEGER DEFAULT 0,
+                    away_shots_on_target INTEGER DEFAULT 0,
+                    total_shots_on_target INTEGER DEFAULT 0,
                     over_line VARCHAR(20),
                     over_odds VARCHAR(20),
                     final_corners INTEGER DEFAULT NULL,
@@ -81,8 +84,8 @@ class PostgreSQLDatabase:
     
     def _run_migrations(self, cursor):
         """Run database migrations for schema updates"""
+        # Migration: Add high_priority_count column if it doesn't exist
         try:
-            # Migration: Add high_priority_count column if it doesn't exist
             cursor.execute("""
                 SELECT column_name 
                 FROM information_schema.columns 
@@ -98,8 +101,13 @@ class PostgreSQLDatabase:
                 logger.info("✅ MIGRATION: high_priority_count column added")
             else:
                 logger.debug("⏭️ MIGRATION: high_priority_count column already exists")
-            
-            # Migration: Add high_priority_ratio column if it doesn't exist
+                
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+            # Don't raise - migrations are non-critical for basic functionality
+
+        # Migration: Add high_priority_ratio column if it doesn't exist
+        try:
             cursor.execute("""
                 SELECT column_name 
                 FROM information_schema.columns 
@@ -118,6 +126,66 @@ class PostgreSQLDatabase:
                 
         except Exception as e:
             logger.error(f"❌ Migration failed: {e}")
+                
+        # Migration: Add home_shots_on_target column if it doesn't exist
+        try:
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'alerts' AND column_name = 'home_shots_on_target'
+            """)
+            
+            if not cursor.fetchone():
+                logger.info("🔄 MIGRATION: Adding home_shots_on_target column...")
+                cursor.execute("""
+                    ALTER TABLE alerts 
+                    ADD COLUMN home_shots_on_target INTEGER DEFAULT 0
+                """)
+                logger.info("✅ MIGRATION: home_shots_on_target column added")
+            else:
+                logger.debug("⏭️ MIGRATION: home_shots_on_target column already exists")
+                
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+            
+        # Migration: Add away_shots_on_target column if it doesn't exist
+        try:
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'alerts' AND column_name = 'away_shots_on_target'
+            """)
+            
+            if not cursor.fetchone():
+                logger.info("🔄 MIGRATION: Adding away_shots_on_target column...")
+                cursor.execute("""
+                    ALTER TABLE alerts 
+                    ADD COLUMN away_shots_on_target INTEGER DEFAULT 0
+                """)
+                logger.info("✅ MIGRATION: away_shots_on_target column added")
+            else:
+                logger.debug("⏭️ MIGRATION: away_shots_on_target column already exists")
+                
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+            
+        # Migration: Add total_shots_on_target column if it doesn't exist
+        try:
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'alerts' AND column_name = 'total_shots_on_target'
+            """)
+            
+            if not cursor.fetchone():
+                logger.info("🔄 MIGRATION: Adding total_shots_on_target column...")
+                cursor.execute("""
+                    ALTER TABLE alerts 
+                    ADD COLUMN total_shots_on_target INTEGER DEFAULT 0
+                """)
+                logger.info("✅ MIGRATION: total_shots_on_target column added")
+            else:
+                logger.debug("⏭️ MIGRATION: total_shots_on_target column already exists")
+                
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
             # Don't raise - migrations are non-critical for basic functionality
     
     def save_alert(self, alert_data: Dict) -> bool:
@@ -130,8 +198,9 @@ class PostgreSQLDatabase:
                 INSERT INTO alerts (
                     fixture_id, teams, score_at_alert, minute_sent,
                     corners_at_alert, elite_score, high_priority_count, 
-                    high_priority_ratio, over_line, over_odds
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    high_priority_ratio, home_shots_on_target, away_shots_on_target,
+                    total_shots_on_target, over_line, over_odds
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 alert_data['fixture_id'],
                 alert_data['teams'],
@@ -141,6 +210,9 @@ class PostgreSQLDatabase:
                 alert_data['elite_score'],
                 alert_data.get('high_priority_count', 0),
                 alert_data.get('high_priority_ratio', None),
+                alert_data.get('home_shots_on_target', 0),
+                alert_data.get('away_shots_on_target', 0),
+                alert_data.get('total_shots_on_target', 0),
                 alert_data['over_line'],
                 alert_data['over_odds']
             ))

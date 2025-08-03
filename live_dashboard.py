@@ -107,7 +107,7 @@ def get_live_dashboard():
             score_indicator = ""
             if match['home_score'] == match['away_score'] and match['minute'] >= 75:
                 score_indicator = "🤝 DRAW"
-            elif abs(match['home_score'] - match['away_score']) == 1 and match['minute'] >= 70:
+            elif abs(match['home_score'] - match['away_score']) <= 2 and match['minute'] >= 70:
                 score_indicator = "🎯 CLOSE"
             
             print(f"   {i+1:2d}. {icon} {match['teams_display']} | {match['state']} | {match['minute']}' | {match['scoreline']} {score_indicator}")
@@ -123,7 +123,7 @@ def get_live_dashboard():
         print(f"   🔥 Critical (85+ min): {len([m for m in live_matches if m['minute'] >= 85])}")
         print(f"   ⚡ High Priority (75+ min): {len([m for m in live_matches if m['minute'] >= 75])}")
         print(f"   🤝 Draw Games: {len([m for m in live_matches if m['home_score'] == m['away_score']])}")
-        print(f"   🎯 Close Games (1 goal diff): {len([m for m in live_matches if abs(m['home_score'] - m['away_score']) == 1])}")
+        print(f"   🎯 Close Games (≤2 goal diff): {len([m for m in live_matches if abs(m['home_score'] - m['away_score']) <= 2])}")
         
         return live_matches
         
@@ -215,7 +215,7 @@ def save_dashboard_data(live_matches):
                 'critical_late_game': len([m for m in live_matches if m['minute'] >= 85]),
                 'high_priority': len([m for m in live_matches if m['minute'] >= 75]),
                 'draw_games': len([m for m in live_matches if m['home_score'] == m['away_score']]),
-                'close_games': len([m for m in live_matches if abs(m['home_score'] - m['away_score']) == 1])
+                'close_games': len([m for m in live_matches if abs(m['home_score'] - m['away_score']) <= 2])
             }
         }
         
