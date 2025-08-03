@@ -629,6 +629,17 @@ class SportmonksClient:
         self.logger.info(f"   Periods count: {len(periods) if periods else 0}")
         self.logger.info(f"   Live stats count: {len(live_statistics) if live_statistics else 0}")
         self.logger.info(f"   Match state: {match_state}")
+        self.logger.info(f"   Home team ID: {home_team_id}, Away team ID: {away_team_id}")
+        
+        # DEBUG: Log a few stats from live_statistics
+        if live_statistics:
+            self.logger.info(f"   Sample live stats:")
+            for i, stat in enumerate(live_statistics[:3]):  # First 3 stats
+                stat_id = stat.get('type_id')
+                stat_name = stat_id_mapping.get(stat_id, 'UNKNOWN')
+                location = stat.get('location')
+                value = stat.get('data', {}).get('value', 0)
+                self.logger.info(f"     [{i}] Type {stat_id} -> {stat_name} ({location}: {value})")
         
         # Method 1: Try to extract from periods data (historical/finished matches)
         second_half_period = None
@@ -670,12 +681,16 @@ class SportmonksClient:
                     stat_id = stat.get('type_id')
                     stat_name = stat_id_mapping.get(stat_id)
                     
+                    self.logger.info(f"   🔄 Processing: Type {stat_id} -> {stat_name}")
+                    
                     if stat_name and stat_name != 'corners':  # Skip corners as they're handled separately
                         location = stat.get('location')  # 'home' or 'away'
                         value = stat.get('data', {}).get('value', 0)
                         
+                        self.logger.info(f"   📊 {stat_name}: location={location}, value={value}")
+                        
                         # Special validation for possession (should be percentage 0-100)
-                        if stat_name == 'possession':
+                        if stat_name == 'ball_possession':
                             if value < 0 or value > 100:
                                 self.logger.warning(f"⚠️ SUSPICIOUS POSSESSION: {location} {stat_name}={value}% (Type {stat_id})")
                                 # Don't skip, but log the issue
@@ -684,9 +699,19 @@ class SportmonksClient:
                         if location in ['home', 'away'] and value > 0:
                             second_half_stats[location][stat_name] = value
                             stats_parsed += 1
-                            self.logger.info(f"   ✅ {location} {stat_name}: {value}")
+                            self.logger.info(f"   ✅ SAVED: {location} {stat_name}: {value}")
+                        elif value == 0:
+                            self.logger.info(f"   ⚪ SKIPPED (zero): {location} {stat_name}: {value}")
+                        else:
+                            self.logger.warning(f"   ❌ FAILED: {location} {stat_name}: {value} (location: {location})")
                 
                 self.logger.info(f"   📊 TOTAL PARSED: {stats_parsed} live statistics")
+            else:
+                self.logger.warning(f"   ⚠️ NOT SECOND HALF: match_state='{match_state}'")
+        else:
+            self.logger.warning(f"   ⚠️ NO EXTRACTION METHOD AVAILABLE:")
+            self.logger.warning(f"     Live stats: {bool(live_statistics)}")
+            self.logger.warning(f"     Match state: {bool(match_state)}")
         
         # Final verification
         home_stats_count = len(second_half_stats['home'])
@@ -696,6 +721,11 @@ class SportmonksClient:
             self.logger.info(f"✅ 2ND HALF STATS EXTRACTED: {home_stats_count} home, {away_stats_count} away")
             self.logger.info(f"   🏠 Home stats: {list(second_half_stats['home'].keys())}")
             self.logger.info(f"   🚌 Away stats: {list(second_half_stats['away'].keys())}")
+            
+            # Log key stats for debugging
+            home_dangerous = second_half_stats['home'].get('dangerous_attacks', 0)
+            away_dangerous = second_half_stats['away'].get('dangerous_attacks', 0)
+            self.logger.info(f"   🎯 KEY: Home dangerous_attacks={home_dangerous}, Away dangerous_attacks={away_dangerous}")
         else:
             self.logger.warning(f"⚠️ NO 2ND HALF STATS EXTRACTED!")
             self.logger.warning(f"   Debug: periods={len(periods)}, live_stats={len(live_statistics) if live_statistics else 0}")

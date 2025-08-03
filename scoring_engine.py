@@ -193,31 +193,25 @@ class ScoringEngine:
             trailing_team = 'away' if leading_team == 'home' else 'home'
             conditions.append(f'{trailing_team.title()} team trailing by 2 goals (testing competitive threshold)')
         
-        # Use second half stats for much better "recent activity" detection
-        # This is a major improvement - we now have period-level granularity!
+        # Use total stats instead of second_half_stats (at 85+ min, mostly 2nd half anyway)
+        # This fixes the issue where second_half_stats are empty but total stats are available
         
-        # Get second half stats for the focused team
-        second_half_team_stats = stats.second_half_stats.get(team_focus, {})
-        
-        # High shots on target in 2nd half (much more accurate than total)
-        second_half_shots_on_target = second_half_team_stats.get('shots_on_target', 0)
-        if second_half_shots_on_target >= 5 and stats.minute >= 75:  # 5+ in 2nd half = very active
+        # High shots on target - use TOTAL stats instead of empty second_half_stats
+        team_shots_on_target_total = stats.shots_on_target.get(team_focus, 0)
+        if team_shots_on_target_total >= 5 and stats.minute >= 75:  # 5+ total SOT at 75+ min
             score += SCORING_MATRIX['shots_on_target_last_15min_5plus']
-            conditions.append(f'{second_half_shots_on_target} shots on target in 2nd half')
+            conditions.append(f'{team_shots_on_target_total} shots on target (late game)')
         
-        # High total shots on target (reliable metric across all matches)
-        team_shots_on_target = stats.shots_on_target[team_focus]
-        if team_shots_on_target >= 8:
+        # Alternative: High total shots on target (8+ threshold)
+        if team_shots_on_target_total >= 8:
             score += SCORING_MATRIX['shots_on_target_total_8plus']
-            conditions.append(f'{team_shots_on_target} total shots on target')
+            conditions.append(f'{team_shots_on_target_total} total shots on target')
         
-        # High dangerous attacks in 2nd half
-        second_half_attacks = second_half_team_stats.get('dangerous_attacks', 0)
-        if second_half_attacks >= 30 and stats.minute >= 75:
+        # High dangerous attacks - use TOTAL stats instead of empty second_half_stats  
+        team_dangerous_attacks = stats.dangerous_attacks.get(team_focus, 0)
+        if team_dangerous_attacks >= 30 and stats.minute >= 75:
             score += SCORING_MATRIX['dangerous_attacks_2nd_half_30plus']
-            conditions.append(f'{second_half_attacks} dangerous attacks in 2nd half')
-        
-
+            conditions.append(f'{team_dangerous_attacks} dangerous attacks (late game)')
         
         # High total shots blocked (very high corner correlation)
         team_shots_blocked = stats.shots_blocked[team_focus]
@@ -225,11 +219,11 @@ class ScoringEngine:
             score += SCORING_MATRIX['shots_blocked_total_6plus'] 
             conditions.append(f'{team_shots_blocked} total shots blocked')
         
-        # High big chances in 2nd half
-        second_half_big_chances = second_half_team_stats.get('big_chances_created', 0)
-        if second_half_big_chances >= 3 and stats.minute >= 75:
+        # High big chances - use TOTAL stats instead of empty second_half_stats
+        team_big_chances = stats.big_chances_created.get(team_focus, 0)
+        if team_big_chances >= 3 and stats.minute >= 75:
             score += SCORING_MATRIX['big_chances_created_last_15min_3plus']
-            conditions.append(f'{second_half_big_chances} big chances in 2nd half')
+            conditions.append(f'{team_big_chances} big chances created (late game)')
         
 
         
@@ -260,14 +254,13 @@ class ScoringEngine:
         
 
         
-        # Get second half stats for the focused team (for medium priority)
-        second_half_team_stats = stats.second_half_stats.get(team_focus, {})
+        # Use total stats instead of empty second_half_stats (medium priority indicators)
         
-        # High shots inside box in 2nd half
-        second_half_shots_inside = second_half_team_stats.get('shots_inside_box', 0)
-        if second_half_shots_inside >= 4 and stats.minute >= 70:  # Lower threshold for 2nd half only
+        # High shots inside box - use TOTAL stats 
+        team_shots_inside = stats.shots_inside_box.get(team_focus, 0)
+        if team_shots_inside >= 5 and stats.minute >= 70:  # Use original 5+ threshold for total
             score += SCORING_MATRIX['shots_inside_box_last_20min_5plus']
-            conditions.append(f'{second_half_shots_inside} shots inside box in 2nd half')
+            conditions.append(f'{team_shots_inside} shots inside box (late game)')
         
         # Hit woodwork 3+ times (use total match - woodwork is rare)
         woodwork_hits = stats.hit_woodwork.get(team_focus, 0)
@@ -275,23 +268,23 @@ class ScoringEngine:
             score += SCORING_MATRIX['hit_woodwork_3plus']
             conditions.append(f'{woodwork_hits} times hit woodwork')
         
-        # High crosses in 2nd half
-        second_half_crosses = second_half_team_stats.get('crosses_total', 0)
-        if second_half_crosses >= 6 and stats.minute >= 70:  # 6+ crosses in 2nd half shows attacking intent
+        # High crosses - use TOTAL stats
+        team_crosses = stats.crosses_total.get(team_focus, 0)
+        if team_crosses >= 8 and stats.minute >= 70:  # Use original 8+ threshold for total
             score += SCORING_MATRIX['crosses_last_15min_8plus']
-            conditions.append(f'{second_half_crosses} crosses in 2nd half')
+            conditions.append(f'{team_crosses} crosses (late game)')
         
-        # High key passes in 2nd half
-        second_half_key_passes = second_half_team_stats.get('key_passes', 0)
-        if second_half_key_passes >= 4 and stats.minute >= 70:
+        # High key passes - use TOTAL stats
+        team_key_passes = stats.key_passes.get(team_focus, 0)
+        if team_key_passes >= 4 and stats.minute >= 70:
             score += SCORING_MATRIX['key_passes_last_10min_4plus']
-            conditions.append(f'{second_half_key_passes} key passes in 2nd half')
+            conditions.append(f'{team_key_passes} key passes (late game)')
         
-        # Counter attacks in 2nd half (desperation play)
-        second_half_counter_attacks = second_half_team_stats.get('counter_attacks', 0)
-        if second_half_counter_attacks >= 2 and stats.minute >= 70:
+        # Counter attacks - use TOTAL stats
+        team_counter_attacks = stats.counter_attacks.get(team_focus, 0)
+        if team_counter_attacks >= 2 and stats.minute >= 70:
             score += SCORING_MATRIX['counter_attacks_last_15min_2plus']
-            conditions.append(f'{second_half_counter_attacks} counter attacks in 2nd half')
+            conditions.append(f'{team_counter_attacks} counter attacks (late game)')
         
         return score, conditions
     
@@ -306,20 +299,19 @@ class ScoringEngine:
             score += SCORING_MATRIX['attacking_sub_after_70min']
             conditions.append(f'{len(attacking_subs)} attacking subs after 70\'')
         
-        # Get second half stats for tactical indicators
-        second_half_team_stats = stats.second_half_stats.get(team_focus, {})
+        # Use total stats instead of empty second_half_stats (tactical indicators)
         
-        # High offsides in 2nd half (desperate attacking)
-        second_half_offsides = second_half_team_stats.get('offsides', 0)
-        if second_half_offsides >= 3 and stats.minute >= 70:  # 3+ in 2nd half = desperate
+        # High offsides - use TOTAL stats (desperate attacking)
+        team_offsides = stats.offsides.get(team_focus, 0)
+        if team_offsides >= 3 and stats.minute >= 70:  # 3+ total = desperate
             score += SCORING_MATRIX['offsides_last_15min_3plus']
-            conditions.append(f'{second_half_offsides} offsides in 2nd half (desperate attacking)')
+            conditions.append(f'{team_offsides} offsides (desperate attacking)')
         
-        # High throwins in 2nd half (pressure play)
-        second_half_throwins = second_half_team_stats.get('throwins', 0)
-        if second_half_throwins >= 8 and stats.minute >= 70:  # 8+ in 2nd half = sustained pressure
+        # High throwins - use TOTAL stats (pressure play)  
+        team_throwins = stats.throwins.get(team_focus, 0)
+        if team_throwins >= 8 and stats.minute >= 70:  # 8+ total = sustained pressure
             score += SCORING_MATRIX['throwins_last_20min_8plus']
-            conditions.append(f'{second_half_throwins} throwins in 2nd half (pressure play)')
+            conditions.append(f'{team_throwins} throwins (pressure play)')
         
 
         
