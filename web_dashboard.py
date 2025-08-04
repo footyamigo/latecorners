@@ -108,19 +108,19 @@ def trigger_85_minute_alert(match):
         return False
     
     print(f"📊 CORNER EVALUATION:")
-    print(f"   • Final Score: {evaluation['final_score']:.1f}")
-    print(f"   • Corner Count: {evaluation['corner_count']}")
+    print(f"   • Final Score: {evaluation['score']:.1f}")
+    print(f"   • Corner Count: {evaluation['total_corners']}")
     print(f"   • Corner Category: {evaluation['corner_category']}")
-    print(f"   • Psychology Score: {evaluation['psychology_score']:.1f}")
-    print(f"   • Recommendation: {evaluation['recommendation']['action']} ({evaluation['recommendation']['confidence']})")
-    print(f"   • Reason: {evaluation['recommendation']['reason']}")
+    print(f"   • Psychology Score: {evaluation['score']:.1f}") # Renamed to 'score'
+    print(f"   • Recommendation: {evaluation['corner_category']} (Score: {evaluation['score']:.1f})") # Renamed to 'corner_category'
+    print(f"   • Reason: {evaluation['corner_category']} (Score: {evaluation['score']:.1f})") # Renamed to 'corner_category'
     
     # UPDATED: Allow WEAK BUY alerts (removed from rejection list)
-    if evaluation['recommendation']['action'] == 'AVOID':
-        print(f"❌ REJECTED: Recommendation is AVOID - {evaluation['recommendation']['reason']}")
+    if evaluation['corner_category'] == "TIER_1_BASELINE":
+        print(f"❌ REJECTED: Recommendation is TIER_1_BASELINE - {evaluation['corner_category']} (Score: {evaluation['score']:.1f})")
         return False
     
-    print(f"✅ SCORING PASSED: Action '{evaluation['recommendation']['action']}' is actionable")
+    print(f"✅ SCORING PASSED: Action '{evaluation['corner_category']}' is actionable")
     
     # CRITICAL: Only alert if Asian corner odds are available
     odds_info = match.get('corner_odds', {})
@@ -177,22 +177,24 @@ def trigger_85_minute_alert(match):
 def _generate_alert_message(match, evaluation, odds_info):
     """Generate actionable alert message for corner betting"""
     
-    corner_count = evaluation['corner_count']
+    corner_count = evaluation['total_corners']
     corner_category = evaluation['corner_category']
     
     # Generate simple, actionable reasoning
-    if corner_category == "PRIME ZONE":
+    if corner_category == "TIER_1_BASELINE":
         reason = f"Active match with perfect corner count ({corner_count}) - teams pushing for winner in final minutes"
-    elif corner_category == "HIGH ACTIVITY":
+    elif corner_category == "TIER_1_PEAK":
         reason = f"High-tempo match with {corner_count} corners - excellent attacking pressure late in game"
-    elif corner_category == "BUILDING":
+    elif corner_category == "TIER_1_PREMIUM":
         reason = f"Match building momentum with {corner_count} corners - late pressure likely to create more"
+    elif corner_category == "TIER_1_HIGH":
+        reason = f"Late game pressure with {corner_count} corners - desperate attacking expected"
     else:
         reason = f"Late game pressure with {corner_count} corners - desperate attacking expected"
     
     # Determine confidence level
-    rec = evaluation['recommendation']
-    confidence = rec['confidence']
+    rec = evaluation # Renamed to 'evaluation'
+    confidence = "HIGH" # Always HIGH for TIER 1
     
     message = f"""
 🎯 MATCH: {match['home_team']} vs {match['away_team']}
@@ -230,21 +232,21 @@ def _generate_alert_message(match, evaluation, odds_info):
 def _generate_telegram_message(match, evaluation, odds_info):
     """Generate mobile-friendly Telegram alert message"""
     
-    corner_count = evaluation['corner_count']
+    corner_count = evaluation['total_corners']
     corner_category = evaluation['corner_category']
     
     # Generate simple, actionable reasoning
-    if corner_category == "PRIME ZONE":
+    if corner_category == "TIER_1_BASELINE":
         reason = f"Perfect corner count ({corner_count}) - teams pushing for winner"
-    elif corner_category == "HIGH ACTIVITY":
+    elif corner_category == "TIER_1_PEAK":
         reason = f"High activity match ({corner_count} corners) - late pressure building"
-    elif corner_category == "BUILDING":
+    elif corner_category == "TIER_1_PREMIUM":
         reason = f"Momentum building ({corner_count} corners) - late surge expected"
-    else:
+    elif corner_category == "TIER_1_HIGH":
         reason = f"Late game pressure ({corner_count} corners) - desperation time"
     
-    rec = evaluation['recommendation']
-    confidence = rec['confidence']
+    rec = evaluation
+    confidence = "HIGH"
     
     # Mobile-optimized format
     message = f"""🚨 <b>CORNER ALERT</b> 🚨
@@ -786,23 +788,27 @@ CORNER_COUNT_SCORING = {
     
     # RED FLAGS
     'corners_4_or_less_insufficient': -2, # Insufficient activity for late corners
+    'corners_6_premium': 10, # New: Premium for 6 corners
+    'corners_7_premium': 12, # New: Premium for 7 corners
+    'corners_8_premium': 14, # New: Premium for 8 corners
+    'corners_8_to_11_sweet_spot': 16, # New: Sweet spot for 8-11 corners
 }
 
 def evaluate_corner_potential(match):
-    """Evaluate corner betting potential using optimized criteria"""
+    """Evaluate corner betting potential using TIER 1 criteria"""
     stats = match.get('statistics', {})
     minute = match.get('minute', 0)
     
-    print(f"📊 EVALUATING CORNER POTENTIAL for match at {minute} minutes")
+    print(f"📊 EVALUATING TIER 1 POTENTIAL for match at {minute} minutes")
     
-    # Only evaluate matches in the 83-85 minute window
-    if minute < 83:
-        print(f"❌ Too early: {minute} < 83 minutes")
+    # Only evaluate matches in the 84:30-85:15 window
+    if minute < 84 or minute > 85:
+        print(f"❌ Outside TIER 1 window: {minute} minutes (need 84:30-85:15)")
         return None
     
     # TIER 1 STRICT FILTER: Only allow ultra-profitable score lines (0-1 or 1-1)
-        home_score = match.get('home_score', 0)
-        away_score = match.get('away_score', 0)
+    home_score = match.get('home_score', 0)
+    away_score = match.get('away_score', 0)
     
     is_tier1_eligible, tier1_reason = is_tier1_elite_scoreline(home_score, away_score)
     
@@ -819,119 +825,77 @@ def evaluate_corner_potential(match):
     # Core statistics
     total_corners = home_stats.get('corners', 0) + away_stats.get('corners', 0)
     total_shots = home_stats.get('shots_total', 0) + away_stats.get('shots_total', 0)
+    total_shots_on_target = home_stats.get('shots_on_target', 0) + away_stats.get('shots_on_target', 0)
     dangerous_attacks = home_stats.get('dangerous_attacks', 0) + away_stats.get('dangerous_attacks', 0)
     
-    print(f"📈 CORE STATS:")
-    print(f"   • Total Corners: {total_corners}")
+    print(f"📈 TIER 1 CORE STATS:")
+    print(f"   • Total Corners: {total_corners} (need 6-10)")
+    print(f"   • Total Shots on Target: {total_shots_on_target} (need 7-9)")
     print(f"   • Total Shots: {total_shots}")
     print(f"   • Dangerous Attacks: {dangerous_attacks}")
     
-    # Premium statistics (if available)
-    shots_inside_box = home_stats.get('shots_inside_box', 0) + away_stats.get('shots_inside_box', 0)
-    crosses = home_stats.get('crosses', 0) + away_stats.get('crosses', 0)
+    # TIER 1 Corner Range Check
+    if total_corners < 6 or total_corners > 10:
+        print(f"❌ TIER 1 REJECTED: Corners {total_corners} outside 6-10 range")
+        return None
     
-    if shots_inside_box > 0 or crosses > 0:
-        print(f"🎯 PREMIUM STATS:")
-        print(f"   • Shots Inside Box: {shots_inside_box}")
-        print(f"   • Crosses: {crosses}")
+    # TIER 1 Shots on Target Check
+    if total_shots_on_target < 7 or total_shots_on_target > 9:
+        print(f"❌ TIER 1 REJECTED: Shots on Target {total_shots_on_target} outside 7-9 range")
+        return None
     
-    # Calculate base score using optimized corner count ranges
+    # Calculate base score using TIER 1 corner ranges
     base_score = 0
     corner_category = ""
     
-    if total_corners <= 4:
-        base_score += CORNER_COUNT_SCORING['corners_4_or_less_insufficient']
-        corner_category = "INSUFFICIENT"
-    elif 5 <= total_corners <= 6:
-        base_score += CORNER_COUNT_SCORING['corners_5_to_6_building']
-        corner_category = "BUILDING"
-    elif 7 <= total_corners <= 9:
-        base_score += CORNER_COUNT_SCORING['corners_7_to_9_prime_zone']
-        corner_category = "PRIME ZONE"
-    elif 10 <= total_corners <= 12:
-        base_score += CORNER_COUNT_SCORING['corners_10_to_12_high_activity']
-        corner_category = "HIGH ACTIVITY"
-    elif 13 <= total_corners <= 14:
-        base_score += CORNER_COUNT_SCORING['corners_13_to_14_caution_zone']
-        corner_category = "CAUTION ZONE"
-    elif 15 <= total_corners <= 16:
-        base_score += CORNER_COUNT_SCORING['corners_15_to_16_oversaturated']
-        corner_category = "OVERSATURATED"
-    else:  # 17+
-        base_score += CORNER_COUNT_SCORING['corners_17plus_extreme_fatigue']
-        corner_category = "EXTREME FATIGUE"
+    if total_corners == 6:
+        base_score += CORNER_COUNT_SCORING['corners_6_premium']
+        corner_category = "TIER_1_BASELINE"
+    elif total_corners == 7:
+        base_score += CORNER_COUNT_SCORING['corners_7_premium']
+        corner_category = "TIER_1_PEAK"
+    elif total_corners == 8:
+        base_score += CORNER_COUNT_SCORING['corners_8_premium']
+        corner_category = "TIER_1_PREMIUM"
+    elif total_corners == 9:
+        base_score += CORNER_COUNT_SCORING['corners_8_to_11_sweet_spot']
+        corner_category = "TIER_1_HIGH"
+    elif total_corners == 10:
+        base_score += CORNER_COUNT_SCORING['corners_8_to_11_sweet_spot']
+        corner_category = "TIER_1_HIGH"
     
-    print(f"🏷️ CORNER CATEGORY: {corner_category} (base modifier: {base_score - (total_corners * 3 + total_shots * 1.5 + dangerous_attacks * 0.3):.1f})")
+    print(f"🏷️ TIER 1 CATEGORY: {corner_category}")
     
     # Statistical activity scores
-    activity_score = total_corners * 3 + total_shots * 1.5 + dangerous_attacks * 0.3
+    activity_score = (
+        total_corners * 3 +
+        total_shots_on_target * 2 +  # Increased weight for shots on target
+        total_shots * 1.5 +
+        dangerous_attacks * 0.3
+    )
     base_score += activity_score
     
-    print(f"📊 ACTIVITY SCORING:")
+    print(f"📊 TIER 1 ACTIVITY SCORING:")
     print(f"   • Corners × 3: {total_corners * 3:.1f}")
-    print(f"   • Shots × 1.5: {total_shots * 1.5:.1f}")
+    print(f"   • Shots on Target × 2: {total_shots_on_target * 2:.1f}")
+    print(f"   • Total Shots × 1.5: {total_shots * 1.5:.1f}")
     print(f"   • Dangerous Attacks × 0.3: {dangerous_attacks * 0.3:.1f}")
     print(f"   • Activity Subtotal: {activity_score:.1f}")
     
-    # Premium bonuses (if available)
-    premium_bonus = 0
-    if shots_inside_box > 0:
-        box_bonus = shots_inside_box * 4
-        premium_bonus += box_bonus
-        inside_ratio = shots_inside_box / max(total_shots, 1)
-        ratio_bonus = inside_ratio * 15
-        premium_bonus += ratio_bonus
-        print(f"🎯 PREMIUM BONUSES:")
-        print(f"   • Shots Inside Box × 4: {box_bonus:.1f}")
-        print(f"   • Inside Shot Ratio × 15: {ratio_bonus:.1f}")
+    # Final TIER 1 threshold check
+    if base_score < 16.0:
+        print(f"❌ TIER 1 REJECTED: Score {base_score:.1f} below threshold (need 16.0+)")
+        return None
     
-    if crosses > 0:
-        cross_bonus = crosses * 2
-        premium_bonus += cross_bonus
-        print(f"   • Crosses × 2: {cross_bonus:.1f}")
-    
-    if premium_bonus > 0:
-        print(f"   • Premium Subtotal: {premium_bonus:.1f}")
-        base_score += premium_bonus
-    
-    # Psychology scoring - now guaranteed to be either draw or close game
-    psychology_score = 0
-    if is_draw:
-        psychology_score += 12
-        print(f"🧠 PSYCHOLOGY: Draw situation (+12)")
-    elif is_close:
-        psychology_score += 8
-        print(f"🧠 PSYCHOLOGY: Close game (+8)")
-    
-    # Late game multiplier
-    if minute >= 85:
-        original_psych = psychology_score
-        psychology_score *= 1.8  # High desperation multiplier
-        print(f"⏰ LATE GAME MULTIPLIER (85+): {original_psych:.1f} × 1.8 = {psychology_score:.1f}")
-    elif minute >= 83:
-        original_psych = psychology_score
-        psychology_score *= 1.5  # Building desperation
-        print(f"⏰ LATE GAME MULTIPLIER (83+): {original_psych:.1f} × 1.5 = {psychology_score:.1f}")
-    
-    final_score = base_score + psychology_score
-    
-    print(f"🎯 FINAL CALCULATION:")
-    print(f"   • Base Score: {base_score:.1f}")
-    print(f"   • Psychology Score: {psychology_score:.1f}")
-    print(f"   • FINAL SCORE: {final_score:.1f}")
-    
-    recommendation = _get_recommendation(final_score, corner_category, minute)
-    print(f"💡 RECOMMENDATION: {recommendation['action']} ({recommendation['confidence']}) - {recommendation['reason']}")
+    print(f"✅ TIER 1 QUALIFIED: Final Score {base_score:.1f}")
     
     return {
-        'final_score': final_score,
-        'corner_count': total_corners,
+        'score': base_score,
         'corner_category': corner_category,
-        'base_score': base_score,
-        'psychology_score': psychology_score,
-        'minute': minute,
-        'has_premium_stats': shots_inside_box > 0 or crosses > 0,
-        'recommendation': recommendation
+        'total_corners': total_corners,
+        'total_shots': total_shots,
+        'total_shots_on_target': total_shots_on_target,
+        'dangerous_attacks': dangerous_attacks
     }
 
 def _get_recommendation(final_score, corner_category, minute):

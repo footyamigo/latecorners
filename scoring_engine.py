@@ -82,8 +82,8 @@ class ScoringEngine:
         # Update state tracking
         self.state_tracker.update_match_state(current_stats)
         
-        # Extended 85-87 minute timing - evaluate in the alert window for better opportunity capture
-        if not self._is_in_alert_window(current_stats.minute):
+        # TIER 1: Strict 84:30-85:15 window
+        if not (84 <= current_stats.minute <= 85):
             return None
         
         # Calculate all scoring conditions
@@ -111,14 +111,9 @@ class ScoringEngine:
         total_score += score
         triggered_conditions.extend(conditions)
         
-        # NEGATIVE INDICATORS
-        score, conditions = self._evaluate_negative_conditions(current_stats)
-        total_score += score
-        triggered_conditions.extend(conditions)
-        
         # Count high-priority indicators
         high_priority_count = self._count_high_priority_indicators(triggered_conditions)
-        self.logger.info(f"🧪 SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}, triggered={triggered_conditions}")
+        self.logger.info(f"🧪 TIER 1 SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}")
         
         # TIER 1 STRICT FILTERING: Ultra-selective requirements for maximum profit
         total_corners = current_stats.total_corners
@@ -128,7 +123,7 @@ class ScoringEngine:
         # 1. Elite Score: 16-20 range  
         tier1_score_ok = 16.0 <= total_score <= 20.0
         
-        # 2. Corners: 6-8 exactly (sweet spot)
+        # 2. Corners: 6-10 exactly (sweet spot)
         tier1_corner_ok = self.config.ELITE_MIN_CORNERS <= total_corners <= self.config.ELITE_MAX_CORNERS
         
         # 3. Total Shots on Target: 7-9 (optimal range)
@@ -141,7 +136,11 @@ class ScoringEngine:
         tier1_qualified = tier1_score_ok and tier1_corner_ok and tier1_sot_ok and tier1_priority_ok
         
         if tier1_qualified:
-            self.logger.info(f"🏆 TIER 1 QUALIFIED: Match {current_stats.fixture_id} - Score: {total_score}/16-20, High Priority: {high_priority_count}/3+, Corners: {total_corners}/6-10, SOT: {total_shots_on_target}/7-9")
+            self.logger.info(f"🏆 TIER 1 QUALIFIED: Match {current_stats.fixture_id}")
+            self.logger.info(f"   Score: {total_score}/16-20 ✅")
+            self.logger.info(f"   Corners: {total_corners}/6-10 ✅")
+            self.logger.info(f"   Shots on Target: {total_shots_on_target}/7-9 ✅")
+            self.logger.info(f"   High Priority: {high_priority_count}/3+ ✅")
             
             return ScoringResult(
                 fixture_id=current_stats.fixture_id,

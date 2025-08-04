@@ -23,21 +23,21 @@ class Config:
     MAX_MINUTE_FOR_ALERT: int = 87  # Don't alert after 87th minute
 
     # TIER 1 STRICT ELITE SYSTEM PARAMETERS
-    ELITE_SCORE_THRESHOLD: float = 16.0     # TIER 1: Minimum elite score (was 8.0)
-    ELITE_HIGH_PRIORITY_THRESHOLD: int = 3  # TIER 1: Minimum high priority count (was 2)
-    ELITE_MIN_CORNERS: int = 6              # TIER 1: Minimum corners
-    ELITE_MAX_CORNERS: int = 10             # TIER 1: Maximum corners (expanded from 8 for flexibility)
-    ELITE_MIN_SHOTS_ON_TARGET: int = 7      # TIER 1: Minimum total shots on target
-    ELITE_MAX_SHOTS_ON_TARGET: int = 9      # TIER 1: Maximum total shots on target
-    ELITE_MIN_HIGH_PRIORITY: int = 3        # TIER 1: Minimum high priority indicators
+    ELITE_SCORE_THRESHOLD: float = 16.0     # TIER 1: Minimum elite score
+    ELITE_HIGH_PRIORITY_THRESHOLD: int = 3   # TIER 1: Minimum high priority count
+    ELITE_MIN_CORNERS: int = 6               # TIER 1: Minimum corners
+    ELITE_MAX_CORNERS: int = 10              # TIER 1: Maximum corners
+    ELITE_MIN_SHOTS_ON_TARGET: int = 7       # TIER 1: Minimum total shots on target
+    ELITE_MAX_SHOTS_ON_TARGET: int = 9       # TIER 1: Maximum total shots on target
+    ELITE_MIN_HIGH_PRIORITY: int = 3         # TIER 1: Minimum high priority indicators
 
-    # Alert timing (extended window for better opportunity capture)
-    TARGET_ALERT_MINUTE_MIN: int = 85  # Start of alert window
-    TARGET_ALERT_MINUTE_MAX: int = 87  # End of alert window
+    # Alert timing (strict 85th minute targeting)
+    TARGET_ALERT_MINUTE_MIN: int = 84  # Start checking at 84:30
+    TARGET_ALERT_MINUTE_MAX: int = 85  # Stop at 85:15
     
-    # Corner Count Sweet Spot (at 85th minute)
-    CORNER_SWEET_SPOT_MIN: int = 8
-    CORNER_SWEET_SPOT_MAX: int = 11
+    # Corner Count Sweet Spot (Tier 1 ranges)
+    CORNER_SWEET_SPOT_MIN: int = 6  # Tier 1 minimum
+    CORNER_SWEET_SPOT_MAX: int = 10 # Tier 1 maximum
     
     # Monitoring Configuration
     LIVE_POLL_INTERVAL: int = 30  # Poll every 30 seconds (reduced from 15 to avoid rate limits)
