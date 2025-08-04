@@ -651,21 +651,22 @@ class SportmonksClient:
         
         if second_half_period:
             self.logger.info(f"📊 FOUND 2ND HALF PERIOD: Extracting from periods data")
-        # Extract statistics from the second half period
-        period_statistics = second_half_period.get('statistics', [])
-        
-        for stat in period_statistics:
-            stat_id = stat.get('type_id')
-            stat_name = stat_id_mapping.get(stat_id)
+            # Extract statistics from the second half period
+            period_statistics = second_half_period.get('statistics', [])
             
-            if stat_name and stat_name != 'corners':  # Skip corners as they're handled separately
-                participant_id = stat.get('participant_id')
-                value = stat.get('value', 0)
+            for stat in period_statistics:
+                stat_id = stat.get('type_id')
+                stat_name = stat_id_mapping.get(stat_id)
                 
-                if participant_id == home_team_id:
-                    second_half_stats['home'][stat_name] = value
-                elif participant_id == away_team_id:
-                    second_half_stats['away'][stat_name] = value
+                if stat_name and stat_name != 'corners':  # Skip corners as they're handled separately
+                    participant_id = stat.get('participant_id')
+                    value = stat.get('value', 0)
+                    
+                    if participant_id == home_team_id:
+                        second_half_stats['home'][stat_name] = value
+                    elif participant_id == away_team_id:
+                        second_half_stats['away'][stat_name] = value
+        
         # Method 2: If we're in a live second half match, use live statistics
         elif live_statistics and match_state:
             is_second_half = ('2nd' in match_state.lower() or 'inplay_2nd_half' in match_state.lower())
@@ -730,7 +731,7 @@ class SportmonksClient:
             self.logger.warning(f"   Debug: periods={len(periods)}, live_stats={len(live_statistics) if live_statistics else 0}")
         
         return second_half_stats
-
+    
     def _parse_live_match_data(self, match_data: Dict) -> Optional[MatchStats]:
         """Parse live match data from livescores/inplay endpoint into MatchStats format"""
         try:
