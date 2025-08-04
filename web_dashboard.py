@@ -800,19 +800,18 @@ def evaluate_corner_potential(match):
         print(f"❌ Too early: {minute} < 83 minutes")
         return None
     
-    # ELITE FILTER: Only allow draws and close games (up to 2 goal difference)
-    is_draw = match.get('is_draw', False)
-    is_close = match.get('is_close', False)
-    
-    if not is_draw and not is_close:
+    # TIER 1 STRICT FILTER: Only allow ultra-profitable score lines (0-1 or 1-1)
         home_score = match.get('home_score', 0)
         away_score = match.get('away_score', 0)
-        goal_diff = abs(home_score - away_score)
-        print(f"❌ REJECTED: Large goal difference ({home_score}-{away_score}, diff: {goal_diff})")
-        print(f"   💡 System only alerts for DRAWS or UP TO 2-GOAL DIFFERENCE games")
+    
+    is_tier1_eligible, tier1_reason = is_tier1_elite_scoreline(home_score, away_score)
+    
+    if not is_tier1_eligible:
+        print(f"❌ TIER 1 REJECTED: Score {home_score}-{away_score} - {tier1_reason}")
+        print(f"   💡 TIER 1 STRICT: Only accepts 0-1 (away leading) or 1-1 (draw)")
         return None
     
-    print(f"✅ SCORELINE PASSED: {'Draw' if is_draw else 'Close game (≤2 goals)'} - eligible for corner alert")
+    print(f"✅ TIER 1 SCORELINE PASSED: {home_score}-{away_score} ({tier1_reason}) - ELITE opportunity!")
     
     home_stats = stats.get('home', {})
     away_stats = stats.get('away', {})
@@ -968,6 +967,22 @@ def _get_recommendation(final_score, corner_category, minute):
             'confidence': 'HIGH',
             'reason': f'Insufficient activity (Score: {final_score:.1f})'
         }
+
+def is_tier1_elite_scoreline(home_score, away_score):
+    """
+    TIER 1 STRICT: Ultra-selective score line filtering for maximum profit
+    Only allows the most profitable score lines: 0-1 and 1-1
+    Based on 88.9% profit rate for 0-1 and 61.1% for 1-1
+    """
+    # TIER 1 GOLDEN OPPORTUNITY: Away team leading by 1 (0-1)
+    if home_score == 0 and away_score == 1:
+        return True, "TIER_1_AWAY_LEADING"
+    
+    # TIER 1 HIGH VALUE: Draw at 1-1  
+    if home_score == 1 and away_score == 1:
+        return True, "TIER_1_DRAW"
+    
+    return False, "REJECTED_SCORELINE"
 
 @app.route('/')
 def dashboard():

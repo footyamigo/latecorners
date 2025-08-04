@@ -53,7 +53,8 @@ class PostgreSQLDatabase:
                     result VARCHAR(20) DEFAULT NULL,
                     checked_at TIMESTAMP DEFAULT NULL,
                     match_finished BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    tier_1 VARCHAR(3) DEFAULT 'No'
                 )
             """)
             
@@ -187,7 +188,27 @@ class PostgreSQLDatabase:
         except Exception as e:
             logger.error(f"❌ Migration failed: {e}")
             # Don't raise - migrations are non-critical for basic functionality
-    
+
+        # Migration: Add tier_1 column if it doesn't exist
+        try:
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'alerts' AND column_name = 'tier_1'
+            """)
+            
+            if not cursor.fetchone():
+                logger.info("🔄 MIGRATION: Adding tier_1 column...")
+                cursor.execute("""
+                    ALTER TABLE alerts 
+                    ADD COLUMN tier_1 VARCHAR(3) DEFAULT 'No'
+                """)
+                logger.info("✅ MIGRATION: tier_1 column added")
+            else:
+                logger.debug("⏭️ MIGRATION: tier_1 column already exists")
+                
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+
     def save_alert(self, alert_data: Dict) -> bool:
         """Save alert to database"""
         try:
@@ -199,8 +220,8 @@ class PostgreSQLDatabase:
                     fixture_id, teams, score_at_alert, minute_sent,
                     corners_at_alert, elite_score, high_priority_count, 
                     high_priority_ratio, home_shots_on_target, away_shots_on_target,
-                    total_shots_on_target, over_line, over_odds
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    total_shots_on_target, over_line, over_odds, tier_1
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 alert_data['fixture_id'],
                 alert_data['teams'],
@@ -214,7 +235,8 @@ class PostgreSQLDatabase:
                 alert_data.get('away_shots_on_target', 0),
                 alert_data.get('total_shots_on_target', 0),
                 alert_data['over_line'],
-                alert_data['over_odds']
+                alert_data['over_odds'],
+                'Yes'  # All new alerts are TIER 1
             ))
             
             conn.commit()

@@ -22,11 +22,14 @@ class Config:
     MIN_MINUTE_FOR_ALERT: int = 85  # Don't alert before 85th minute
     MAX_MINUTE_FOR_ALERT: int = 87  # Don't alert after 87th minute
 
-    # Elite System Parameters
-    ELITE_SCORE_THRESHOLD: float = 8.0      # Minimum score for ELITE tier
-    ELITE_HIGH_PRIORITY_THRESHOLD: int = 2  # Minimum high priority count for ELITE tier
-    ELITE_MIN_CORNERS: int = 6              # Minimum corners for ELITE tier (expanded from 7)
-    ELITE_MAX_CORNERS: int = 14             # Maximum corners for ELITE tier (expanded from 12)
+    # TIER 1 STRICT ELITE SYSTEM PARAMETERS
+    ELITE_SCORE_THRESHOLD: float = 16.0     # TIER 1: Minimum elite score (was 8.0)
+    ELITE_HIGH_PRIORITY_THRESHOLD: int = 3  # TIER 1: Minimum high priority count (was 2)
+    ELITE_MIN_CORNERS: int = 6              # TIER 1: Minimum corners
+    ELITE_MAX_CORNERS: int = 10             # TIER 1: Maximum corners (expanded from 8 for flexibility)
+    ELITE_MIN_SHOTS_ON_TARGET: int = 7      # TIER 1: Minimum total shots on target
+    ELITE_MAX_SHOTS_ON_TARGET: int = 9      # TIER 1: Maximum total shots on target
+    ELITE_MIN_HIGH_PRIORITY: int = 3        # TIER 1: Minimum high priority indicators
 
     # Alert timing (extended window for better opportunity capture)
     TARGET_ALERT_MINUTE_MIN: int = 85  # Start of alert window
@@ -54,8 +57,27 @@ class Config:
     LOG_LEVEL: str = 'INFO'
     LOG_FILE: str = 'latecorners.log'
 
+# TIER 1 STRICT ELITE CORNER ALERT CONFIGURATION
+# ELITE_MIN_CORNERS = 6  # Tier 1: Minimum corners for elite alerts
+# ELITE_MAX_CORNERS = 8  # Tier 1: Maximum corners for elite alerts (was 14)
+
+# TIER 1 ELITE SCORE THRESHOLDS
+# ELITE_SCORE_THRESHOLD = 16  # Tier 1: Minimum elite score (was 10)
+
+# TIER 1 SHOTS ON TARGET RANGE  
+# ELITE_MIN_SHOTS_ON_TARGET = 7  # Tier 1: Minimum total shots on target
+# ELITE_MAX_SHOTS_ON_TARGET = 9  # Tier 1: Maximum total shots on target
+
+# TIER 1 HIGH PRIORITY REQUIREMENTS
+# ELITE_MIN_HIGH_PRIORITY = 3  # Tier 1: Minimum high priority indicators (was 1)
+
 # Scoring Matrix Configuration
 SCORING_MATRIX = {
+    # Corner count scoring - focused on 6-8 range
+    'corners_6_premium': 2.0,   # Premium scoring for 6 corners
+    'corners_7_premium': 2.5,   # Peak scoring for 7 corners  
+    'corners_8_premium': 2.0,   # Premium scoring for 8 corners
+    
     # High Priority Indicators (4-5 points) - Prioritizing game state + reliable data
     'team_trailing_by_1_after_75min': 5,    # Enhanced: Prime corner scenario
     'draw_situation_after_75min': 4,        # New: Both teams pushing for goals
@@ -72,24 +94,26 @@ SCORING_MATRIX = {
     'hit_woodwork_3plus': 4,  # Enhanced: Near misses create pressure
     'crosses_last_15min_8plus': 3,  # Enhanced: Failed crosses → corners
     'counter_attacks_last_15min_2plus': 2,
+    'key_passes_last_10min_4plus': 2,  # Missing key added
+    'throwins_last_20min_6plus': 2,   # Missing key added
+    'offsides_last_15min_2plus': 2,   # Missing key added
     
     # Tactical Indicators (1-3 points) - Enhanced corner-focused
     'attacking_sub_after_70min': 2,
     'offsides_last_15min_3plus': 2,  # Enhanced: Shows attacking urgency
     'throwins_last_20min_8plus': 2,  # Enhanced: Territory pressure indicator
     
-    # Corner Count Context (6-14 corners now MANDATORY for elite alerts - EXPANDED RANGE)
-    'corners_6_low': 0.5,                # New minimum - still has potential but lower
-    'corners_7_baseline': 1,             # Previous minimum - solid potential
-    'corners_8_to_11_sweet_spot': 3,     # Peak corner generation range
-    'corners_12_maximum': 1,             # Still good potential
-    'corners_13_14_high': 0.5,           # New maximum - high action but still possible
+    # Corner Count Context - TIER 1 focused (6-8 only)
+    'corners_6_low': 0.5,                # Baseline
+    'corners_7_baseline': 1,             # Good potential
+    'corners_8_to_11_sweet_spot': 3,     # Peak range
+    'corners_12_maximum': 1,             # High but acceptable
+    'corners_13_14_high': 0,             # Remove high corner scoring for TIER 1
     
     # REMOVED ALL NEGATIVE INDICATORS - ONLY POSITIVE SCORING
-    # We filter by time/corners already, no need for penalties
-    'red_card_issued': 0,        # No penalty - rare and doesn't affect corner potential
-    'leading_by_2_goals': 0,     # No penalty - 10 corners at 85' speaks for itself
-    'gk_making_8plus_saves': 0,  # No penalty - actually shows active game
+    'red_card_issued': 0,        # No penalty
+    'leading_by_2_goals': 0,     # No penalty for TIER 1
+    'gk_making_8plus_saves': 0,  # No penalty
 }
 
 # Historical multipliers

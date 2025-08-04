@@ -179,7 +179,7 @@ class LiveDataCollector:
         # Key stat type IDs we need
         stat_mapping = {
             34: 'corners',          # Corners ✅ (Type 34 - original working + official docs)
-            42: 'shots_total',      # Shots Total
+            42: 'shots_total',      # Shots Total  
             86: 'shots_on_target',  # Shots on Target ✅ (Type 86 - confirmed)
             41: 'shots_off_target', # Shots off Target ✅ (Type 41 - confirmed)  
             44: 'dangerous_attacks', # Dangerous Attacks

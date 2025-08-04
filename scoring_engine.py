@@ -120,17 +120,28 @@ class ScoringEngine:
         high_priority_count = self._count_high_priority_indicators(triggered_conditions)
         self.logger.info(f"🧪 SCORING: fixture_id={current_stats.fixture_id}, total_score={total_score}, high_priority_count={high_priority_count}, triggered={triggered_conditions}")
         
-        # FLEXIBLE CORNER FILTER: Support different tiers
+        # TIER 1 STRICT FILTERING: Ultra-selective requirements for maximum profit
         total_corners = current_stats.total_corners
+        total_shots_on_target = sum(current_stats.shots_on_target.values())
         
-        # ELITE tier: 6-14 corners (expanded range for more opportunities, ONLY tier used)
-        elite_corner_ok = self.config.ELITE_MIN_CORNERS <= total_corners <= self.config.ELITE_MAX_CORNERS
+        # TIER 1 Requirements:
+        # 1. Elite Score: 16-20 range  
+        tier1_score_ok = 16.0 <= total_score <= 20.0
         
-        # Check ELITE qualification only
-        elite_qualified = total_score >= 8.0 and high_priority_count >= 2 and elite_corner_ok
+        # 2. Corners: 6-8 exactly (sweet spot)
+        tier1_corner_ok = self.config.ELITE_MIN_CORNERS <= total_corners <= self.config.ELITE_MAX_CORNERS
         
-        if elite_qualified:
-            self.logger.info(f"🏆 ELITE QUALIFIED: Match {current_stats.fixture_id} - Score: {total_score}/8.0, High Priority: {high_priority_count}/2, Corners: {total_corners}")
+        # 3. Total Shots on Target: 7-9 (optimal range)
+        tier1_sot_ok = self.config.ELITE_MIN_SHOTS_ON_TARGET <= total_shots_on_target <= self.config.ELITE_MAX_SHOTS_ON_TARGET
+        
+        # 4. High Priority Count: 3+ (multiple strong indicators)
+        tier1_priority_ok = high_priority_count >= self.config.ELITE_MIN_HIGH_PRIORITY
+        
+        # TIER 1 STRICT: ALL criteria must be met
+        tier1_qualified = tier1_score_ok and tier1_corner_ok and tier1_sot_ok and tier1_priority_ok
+        
+        if tier1_qualified:
+            self.logger.info(f"🏆 TIER 1 QUALIFIED: Match {current_stats.fixture_id} - Score: {total_score}/16-20, High Priority: {high_priority_count}/3+, Corners: {total_corners}/6-10, SOT: {total_shots_on_target}/7-9")
             
             return ScoringResult(
                 fixture_id=current_stats.fixture_id,
@@ -142,13 +153,12 @@ class ScoringEngine:
                 match_context=self._generate_match_context(current_stats, triggered_conditions)
             )
         else:
-            # Log why it didn't qualify for ELITE tier
-            if total_corners < 6:
-                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (need 6+ for ELITE)")
-            elif total_corners > 14:
-                self.logger.info(f"🚫 CORNER FILTER: Match {current_stats.fixture_id} rejected - {total_corners} corners (max 14 for ELITE)")
-            else:
-                self.logger.info(f"🚫 SCORE FILTER: Match {current_stats.fixture_id} rejected - Score: {total_score} (need 8+ for ELITE), High Priority: {high_priority_count}")
+            # Log why it didn't qualify for TIER 1 (detailed breakdown)
+            self.logger.info(f"🚫 TIER 1 REJECTED: Match {current_stats.fixture_id}")
+            self.logger.info(f"   Score: {total_score} (need 16-20) {'✅' if tier1_score_ok else '❌'}")
+            self.logger.info(f"   Corners: {total_corners} (need 6-10) {'✅' if tier1_corner_ok else '❌'}")
+            self.logger.info(f"   Shots on Target: {total_shots_on_target} (need 7-9) {'✅' if tier1_sot_ok else '❌'}")
+            self.logger.info(f"   High Priority: {high_priority_count} (need 3+) {'✅' if tier1_priority_ok else '❌'}")
         
         return None
     
@@ -318,28 +328,28 @@ class ScoringEngine:
         return score, conditions
     
     def _evaluate_corner_context(self, stats: MatchStats) -> Tuple[float, List[str]]:
-        """Evaluate corner count context - 6-14 corners already verified as mandatory"""
+        """TIER 1: Evaluate corner count context - 6-10 corners (expanded range)"""
         score = 0.0
         conditions = []
         
         total_corners = stats.total_corners
         
-        # Note: 6-14 range already verified before this function is called
-        if 8 <= total_corners <= 11:
-            score += SCORING_MATRIX['corners_8_to_11_sweet_spot']
-            conditions.append(f'{total_corners} corners (SWEET SPOT)')
-        elif total_corners == 6:
-            score += SCORING_MATRIX['corners_6_low']
-            conditions.append(f'{total_corners} corners (low but potential)')
+        # TIER 1 CORNER SCORING: Expanded 6-10 range
+        if total_corners == 6:
+            score += SCORING_MATRIX['corners_6_premium']
+            conditions.append(f'{total_corners} corners (TIER 1 BASELINE)')
         elif total_corners == 7:
-            score += SCORING_MATRIX['corners_7_baseline']
-            conditions.append(f'{total_corners} corners (baseline)')
-        elif total_corners == 12:
-            score += SCORING_MATRIX['corners_12_maximum']
-            conditions.append(f'{total_corners} corners (high but good)')
-        elif 13 <= total_corners <= 14:
-            score += SCORING_MATRIX['corners_13_14_high']
-            conditions.append(f'{total_corners} corners (very high but possible)')
+            score += SCORING_MATRIX['corners_7_premium']
+            conditions.append(f'{total_corners} corners (TIER 1 PEAK)')
+        elif total_corners == 8:
+            score += SCORING_MATRIX['corners_8_premium']
+            conditions.append(f'{total_corners} corners (TIER 1 PREMIUM)')
+        elif total_corners == 9:
+            score += SCORING_MATRIX['corners_8_to_11_sweet_spot']
+            conditions.append(f'{total_corners} corners (TIER 1 HIGH)')
+        elif total_corners == 10:
+            score += SCORING_MATRIX['corners_8_to_11_sweet_spot']
+            conditions.append(f'{total_corners} corners (TIER 1 HIGH)')
         
         return score, conditions
     
