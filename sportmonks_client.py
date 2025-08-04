@@ -557,14 +557,14 @@ class SportmonksClient:
             # Handle corners separately (total across both teams)
                 if stat_name == 'corners':
                     total_corners += value
-                self.logger.info(f"   ⚽ CORNER: +{value} (total: {total_corners})")
+                    self.logger.info(f"   ⚽ CORNER: +{value} (total: {total_corners})")
             
             # Assign stats to home/away teams
             if participant_id == home_team_id or location == 'home':
-                    stats_dict[stat_name]['home'] = value
+                stats_dict[stat_name]['home'] = value
                 parsed_stats_count += 1
             elif participant_id == away_team_id or location == 'away':
-                    stats_dict[stat_name]['away'] = value
+                stats_dict[stat_name]['away'] = value
                 parsed_stats_count += 1
         
         self.logger.info(f"📈 MAIN STATS SUMMARY:")
