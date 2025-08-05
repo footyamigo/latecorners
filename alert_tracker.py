@@ -22,21 +22,22 @@ class AlertTracker:
     def save_elite_alert(self, match_data: Dict, tier: str, score: float, conditions: list) -> bool:
         """Save an elite alert to the database for tracking"""
         
-        if tier != "ELITE":
-            # Only track ELITE alerts for performance analysis
-            logger.debug(f"⏭️ Skipping {tier} alert tracking (ELITE only)")
+        # Accept both ELITE and any TIER_1 alerts
+        if tier != "ELITE" and not tier.startswith("TIER_1"):
+            # Only track ELITE and TIER_1 alerts for performance analysis
+            logger.debug(f"⏭️ Skipping {tier} alert tracking (ELITE/TIER_1 only)")
             return True
         
         try:
-            logger.info(f"💾 SAVING ELITE ALERT: {match_data.get('home_team')} vs {match_data.get('away_team')}")
+            logger.info(f"💾 SAVING {tier} ALERT: {match_data.get('home_team')} vs {match_data.get('away_team')}")
             
             # Extract betting line and odds from active_odds
             over_line, over_odds = self._extract_over_bet(match_data.get('active_odds', []))
             
             # Calculate high priority ratio based on tier
             high_priority_count = match_data.get('high_priority_count', 0)
-            if tier == "ELITE":
-                priority_required = 2
+            if tier == "ELITE" or tier.startswith("TIER_1"):
+                priority_required = 3  # Updated for Tier 1 system
             elif tier == "PREMIUM":
                 priority_required = 1
             else:
@@ -63,14 +64,14 @@ class AlertTracker:
             success = self.db.save_alert(alert_data)
             
             if success:
-                logger.info(f"✅ ELITE ALERT TRACKED: {alert_data['teams']} - {alert_data['corners_at_alert']} corners at 85' (High Priority: {high_priority_ratio}) (Over {over_line} @ {over_odds})")
+                logger.info(f"✅ {tier} ALERT TRACKED: {alert_data['teams']} - {alert_data['corners_at_alert']} corners at 85' (High Priority: {high_priority_ratio}) (Over {over_line} @ {over_odds})")
             else:
-                logger.error(f"❌ Failed to save elite alert: {alert_data['teams']}")
+                logger.error(f"❌ Failed to save {tier} alert: {alert_data['teams']}")
             
             return success
             
         except Exception as e:
-            logger.error(f"❌ Error tracking elite alert: {e}")
+            logger.error(f"❌ Error tracking {tier} alert: {e}")
             return False
     
     def _extract_over_bet(self, active_odds: list) -> tuple:

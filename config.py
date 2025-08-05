@@ -27,13 +27,13 @@ class Config:
     ELITE_HIGH_PRIORITY_THRESHOLD: int = 3   # TIER 1: Minimum high priority count
     ELITE_MIN_CORNERS: int = 6               # TIER 1: Minimum corners
     ELITE_MAX_CORNERS: int = 10              # TIER 1: Maximum corners
-    ELITE_MIN_SHOTS_ON_TARGET: int = 7       # TIER 1: Minimum total shots on target
-    ELITE_MAX_SHOTS_ON_TARGET: int = 9       # TIER 1: Maximum total shots on target
+    ELITE_MIN_SHOTS_ON_TARGET: int = 6       # TIER 1: Minimum total shots on target (relaxed from 7)
+    ELITE_MAX_SHOTS_ON_TARGET: int = 10      # TIER 1: Maximum total shots on target (relaxed from 9)
     ELITE_MIN_HIGH_PRIORITY: int = 3         # TIER 1: Minimum high priority indicators
 
-    # Alert timing (strict 85th minute targeting)
-    TARGET_ALERT_MINUTE_MIN: int = 84  # Start checking at 84:30
-    TARGET_ALERT_MINUTE_MAX: int = 85  # Stop at 85:15
+    # Alert timing (85-89 minute window)
+    TARGET_ALERT_MINUTE_MIN: int = 85  # Start at 85th minute
+    TARGET_ALERT_MINUTE_MAX: int = 89  # End at 89th minute
     
     # Corner Count Sweet Spot (Tier 1 ranges)
     CORNER_SWEET_SPOT_MIN: int = 6  # Tier 1 minimum

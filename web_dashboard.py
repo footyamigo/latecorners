@@ -935,8 +935,11 @@ def _get_recommendation(final_score, corner_category, minute):
 def is_tier1_elite_scoreline(home_score, away_score):
     """
     TIER 1 STRICT: Ultra-selective score line filtering for maximum profit
-    Only allows the most profitable score lines: 0-1 and 1-1
-    Based on 88.9% profit rate for 0-1 and 61.1% for 1-1
+    Allows the most profitable score lines:
+    - 0-1 (away leading by 1) - 88.9% profit rate
+    - 1-1 (draw) - 61.1% profit rate
+    - 1-0 (home leading by 1) - Added
+    - 0-0 (teams desperate for winner) - Added
     """
     # TIER 1 GOLDEN OPPORTUNITY: Away team leading by 1 (0-1)
     if home_score == 0 and away_score == 1:
@@ -945,6 +948,14 @@ def is_tier1_elite_scoreline(home_score, away_score):
     # TIER 1 HIGH VALUE: Draw at 1-1  
     if home_score == 1 and away_score == 1:
         return True, "TIER_1_DRAW"
+
+    # TIER 1 ADDED: Home team leading by 1 (1-0)
+    if home_score == 1 and away_score == 0:
+        return True, "TIER_1_HOME_LEADING"
+
+    # TIER 1 ADDED: Goalless draw (0-0)
+    if home_score == 0 and away_score == 0:
+        return True, "TIER_1_GOALLESS_DRAW"
     
     return False, "REJECTED_SCORELINE"
 

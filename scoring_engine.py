@@ -82,8 +82,8 @@ class ScoringEngine:
         # Update state tracking
         self.state_tracker.update_match_state(current_stats)
         
-        # TIER 1: Strict 84:30-85:15 window
-        if not (84 <= current_stats.minute <= 85):
+        # TIER 1: 85-89 minute window
+        if not (85 <= current_stats.minute <= 89):
             return None
         
         # Calculate all scoring conditions

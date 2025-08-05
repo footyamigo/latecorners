@@ -312,7 +312,7 @@ class LateCornerMonitor:
                         corner_odds = await self._get_corner_odds(fixture_id)
                         if corner_odds:
                             self.logger.info(f"🚀 SENDING ELITE ALERT: All conditions met for match {fixture_id}")
-                            match_info = self._extract_match_info(match_stats, scoring_result, corner_odds, tier="ELITE")
+                            match_info = self._extract_match_info(match_stats, scoring_result, corner_odds, tier="TIER_1")
                             return match_info
                         else:
                             self.logger.warning(f"🚫 ELITE ALERT BLOCKED: No odds available for match {fixture_id}")
@@ -408,48 +408,30 @@ class LateCornerMonitor:
             self.logger.error(f"❌ Error getting corner odds for match {fixture_id}: {e}")
             return None
 
-    def _extract_match_info(self, match_stats, scoring_result, corner_odds: Dict, tier: str = "ELITE") -> Dict:
-        """Extract match information for alert"""
-        try:
-            match_info = {
-                'fixture_id': match_stats.fixture_id,
-                'home_team': match_stats.home_team,
-                'away_team': match_stats.away_team,
-                'home_score': match_stats.home_score,
-                'away_score': match_stats.away_score,
-                'minute': match_stats.minute,
-                'tier': tier,  # ELITE only
-                
-                # Live statistics for Telegram message
-                'total_corners': match_stats.total_corners if hasattr(match_stats, 'total_corners') else 0,  # ✅ CRITICAL: Total corners for display
-                'home_corners': match_stats.total_corners // 2 if hasattr(match_stats, 'total_corners') else 0,  # Rough split
-                'away_corners': match_stats.total_corners // 2 if hasattr(match_stats, 'total_corners') else 0,  # Rough split
-                'home_shots': match_stats.shots_total.get('home', 0) if hasattr(match_stats, 'shots_total') else 0,
-                'away_shots': match_stats.shots_total.get('away', 0) if hasattr(match_stats, 'shots_total') else 0,
-                'home_shots_on_target': match_stats.shots_on_target.get('home', 0) if hasattr(match_stats, 'shots_on_target') else 0,
-                'away_shots_on_target': match_stats.shots_on_target.get('away', 0) if hasattr(match_stats, 'shots_on_target') else 0,
-                'home_attacks': match_stats.dangerous_attacks.get('home', 0) if hasattr(match_stats, 'dangerous_attacks') else 0,
-                'away_attacks': match_stats.dangerous_attacks.get('away', 0) if hasattr(match_stats, 'dangerous_attacks') else 0,
-                
-                # Corner odds information for alert
-                'odds_available': corner_odds.get('available', False),
-                'odds_count': corner_odds.get('count', 0),
-                'active_odds_count': corner_odds.get('active_count', 0),
-                'odds_details': corner_odds.get('odds_details', []),
-                'active_odds': corner_odds.get('active_odds', []),
-                
-                # Scoring information for alert
-                'elite_score': scoring_result.total_score,
-                'high_priority_count': scoring_result.high_priority_indicators,
-                'triggered_conditions': scoring_result.triggered_conditions
-            }
-            
-            self.logger.info(f"🧪 DEBUG: Extracted match_info: {match_info}")
-            return match_info
-            
-        except Exception as e:
-            self.logger.error(f"❌ Error extracting match info: {e}")
-            return {}
+    def _extract_match_info(self, match_stats, scoring_result, corner_odds: Dict, tier: str = "TIER_1") -> Dict:
+        """Extract relevant match info for alert"""
+        
+        # Basic match info
+        match_info = {
+            'fixture_id': match_stats.fixture_id,
+            'home_team': match_stats.home_team,
+            'away_team': match_stats.away_team,
+            'home_score': match_stats.home_score,
+            'away_score': match_stats.away_score,
+            'minute': match_stats.minute,
+            'total_corners': match_stats.total_corners,
+            'tier': tier,  # Now using TIER_1 as default
+            'high_priority_count': scoring_result.high_priority_indicators,
+            'home_shots_on_target': match_stats.shots_on_target.get('home', 0),
+            'away_shots_on_target': match_stats.shots_on_target.get('away', 0),
+            'total_shots_on_target': sum(match_stats.shots_on_target.values()),
+            'odds_count': corner_odds.get('count', 0),
+            'active_odds_count': corner_odds.get('active_count', 0),
+            'odds_details': corner_odds.get('odds_details', []),
+            'active_odds': corner_odds.get('active_odds', [])
+        }
+        
+        return match_info
 
     async def start_monitoring(self):
         """Start the main monitoring loop using shared dashboard data"""
