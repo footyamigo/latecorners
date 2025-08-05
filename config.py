@@ -23,12 +23,12 @@ class Config:
     MAX_MINUTE_FOR_ALERT: int = 87  # Don't alert after 87th minute
 
     # TIER 1 STRICT ELITE SYSTEM PARAMETERS
-    ELITE_SCORE_THRESHOLD: float = 16.0     # TIER 1: Minimum elite score
+    ELITE_SCORE_THRESHOLD: float = 16.0     # TIER 1: Minimum elite score (no upper limit)
     ELITE_HIGH_PRIORITY_THRESHOLD: int = 3   # TIER 1: Minimum high priority count
     ELITE_MIN_CORNERS: int = 6               # TIER 1: Minimum corners
     ELITE_MAX_CORNERS: int = 10              # TIER 1: Maximum corners
     ELITE_MIN_SHOTS_ON_TARGET: int = 6       # TIER 1: Minimum total shots on target (relaxed from 7)
-    ELITE_MAX_SHOTS_ON_TARGET: int = 10      # TIER 1: Maximum total shots on target (relaxed from 9)
+    ELITE_MAX_SHOTS_ON_TARGET: int = 15      # TIER 1: Maximum total shots on target (increased from 9)
     ELITE_MIN_HIGH_PRIORITY: int = 3         # TIER 1: Minimum high priority indicators
 
     # Alert timing (85-89 minute window)

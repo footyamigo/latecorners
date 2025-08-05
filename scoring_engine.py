@@ -120,13 +120,13 @@ class ScoringEngine:
         total_shots_on_target = sum(current_stats.shots_on_target.values())
         
         # TIER 1 Requirements:
-        # 1. Elite Score: 16-20 range  
-        tier1_score_ok = 16.0 <= total_score <= 20.0
+        # 1. Elite Score: 16+ (no upper limit)  
+        tier1_score_ok = total_score >= self.config.ELITE_SCORE_THRESHOLD
         
         # 2. Corners: 6-10 exactly (sweet spot)
         tier1_corner_ok = self.config.ELITE_MIN_CORNERS <= total_corners <= self.config.ELITE_MAX_CORNERS
         
-        # 3. Total Shots on Target: 7-9 (optimal range)
+        # 3. Total Shots on Target: 6+ (relaxed requirement)
         tier1_sot_ok = self.config.ELITE_MIN_SHOTS_ON_TARGET <= total_shots_on_target <= self.config.ELITE_MAX_SHOTS_ON_TARGET
         
         # 4. High Priority Count: 3+ (multiple strong indicators)
