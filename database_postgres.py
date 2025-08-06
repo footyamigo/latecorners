@@ -210,11 +210,25 @@ class PostgreSQLDatabase:
             logger.error(f"❌ Migration failed: {e}")
 
     def save_alert(self, alert_data: Dict) -> bool:
-        """Save alert to database"""
+        """Save alert to database with duplicate prevention"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
             
+            # Check if alert already exists for this fixture
+            cursor.execute("""
+                SELECT id FROM alerts WHERE fixture_id = %s
+            """, (alert_data['fixture_id'],))
+            
+            existing_alert = cursor.fetchone()
+            
+            if existing_alert:
+                logger.warning(f"⚠️ DUPLICATE ALERT PREVENTED: Alert for fixture {alert_data['fixture_id']} already exists (ID: {existing_alert[0]})")
+                cursor.close()
+                conn.close()
+                return True  # Return True since alert data exists (not an error)
+            
+            # Insert new alert if no duplicate found
             cursor.execute("""
                 INSERT INTO alerts (
                     fixture_id, teams, score_at_alert, minute_sent,
@@ -243,11 +257,13 @@ class PostgreSQLDatabase:
             cursor.close()
             conn.close()
             
-            logger.info(f"✅ Alert saved to PostgreSQL: {alert_data['fixture_id']}")
+            logger.info(f"✅ NEW ALERT SAVED to PostgreSQL: {alert_data['fixture_id']} - {alert_data['teams']}")
             return True
             
         except Exception as e:
             logger.error(f"❌ Failed to save alert: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def get_unfinished_alerts(self) -> List[Dict]:

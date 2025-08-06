@@ -421,7 +421,9 @@ class LateCornerMonitor:
             'minute': match_stats.minute,
             'total_corners': match_stats.total_corners,
             'tier': tier,  # Now using TIER_1 as default
+            'elite_score': scoring_result.total_score,  # Add the actual calculated score
             'high_priority_count': scoring_result.high_priority_indicators,
+            'triggered_conditions': scoring_result.triggered_conditions,  # Add triggered conditions
             'home_shots_on_target': match_stats.shots_on_target.get('home', 0),
             'away_shots_on_target': match_stats.shots_on_target.get('away', 0),
             'total_shots_on_target': sum(match_stats.shots_on_target.values()),
@@ -532,36 +534,46 @@ class LateCornerMonitor:
                                         self.logger.info(f"   Total markets: {corner_odds['count']}")
                                         self.logger.info(f"   Active markets: {corner_odds['active_count']}")
                                         
-                                        # ATTEMPT TO SEND TELEGRAM ALERT
-                                        self.logger.info(f"📱 INITIATING TELEGRAM ALERT for {actual_tier} match {match_id}...")
+                                        # SAVE ALERT TO DATABASE FIRST (regardless of Telegram outcome)
+                                        self.logger.info(f"💾 SAVING ALERT TO DATABASE for {actual_tier} match {match_id}...")
                                         
-                                        # USE NEW BULLETPROOF TELEGRAM SYSTEM
-                                        success = send_corner_alert_new(
-                                            match_data=alert_info,
-                                            tier=actual_tier,
-                                            score=actual_score,
-                                            conditions=actual_conditions
-                                        )
+                                        try:
+                                            track_success = track_elite_alert(alert_info, actual_tier, actual_score, actual_conditions)
+                                            if track_success:
+                                                self.logger.info(f"✅ ALERT SAVED TO DATABASE: {actual_tier} alert tracked successfully")
+                                            else:
+                                                self.logger.error(f"❌ DATABASE SAVE FAILED: Alert not saved to database")
+                                        except Exception as e:
+                                            self.logger.error(f"❌ DATABASE SAVE ERROR: {e}")
+                                            import traceback
+                                            self.logger.error(traceback.format_exc())
                                         
-                                        if success:
-                                            self.alerted_matches.add(match_id)
-                                            self.logger.info(f"🎉 TELEGRAM ALERT SENT SUCCESSFULLY for match {match_id}")
-                                            self.logger.info(f"   ✅ {actual_tier} tier alert delivered")
-                                            self.logger.info(f"   ✅ Match added to alerted list")
+                                        # THEN ATTEMPT TO SEND TELEGRAM ALERT
+                                        self.logger.info(f"📱 SENDING TELEGRAM ALERT for {actual_tier} match {match_id}...")
+                                        
+                                        try:
+                                            telegram_success = send_corner_alert_new(
+                                                match_data=alert_info,
+                                                tier=actual_tier,
+                                                score=actual_score,
+                                                conditions=actual_conditions
+                                            )
                                             
-                                            # TRACK ELITE ALERT FOR PERFORMANCE ANALYSIS
-                                            try:
-                                                track_success = track_elite_alert(alert_info, actual_tier, actual_score, actual_conditions)
-                                                if track_success:
-                                                    self.logger.info(f"💾 ALERT TRACKED: {actual_tier} alert saved to database")
-                                                else:
-                                                    self.logger.warning(f"⚠️ Alert tracking failed (alert still sent)")
-                                            except Exception as e:
-                                                self.logger.error(f"❌ Alert tracking error: {e}")
-                                        else:
-                                            self.logger.error(f"❌ TELEGRAM ALERT FAILED for match {match_id}")
-                                            self.logger.error(f"   ❌ Check Telegram configuration and network")
-                                            self.logger.error(f"   ❌ Alert will be retried next cycle")
+                                            if telegram_success:
+                                                self.alerted_matches.add(match_id)
+                                                self.logger.info(f"🎉 TELEGRAM ALERT SENT SUCCESSFULLY for match {match_id}")
+                                                self.logger.info(f"   ✅ {actual_tier} tier alert delivered")
+                                                self.logger.info(f"   ✅ Match added to alerted list")
+                                            else:
+                                                self.logger.error(f"❌ TELEGRAM ALERT FAILED for match {match_id}")
+                                                self.logger.error(f"   ❌ Check Telegram configuration and network")
+                                                self.logger.error(f"   ❌ Alert will be retried next cycle")
+                                                # NOTE: Alert is still saved in database even if Telegram fails
+                                        except Exception as e:
+                                            self.logger.error(f"❌ TELEGRAM SEND ERROR: {e}")
+                                            import traceback
+                                            self.logger.error(traceback.format_exc())
+                                            # NOTE: Alert is still saved in database even if Telegram fails
                                             
                             except Exception as e:
                                 self.logger.error(f"❌ Error processing match {match.get('id', 'unknown')}: {e}")
