@@ -229,20 +229,47 @@ class PostgreSQLDatabase:
                 return True  # Return True since alert data exists (not an error)
             
             # Insert new alert if no duplicate found
+            # First, let's alter the table to add new columns if they don't exist
+            try:
+                cursor.execute("""
+                    ALTER TABLE alerts
+                    ADD COLUMN IF NOT EXISTS attack_intensity FLOAT,
+                    ADD COLUMN IF NOT EXISTS shot_efficiency FLOAT,
+                    ADD COLUMN IF NOT EXISTS attack_volume FLOAT,
+                    ADD COLUMN IF NOT EXISTS corner_momentum FLOAT,
+                    ADD COLUMN IF NOT EXISTS score_context FLOAT,
+                    ADD COLUMN IF NOT EXISTS total_probability FLOAT,
+                    ADD COLUMN IF NOT EXISTS detected_patterns TEXT[],
+                    ADD COLUMN IF NOT EXISTS corners_last_15 INTEGER,
+                    ADD COLUMN IF NOT EXISTS dangerous_attacks_last_5 INTEGER,
+                    ADD COLUMN IF NOT EXISTS attacks_last_5 INTEGER;
+                """)
+                conn.commit()
+            except Exception as e:
+                logger.error(f"Failed to alter table: {e}")
+                
+            # Now insert with all the new metrics
             cursor.execute("""
                 INSERT INTO alerts (
                     fixture_id, teams, score_at_alert, minute_sent,
                     corners_at_alert, elite_score, high_priority_count, 
                     high_priority_ratio, home_shots_on_target, away_shots_on_target,
-                    total_shots_on_target, over_line, over_odds, tier_1
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    total_shots_on_target, over_line, over_odds, tier_1,
+                    attack_intensity, shot_efficiency, attack_volume, corner_momentum,
+                    score_context, total_probability, detected_patterns,
+                    corners_last_15, dangerous_attacks_last_5, attacks_last_5
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s
+                )
             """, (
                 alert_data['fixture_id'],
                 alert_data['teams'],
                 alert_data['score_at_alert'],
                 alert_data['minute_sent'],
                 alert_data['corners_at_alert'],
-                alert_data['elite_score'],
+                alert_data.get('total_probability', 0),  # Use total_probability as elite_score
                 alert_data.get('high_priority_count', 0),
                 alert_data.get('high_priority_ratio', None),
                 alert_data.get('home_shots_on_target', 0),
@@ -250,7 +277,17 @@ class PostgreSQLDatabase:
                 alert_data.get('total_shots_on_target', 0),
                 alert_data['over_line'],
                 alert_data['over_odds'],
-                'Yes'  # All new alerts are TIER 1
+                'Yes',  # All new alerts are TIER 1
+                alert_data.get('momentum_indicators', {}).get('attack_intensity', 0),
+                alert_data.get('momentum_indicators', {}).get('shot_efficiency', 0),
+                alert_data.get('momentum_indicators', {}).get('attack_volume', 0),
+                alert_data.get('momentum_indicators', {}).get('corner_momentum', 0),
+                alert_data.get('momentum_indicators', {}).get('score_context', 0),
+                alert_data.get('total_probability', 0),
+                [p['name'] for p in alert_data.get('detected_patterns', [])],
+                alert_data.get('corners_last_15', 0),
+                alert_data.get('dangerous_attacks_last_5', 0),
+                alert_data.get('attacks_last_5', 0)
             ))
             
             conn.commit()

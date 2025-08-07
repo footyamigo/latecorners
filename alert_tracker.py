@@ -7,7 +7,7 @@ Automatically saves elite corner alerts for result tracking.
 
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import re
 from database import get_database
 
@@ -19,7 +19,8 @@ class AlertTracker:
     def __init__(self):
         self.db = get_database()
     
-    def save_elite_alert(self, match_data: Dict, tier: str, score: float, conditions: list) -> bool:
+    def save_elite_alert(self, match_data: Dict, tier: str, score: float, conditions: list,
+                        momentum_indicators: Dict = None, detected_patterns: List[Dict] = None) -> bool:
         """Save an elite alert to the database for tracking"""
         
         # Accept both ELITE and any TIER_1 alerts
@@ -45,6 +46,7 @@ class AlertTracker:
             
             high_priority_ratio = f"{high_priority_count}/{priority_required}"
             
+            # Base alert data
             alert_data = {
                 'fixture_id': match_data.get('fixture_id'),
                 'teams': f"{match_data.get('home_team')} vs {match_data.get('away_team')}",
@@ -58,13 +60,38 @@ class AlertTracker:
                 'away_shots_on_target': match_data.get('away_shots_on_target', 0),
                 'total_shots_on_target': match_data.get('home_shots_on_target', 0) + match_data.get('away_shots_on_target', 0),
                 'over_line': over_line,
-                'over_odds': over_odds
+                'over_odds': over_odds,
+                
+                # New metrics from the enhanced system
+                'total_probability': score,  # Use the overall score
+                'momentum_indicators': momentum_indicators or {},
+                'detected_patterns': detected_patterns or [],
+                'corners_last_15': match_data.get('corners_last_15', 0),
+                'dangerous_attacks_last_5': match_data.get('dangerous_attacks_last_5', 0),
+                'attacks_last_5': match_data.get('attacks_last_5', 0)
             }
+            
+            # Add momentum indicators if available
+            if momentum_indicators:
+                alert_data.update({
+                    'attack_intensity': momentum_indicators.get('attack_intensity', 0),
+                    'shot_efficiency': momentum_indicators.get('shot_efficiency', 0),
+                    'attack_volume': momentum_indicators.get('attack_volume', 0),
+                    'corner_momentum': momentum_indicators.get('corner_momentum', 0),
+                    'score_context': momentum_indicators.get('score_context', 0)
+                })
             
             success = self.db.save_alert(alert_data)
             
             if success:
-                logger.info(f"✅ {tier} ALERT TRACKED: {alert_data['teams']} - {alert_data['corners_at_alert']} corners at 85' (High Priority: {high_priority_ratio}) (Over {over_line} @ {over_odds})")
+                logger.info(f"✅ {tier} ALERT TRACKED: {alert_data['teams']}")
+                logger.info(f"   📊 Score: {score} | Corners: {alert_data['corners_at_alert']}")
+                if momentum_indicators:
+                    logger.info(f"   🔄 Attack Intensity: {momentum_indicators.get('attack_intensity', 0):.1f}")
+                    logger.info(f"   🎯 Shot Efficiency: {momentum_indicators.get('shot_efficiency', 0):.1f}")
+                    logger.info(f"   ⚡ Corner Momentum: {momentum_indicators.get('corner_momentum', 0):.1f}")
+                if detected_patterns:
+                    logger.info(f"   🎯 Patterns: {', '.join(p['name'] for p in detected_patterns)}")
             else:
                 logger.error(f"❌ Failed to save {tier} alert: {alert_data['teams']}")
             
@@ -72,6 +99,8 @@ class AlertTracker:
             
         except Exception as e:
             logger.error(f"❌ Error tracking {tier} alert: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def _extract_over_bet(self, active_odds: list) -> tuple:
@@ -119,6 +148,8 @@ class AlertTracker:
 # Global tracker instance
 alert_tracker = AlertTracker()
 
-def track_elite_alert(match_data: Dict, tier: str, score: float, conditions: list) -> bool:
+def track_elite_alert(match_data: Dict, tier: str, score: float, conditions: list,
+                     momentum_indicators: Dict = None, detected_patterns: List[Dict] = None) -> bool:
     """Global function to track elite alerts"""
-    return alert_tracker.save_elite_alert(match_data, tier, score, conditions) 
+    return alert_tracker.save_elite_alert(match_data, tier, score, conditions,
+                                        momentum_indicators, detected_patterns)

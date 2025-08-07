@@ -230,6 +230,10 @@ class NewTelegramSystem:
             header = "🏆 ELITE CORNER ALERT 🏆"
             score_threshold = "8.0"
             priority_required = 2
+        elif tier.startswith("TIER_1"):
+            header = "💎 PREMIUM CORNER ALERT 💎"
+            score_threshold = "16.0"
+            priority_required = 3
         else:
             header = "💎 PREMIUM CORNER ALERT 💎"
             score_threshold = "6.0"
@@ -240,8 +244,9 @@ class NewTelegramSystem:
         
         odds_text = "\n".join(f"• {odd}" for odd in active_odds[:3])  # No fallback needed - odds guaranteed
         
-        # Generate dynamic action based on current situation (also uses whole numbers only)
-        dynamic_action = self._generate_dynamic_action(corners, active_odds)
+        # Generate simple betting recommendation based on current corners
+        next_corner = corners + 1
+        dynamic_action = f"Over {next_corner} Asian Corners"
         
         message = f"""🚨 {header}
 
@@ -251,9 +256,6 @@ class NewTelegramSystem:
 
 <b>🎯 {tier} SCORE: {score}/{score_threshold}</b>
 ⭐ High Priority: {high_priority_count}/{priority_required}
-
-📈 <b>LIVE CORNER ODDS:</b>
-{odds_text}
 
 💡 <b>WHY THIS ALERT:</b>
 {chr(10).join(f'• {condition}' for condition in conditions[:3])}
