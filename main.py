@@ -15,19 +15,21 @@ from config import get_config
 from new_telegram_system import send_corner_alert_new, send_system_message_new
 from alert_tracker import track_elite_alert
 from result_checker import check_pending_results
-from scoring_engine import ScoringEngine
 from startup_flag import is_first_startup, mark_startup
+from reliable_corner_system import ReliableCornerSystem  # New scoring system
 
 class LateCornerMonitor:
     """Monitor live matches for late corner betting opportunities using shared dashboard data"""
     
     def __init__(self):
         self.config = get_config()
-        self.scoring_engine = ScoringEngine()
         
         # Track which matches we've already alerted on
         self.alerted_matches: Set[int] = set()
         self.monitored_matches: Set[int] = set()
+        
+        # Track previous stats for momentum calculation
+        self.previous_stats = {}
         
         # Track discovery cycles
         self.match_discovery_counter = 0
@@ -172,18 +174,18 @@ class LateCornerMonitor:
             return []
     
     def _get_stat_type_id(self, stat_name: str) -> Optional[int]:
-        """Map dashboard stat names to SportMonks type IDs - REVERTED to original working system"""
+        """Map dashboard stat names to SportMonks type IDs"""
         stat_mapping = {
-            'corners': 34,                # ✅ CORNERS (Type 34 - original working + official Sportmonks)
-            'ball_possession': 45,        # ✅ BALL POSSESSION (Type 45 - original working system)
-            'shots_off_target': 41,       # ✅ SHOTS_OFF_TARGET (Type 41 - confirmed)
-            'shots_total': 42,            # ✅ SHOTS_TOTAL (Type 42 - confirmed)
-            'dangerous_attacks': 44,      # ✅ DANGEROUS_ATTACKS (Type 44 - confirmed)
-            'offsides': 51,               # ✅ OFFSIDES (Type 51 - confirmed)
-            'goal_attempts': 54,          # ✅ GOAL_ATTEMPTS (Type 54 - confirmed)
-            'throwins': 60,               # ✅ THROWINS (Type 60 - confirmed)
-            'shots_on_target': 86,        # ✅ SHOTS_ON_TARGET (Type 86 - confirmed)
-            'crosses_total': 98,          # ✅ TOTAL_CROSSES (Type 98 - confirmed)
+            'corners': 34,                # CORNERS
+            'ball_possession': 45,        # BALL POSSESSION
+            'shots_off_target': 41,       # SHOTS_OFF_TARGET
+            'shots_total': 42,            # SHOTS_TOTAL
+            'dangerous_attacks': 44,      # DANGEROUS_ATTACKS
+            'offsides': 51,               # OFFSIDES
+            'goal_attempts': 54,          # GOAL_ATTEMPTS
+            'throwins': 60,               # THROWINS
+            'shots_on_target': 86,        # SHOTS_ON_TARGET
+            'crosses_total': 98,          # TOTAL_CROSSES
         }
         return stat_mapping.get(stat_name)
     
@@ -262,67 +264,186 @@ class LateCornerMonitor:
             # Log detailed match information
             self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
             
+            # Store current stats for momentum tracking
+            current_stats = {
+                'minute': match_stats.minute,
+                'attacks': match_stats.attacks,
+                'dangerous_attacks': match_stats.dangerous_attacks,
+                'shots_total': match_stats.shots_total,
+                'shots_on_target': match_stats.shots_on_target,
+                'total_corners': match_stats.total_corners,
+                'score_diff': match_stats.home_score - match_stats.away_score,
+                'is_home': True,  # We'll enhance this later
+                'has_live_asian_corners': True,  # We'll check this properly later
+                'home_team': match_stats.home_team,
+                'away_team': match_stats.away_team,
+                'home_score': match_stats.home_score,
+                'away_score': match_stats.away_score,
+                'corners_last_15': 0  # We'll calculate this properly later
+            }
+            
+            # Store stats for next cycle
+            self.previous_stats[fixture_id] = current_stats
+            
             # Remove finished matches from monitoring
             if match_stats.state == 'FT' or match_stats.minute >= 100:
                 if fixture_id in self.monitored_matches:
                     self.monitored_matches.remove(fixture_id)
+                    if fixture_id in self.previous_stats:
+                        del self.previous_stats[fixture_id]
                     self.logger.info(f"🏁 REMOVED finished match {fixture_id} from monitoring")
                 return None
             
-
-            
-            # PRE-SCORING DEBUG: Check basic requirements
+            # PRE-CHECKS: Log basic match info
             self.logger.info(f"🔍 PRE-CHECKS: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
-            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85 for ELITE alert)")
-            self.logger.info(f"   ⚽ Corners: {match_stats.total_corners} (need 6-14)")
+            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85-89)")
+            self.logger.info(f"   ⚽ Corners: {match_stats.total_corners}")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
-            # Check if this match meets our alert criteria
-            scoring_result = self.scoring_engine.evaluate_match(match_stats)
+            # First, check if we're in the alert window (85-89th minute)
+            if not (85 <= match_stats.minute <= 89):
+                self.logger.info(f"⏰ Match {fixture_id} outside alert window (need 85-89', currently {match_stats.minute}')")
+                return None
+
+            # Check if we've already alerted on this match
+            if fixture_id in self.alerted_matches:
+                self.logger.info(f"⏭️ Match {fixture_id} already alerted")
+                return None
+
+            # Get corner odds first - no point calculating if we can't bet
+            corner_odds = await self._get_corner_odds(fixture_id)
+            if not corner_odds:
+                self.logger.warning(f"🚫 Match {fixture_id} - No corner odds available")
+                return None
+
+            # Get previous stats or empty dict if first time
+            previous_stats = self.previous_stats.get(fixture_id, {})
+
+            # Use the reliable corner system to make alert decision
+            corner_system = ReliableCornerSystem()
+            result = corner_system.should_alert(current_stats, previous_stats, 5)
+
+            # Log the analysis
+            self.logger.info(f"\n📊 ANALYZING MATCH {fixture_id}:")
+            self.logger.info(f"   {match_stats.home_team} vs {match_stats.away_team}")
+            self.logger.info(f"   Score: {match_stats.home_score}-{match_stats.away_score}")
+            self.logger.info(f"   Minute: {match_stats.minute}")
+            self.logger.info(f"   Corners: {match_stats.total_corners}")
+
+            # Check home team first (we'll enhance for away team later)
+            team = 'home'
+            team_result = result[team]
+
+            if not team_result['alert']:
+                self.logger.info("\n❌ NO ALERT - Reasons:")
+                for reason in team_result['reasons']:
+                    self.logger.info(f"   • {reason}")
+                return None
+
+            # If we get here, the alert is triggered
+            self.logger.info("\n✅ ALERT TRIGGERED!")
             
-            # ENHANCED DEBUG: Log ALL scoring attempts
-            if scoring_result:
-                total_score = scoring_result.total_score
-                high_priority_count = scoring_result.high_priority_indicators
-                triggered_conditions = scoring_result.triggered_conditions
-                self.logger.info(f"🎯 ELITE SCORING: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
-                self.logger.info(f"   📊 Total Score: {total_score}/8.0 | High Priority: {high_priority_count}/2")
-                self.logger.info(f"   🏆 Conditions: {triggered_conditions}")
+            # Get the full probability calculation
+            probabilities = corner_system.calculate_corner_probability(current_stats, previous_stats, 5)
+            
+            # Extract metrics and patterns
+            metrics = team_result['metrics']
+            momentum_indicators = {
+                'attack_intensity': metrics.get('attack_intensity', 0),
+                'shot_efficiency': metrics.get('shot_efficiency', 0),
+                'attack_volume': metrics.get('attack_volume', 0),
+                'corner_momentum': metrics.get('corner_momentum', 0),
+                'score_context': metrics.get('score_context', 0)
+            }
+            
+            # Log the metrics
+            self.logger.info("\n📈 ALERT METRICS:")
+            self.logger.info(f"   • Total Probability: {metrics['total_probability']:.1f}%")
+            self.logger.info(f"   • Attack Intensity: {metrics['attack_intensity']:.1f}%")
+            self.logger.info(f"   • Corner Momentum: {metrics['corner_momentum']:.1f}%")
+            
+            # Get patterns
+            detected_patterns = probabilities[team].get('detected_patterns', [])
+            if detected_patterns:
+                self.logger.info("\n🎯 DETECTED PATTERNS:")
+                for pattern in detected_patterns:
+                    self.logger.info(f"   • {pattern['name']} (Weight: {pattern['weight']})")
+
+            # Prepare alert info
+            alert_info = {
+                'fixture_id': fixture_id,
+                'home_team': match_stats.home_team,
+                'away_team': match_stats.away_team,
+                'home_score': match_stats.home_score,
+                'away_score': match_stats.away_score,
+                'minute': match_stats.minute,
+                'total_corners': match_stats.total_corners,
+                'tier': "TIER_1",
+                'total_probability': metrics['total_probability'],
+                'momentum_indicators': momentum_indicators,
+                'detected_patterns': detected_patterns,
+                'odds_count': corner_odds.get('count', 0),
+                'active_odds_count': corner_odds.get('active_count', 0),
+                'odds_details': corner_odds.get('odds_details', []),
+                'active_odds': corner_odds.get('active_odds', [])
+            }
+
+            # SAVE ALERT TO DATABASE FIRST
+            self.logger.info(f"💾 SAVING ALERT TO DATABASE for TIER_1 match {fixture_id}...")
+            
+            try:
+                # Save alert with new system metrics
+                track_success = track_elite_alert(
+                    alert_info=alert_info,
+                    tier="TIER_1",
+                    score=metrics['total_probability'],
+                    conditions=[p['name'] for p in detected_patterns],
+                    momentum_indicators=momentum_indicators,
+                    detected_patterns=detected_patterns
+                )
                 
-                if total_score >= 8.0 and high_priority_count >= 2:
-                    self.logger.info(f"   ✅ ELITE THRESHOLDS MET! Checking corner odds...")
+                if track_success:
+                    self.logger.info(f"✅ ALERT SAVED TO DATABASE")
+                    self.logger.info("   Metrics saved:")
+                    self.logger.info(f"   • Total Probability: {metrics['total_probability']:.1f}%")
+                    self.logger.info(f"   • Attack Quality: {momentum_indicators['attack_intensity']:.1f}%")
+                    self.logger.info(f"   • Corner Momentum: {momentum_indicators['corner_momentum']:.1f}%")
+                    self.logger.info(f"   • Score Context: {momentum_indicators['score_context']:.1f}%")
+                    self.logger.info(f"   • Patterns: {len(detected_patterns)}")
+                    for pattern in detected_patterns:
+                        self.logger.info(f"     - {pattern['name']} (Weight: {pattern['weight']})")
                 else:
-                    self.logger.info(f"   ❌ Elite thresholds NOT met (need 8+ score AND 2+ high priority)")
-            else:
-                self.logger.info(f"📊 ELITE SCORING: Match {fixture_id} - Minute {match_stats.minute} not in alert window (85') OR no scoring result")
+                    self.logger.error(f"❌ DATABASE SAVE FAILED: Alert not saved to database")
+            except Exception as e:
+                self.logger.error(f"❌ DATABASE SAVE ERROR: {e}")
+                import traceback
+                self.logger.error(traceback.format_exc())
+
+            # THEN ATTEMPT TO SEND TELEGRAM ALERT
+            self.logger.info(f"📱 SENDING TELEGRAM ALERT for TIER_1 match {fixture_id}...")
             
-            # ELITE-ONLY ALERT LOGIC: Ultra-selective alerts
-            if scoring_result and fixture_id not in self.alerted_matches:
-                total_score = scoring_result.total_score
-                high_priority_count = scoring_result.high_priority_indicators
+            try:
+                telegram_success = send_corner_alert_new(
+                    match_data=alert_info,
+                    tier="TIER_1",
+                    score=metrics['total_probability'],
+                    conditions=[p['name'] for p in detected_patterns]
+                )
                 
-                # ELITE TIER: Ultra-selective (8.0+ score, 2+ high priority, 85-87th minute)
-                if total_score >= 8.0 and high_priority_count >= 2:
-                    self.logger.info(f"🏆 ELITE MATCH DETECTED: {fixture_id} - Score: {total_score}, High Priority: {high_priority_count}")
-                    
-                    # Check if we're in the elite alert window (85-87th minute)
-                    if 85 <= match_stats.minute <= 87:
-                        self.logger.info(f"🏆 ELITE ALERT WINDOW! Match {fixture_id} at minute {match_stats.minute} - proceeding to odds check")
-                        
-                        corner_odds = await self._get_corner_odds(fixture_id)
-                        if corner_odds:
-                            self.logger.info(f"🚀 SENDING ELITE ALERT: All conditions met for match {fixture_id}")
-                            match_info = self._extract_match_info(match_stats, scoring_result, corner_odds, tier="TIER_1")
-                            return match_info
-                        else:
-                            self.logger.warning(f"🚫 ELITE ALERT BLOCKED: No odds available for match {fixture_id}")
-                    else:
-                        self.logger.info(f"⏰ Elite match {fixture_id} waiting for alert window (need 85-87', currently {match_stats.minute}')")
-                
+                if telegram_success:
+                    self.alerted_matches.add(fixture_id)
+                    self.logger.info(f"🎉 TELEGRAM ALERT SENT SUCCESSFULLY")
+                    self.logger.info(f"   ✅ Match added to alerted list")
                 else:
-                    self.logger.debug(f"📊 Match {fixture_id} below ELITE thresholds - Score: {total_score}/8.0, High Priority: {high_priority_count}/2")
-            
-            return None
+                    self.logger.error(f"❌ TELEGRAM ALERT FAILED")
+                    self.logger.error(f"   ❌ Check Telegram configuration and network")
+                    self.logger.error(f"   ❌ Alert will be retried next cycle")
+            except Exception as e:
+                self.logger.error(f"❌ TELEGRAM SEND ERROR: {e}")
+                import traceback
+                self.logger.error(traceback.format_exc())
+
+            return alert_info
             
         except Exception as e:
             self.logger.error(f"❌ Error monitoring match {fixture_id}: {e}")
@@ -341,9 +462,9 @@ class LateCornerMonitor:
                 home_corners = 0
                 away_corners = 0
                 
-                # Look for type_id 34 (corners) in statistics - REVERTED to correct official type_id
+                # Look for type_id 34 (corners) in statistics
                 for stat in match_stats.statistics:
-                    if stat.get('type_id') == 34:  # Corners (official type_id from Sportmonks docs)
+                    if stat.get('type_id') == 34:  # Corners
                         value = stat.get('data', {}).get('value', 0)
                         location = stat.get('location', '')
                         
@@ -363,17 +484,14 @@ class LateCornerMonitor:
             return None
 
     async def _get_corner_odds(self, fixture_id: int) -> Optional[Dict]:
-        """Get corner odds directly from SportMonks - with detailed logging"""
+        """Get corner odds directly from SportMonks"""
         try:
-            self.logger.info(f"🔍 ELITE SYSTEM @ 85-87': Fetching corner odds for match {fixture_id}")
+            self.logger.info(f"🔍 Fetching corner odds for match {fixture_id}")
             
             # Import the odds checking function
             from web_dashboard import check_corner_odds_available
             
-            # ALWAYS fetch fresh, live odds at alert time - no caching!
-            self.logger.info(f"🌐 FETCHING LIVE ODDS @ 85-87': Getting current odds from SportMonks for {fixture_id}")
-            self.logger.info(f"   ⚡ Reason: Corner odds change every few seconds - only current odds are actionable!")
-            self.logger.info(f"   🎯 Filter: Only whole number corner totals (8, 9, 10...) for refund possibilities")
+            # Get fresh odds
             odds_data = check_corner_odds_available(fixture_id)
             
             if odds_data and odds_data.get('available', False):
@@ -381,59 +499,24 @@ class LateCornerMonitor:
                 active_count = odds_data.get('active_count', 0)
                 suspended_count = total_count - active_count
                 
-                self.logger.info(f"✅ LIVE ODDS @ 85-87': {total_count} bet365 Asian corner markets found (whole numbers only)!")
+                self.logger.info(f"✅ LIVE ODDS: {total_count} bet365 Asian corner markets found!")
                 self.logger.info(f"   🟢 ACTIVE (bettable): {active_count} markets")
                 self.logger.info(f"   🔶 SUSPENDED: {suspended_count} markets")
                 
-                # Show active odds (the ones you can actually bet on)
+                # Show active odds
                 if 'active_odds' in odds_data and odds_data['active_odds']:
                     self.logger.info(f"   💎 ACTIVE ODDS (bettable now):")
                     for odds_str in odds_data['active_odds']:
                         self.logger.info(f"      • {odds_str}")
                 
-                # Show all odds details if needed
-                if 'odds_details' in odds_data and len(odds_data['odds_details']) > active_count:
-                    self.logger.info(f"   📊 ALL ODDS (including suspended):")
-                    for odds_str in odds_data['odds_details']:
-                        self.logger.info(f"      • {odds_str}")
-                
-                self.logger.info(f"   ⚡ These are LIVE whole number odds fetched at alert time - actionable now!")
                 return odds_data
             else:
-                self.logger.warning(f"❌ NO ODDS @ 85-87': SportMonks has no whole number corner odds for elite match {fixture_id}")
-                self.logger.warning(f"   🚫 ALERT BLOCKED: Cannot send elite alert without current whole number odds available")
+                self.logger.warning(f"❌ NO ODDS: No corner odds available for match {fixture_id}")
                 return None
                 
         except Exception as e:
             self.logger.error(f"❌ Error getting corner odds for match {fixture_id}: {e}")
             return None
-
-    def _extract_match_info(self, match_stats, scoring_result, corner_odds: Dict, tier: str = "TIER_1") -> Dict:
-        """Extract relevant match info for alert"""
-        
-        # Basic match info
-        match_info = {
-            'fixture_id': match_stats.fixture_id,
-            'home_team': match_stats.home_team,
-            'away_team': match_stats.away_team,
-            'home_score': match_stats.home_score,
-            'away_score': match_stats.away_score,
-            'minute': match_stats.minute,
-            'total_corners': match_stats.total_corners,
-            'tier': tier,  # Now using TIER_1 as default
-            'elite_score': scoring_result.total_score,  # Add the actual calculated score
-            'high_priority_count': scoring_result.high_priority_indicators,
-            'triggered_conditions': scoring_result.triggered_conditions,  # Add triggered conditions
-            'home_shots_on_target': match_stats.shots_on_target.get('home', 0),
-            'away_shots_on_target': match_stats.shots_on_target.get('away', 0),
-            'total_shots_on_target': sum(match_stats.shots_on_target.values()),
-            'odds_count': corner_odds.get('count', 0),
-            'active_odds_count': corner_odds.get('active_count', 0),
-            'odds_details': corner_odds.get('odds_details', []),
-            'active_odds': corner_odds.get('active_odds', [])
-        }
-        
-        return match_info
 
     async def start_monitoring(self):
         """Start the main monitoring loop using shared dashboard data"""
@@ -451,11 +534,13 @@ class LateCornerMonitor:
                     "✅ Shared data architecture active\n"
                     "✅ SportMonks API connected via dashboard\n"
                     "✅ Telegram bot ready\n"
-                    "✅ Elite scoring system loaded\n\n"
+                    "✅ New corner prediction system loaded\n\n"
                     "🎯 <b>Alert Criteria:</b>\n"
-                    "• Minimum 10 points total score\n"
-                    "• At least 2 high-priority indicators\n"
-                    "• Exact 85th minute timing\n"
+                    "• High total probability (>80%)\n"
+                    "• Strong attack intensity (>65%)\n"
+                    "• Multiple strong patterns\n"
+                    "• Good corner momentum\n"
+                    "• Exact 85-89 minute timing\n"
                     "• Live corner odds available\n\n"
                     "💰 Ready to catch profitable corner opportunities!"
                 )
@@ -467,12 +552,12 @@ class LateCornerMonitor:
                 except Exception as e:
                     self.logger.error(f"❌ Failed to send startup message: {e}")
             
-            self.logger.info("🎯 SUCCESS: All systems ready. Starting match monitoring with shared data...")
+            self.logger.info("🎯 SUCCESS: All systems ready. Starting match monitoring...")
             
             # Main monitoring loop
             while True:
                 try:
-                    # Discover new matches periodically (less frequently since we're using shared data)
+                    # Discover new matches periodically
                     if self.match_discovery_counter % (self.config.MATCH_DISCOVERY_INTERVAL // self.config.LIVE_POLL_INTERVAL) == 0:
                         await self._discover_new_matches()
                     
@@ -480,101 +565,14 @@ class LateCornerMonitor:
                     shared_live_matches = self._get_shared_live_matches()
                     
                     if shared_live_matches:
-                        self.logger.info(f"🔍 MONITORING: Processing {len(shared_live_matches)} live matches from shared data")
+                        self.logger.info(f"🔍 MONITORING: Processing {len(shared_live_matches)} live matches")
                         
                         for match in shared_live_matches:
                             try:
                                 match_id = match.get('id')
                                 if match_id and match_id in self.monitored_matches:
                                     # Monitor this match for alert conditions
-                                    alert_info = await self._monitor_single_match(match)
-                                    
-                                    if alert_info:
-                                        self.logger.info(f"🎯 ALERT QUALIFIED: Match {match_id} met all criteria!")
-                                        self.logger.info(f"   ✅ Alert info received from monitoring: {alert_info.keys()}")
-                                        
-                                        # Extract actual values from alert_info instead of hardcoding
-                                        actual_minute = alert_info.get('minute', 85)
-                                        actual_score = alert_info.get('elite_score', 0)
-                                        actual_priority = alert_info.get('high_priority_count', 0)
-                                        actual_conditions = alert_info.get('triggered_conditions', [])
-                                        actual_tier = alert_info.get('tier', 'UNKNOWN')
-                                        
-                                        self.logger.info(f"🔍 ALERT DETAILS:")
-                                        self.logger.info(f"   Minute: {actual_minute}")
-                                        self.logger.info(f"   Score: {actual_score}")
-                                        self.logger.info(f"   Priority: {actual_priority}")
-                                        self.logger.info(f"   Tier: {actual_tier}")
-                                        self.logger.info(f"   Conditions: {len(actual_conditions)} met")
-                                        
-                                        # Create proper scoring result object with ACTUAL data
-                                        from scoring_engine import ScoringResult
-                                        scoring_obj = ScoringResult(
-                                            fixture_id=match_id,
-                                            minute=actual_minute,
-                                            total_score=actual_score,
-                                            high_priority_indicators=actual_priority,
-                                            triggered_conditions=actual_conditions,
-                                            team_focus="home",  # This could be extracted from alert_info if needed
-                                            match_context=f"{actual_tier} tier alert - {len(actual_conditions)} conditions met"
-                                        )
-                                        
-                                        # Extract corner odds from alert_info
-                                        corner_odds_available = alert_info.get('odds_available', False)
-                                        corner_odds = {
-                                            'available': corner_odds_available,
-                                            'count': alert_info.get('odds_count', 0),
-                                            'active_count': alert_info.get('active_odds_count', 0),
-                                            'odds_details': alert_info.get('odds_details', []),
-                                            'active_odds': alert_info.get('active_odds', [])
-                                        }
-                                        
-                                        self.logger.info(f"💰 ODDS INFO:")
-                                        self.logger.info(f"   Available: {corner_odds['available']}")
-                                        self.logger.info(f"   Total markets: {corner_odds['count']}")
-                                        self.logger.info(f"   Active markets: {corner_odds['active_count']}")
-                                        
-                                        # SAVE ALERT TO DATABASE FIRST (regardless of Telegram outcome)
-                                        self.logger.info(f"💾 SAVING ALERT TO DATABASE for {actual_tier} match {match_id}...")
-                                        
-                                        try:
-                                            track_success = track_elite_alert(alert_info, actual_tier, actual_score, actual_conditions)
-                                            if track_success:
-                                                self.logger.info(f"✅ ALERT SAVED TO DATABASE: {actual_tier} alert tracked successfully")
-                                            else:
-                                                self.logger.error(f"❌ DATABASE SAVE FAILED: Alert not saved to database")
-                                        except Exception as e:
-                                            self.logger.error(f"❌ DATABASE SAVE ERROR: {e}")
-                                            import traceback
-                                            self.logger.error(traceback.format_exc())
-                                        
-                                        # THEN ATTEMPT TO SEND TELEGRAM ALERT
-                                        self.logger.info(f"📱 SENDING TELEGRAM ALERT for {actual_tier} match {match_id}...")
-                                        
-                                        try:
-                                            telegram_success = send_corner_alert_new(
-                                                match_data=alert_info,
-                                                tier=actual_tier,
-                                                score=actual_score,
-                                                conditions=actual_conditions
-                                            )
-                                            
-                                            if telegram_success:
-                                                self.alerted_matches.add(match_id)
-                                                self.logger.info(f"🎉 TELEGRAM ALERT SENT SUCCESSFULLY for match {match_id}")
-                                                self.logger.info(f"   ✅ {actual_tier} tier alert delivered")
-                                                self.logger.info(f"   ✅ Match added to alerted list")
-                                            else:
-                                                self.logger.error(f"❌ TELEGRAM ALERT FAILED for match {match_id}")
-                                                self.logger.error(f"   ❌ Check Telegram configuration and network")
-                                                self.logger.error(f"   ❌ Alert will be retried next cycle")
-                                                # NOTE: Alert is still saved in database even if Telegram fails
-                                        except Exception as e:
-                                            self.logger.error(f"❌ TELEGRAM SEND ERROR: {e}")
-                                            import traceback
-                                            self.logger.error(traceback.format_exc())
-                                            # NOTE: Alert is still saved in database even if Telegram fails
-                                            
+                                    await self._monitor_single_match(match)
                             except Exception as e:
                                 self.logger.error(f"❌ Error processing match {match.get('id', 'unknown')}: {e}")
                                 continue
@@ -584,7 +582,7 @@ class LateCornerMonitor:
                     self.match_discovery_counter += 1
                     self.result_check_counter += 1
                     
-                    # HOURLY RESULT CHECKING (every ~1 hour = 120 cycles * 30s)
+                    # HOURLY RESULT CHECKING
                     if self.result_check_counter >= 120:  
                         self.logger.info("🔍 HOURLY CHECK: Checking pending alert results...")
                         try:
@@ -631,4 +629,4 @@ async def main():
         raise
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

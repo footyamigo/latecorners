@@ -248,16 +248,39 @@ class NewTelegramSystem:
         next_corner = corners + 1
         dynamic_action = f"Over {next_corner} Asian Corners"
         
+        # Get momentum indicators if available
+        momentum = match_info.get('momentum_indicators', {})
+        patterns = match_info.get('detected_patterns', [])
+        
+        # Format momentum stats
+        attack_intensity = momentum.get('attack_intensity', 0)
+        shot_efficiency = momentum.get('shot_efficiency', 0)
+        corner_momentum = momentum.get('corner_momentum', 0)
+        score_context = momentum.get('score_context', 0)
+        
+        # Format patterns (take top 3 by weight)
+        sorted_patterns = sorted(patterns, key=lambda x: x.get('weight', 0), reverse=True)
+        pattern_text = "\n".join(f"• {p['name']} ({p['weight']})" for p in sorted_patterns[:3]) if patterns else "No patterns detected"
+        
         message = f"""🚨 {header}
 
 <b>{home_team} vs {away_team}</b>
 📊 Score: {home_score}-{away_score} | ⏱️ {minute}'
 🏆 Corners: {corners}
 
-<b>🎯 {tier} SCORE: {score}/{score_threshold}</b>
+<b>🎯 ALERT METRICS:</b>
+• Total Score: {score}/{score_threshold}
+• Attack Quality: {attack_intensity:.1f}%
+• Shot Efficiency: {shot_efficiency:.1f}%
+• Corner Momentum: {corner_momentum:.1f}%
+• Score Context: {score_context:.1f}%
+
 ⭐ High Priority: {high_priority_count}/{priority_required}
 
-💡 <b>WHY THIS ALERT:</b>
+💡 <b>DETECTED PATTERNS:</b>
+{pattern_text}
+
+💫 <b>WHY THIS ALERT:</b>
 {chr(10).join(f'• {condition}' for condition in conditions[:3])}
 
 ⚡ <b>ACTION:</b> {dynamic_action}
