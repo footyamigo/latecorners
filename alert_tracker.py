@@ -9,25 +9,25 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional, List
 import re
-from database import get_database
+try:
+    from database import get_database
+except Exception:
+    from latecorners.database_postgres import get_database
 
 logger = logging.getLogger(__name__)
 
 class AlertTracker:
-    """Track and save elite corner alerts"""
+    """Track and save alerts from the new systems (Late Momentum and Draw Odds)."""
     
     def __init__(self):
         self.db = get_database()
     
     def save_elite_alert(self, match_data: Dict, tier: str, score: float, conditions: list,
                         momentum_indicators: Dict = None, detected_patterns: List[Dict] = None) -> bool:
-        """Save an elite alert to the database for tracking"""
-        
-        # Accept both ELITE and any TIER_1 alerts
-        if tier != "ELITE" and not tier.startswith("TIER_1"):
-            # Only track ELITE and TIER_1 alerts for performance analysis
-            logger.debug(f"⏭️ Skipping {tier} alert tracking (ELITE/TIER_1 only)")
-            return True
+        """Save a new-system alert to the database for tracking.
+
+        Compatible with legacy schema while adding new columns for tier/draw_odds/momentum.
+        """
         
         try:
             logger.info(f"💾 SAVING {tier} ALERT: {match_data.get('home_team')} vs {match_data.get('away_team')}")
@@ -53,22 +53,15 @@ class AlertTracker:
                 'score_at_alert': f"{match_data.get('home_score')}-{match_data.get('away_score')}",
                 'minute_sent': match_data.get('minute'),
                 'corners_at_alert': match_data.get('total_corners', 0),
-                'elite_score': score,
-                'high_priority_count': high_priority_count,
-                'high_priority_ratio': high_priority_ratio,
-                'home_shots_on_target': match_data.get('home_shots_on_target', 0),
-                'away_shots_on_target': match_data.get('away_shots_on_target', 0),
-                'total_shots_on_target': match_data.get('home_shots_on_target', 0) + match_data.get('away_shots_on_target', 0),
-                'over_line': over_line,
-                'over_odds': over_odds,
+                'alert_type': tier,  # store the tier name as alert type
+                'draw_odds': match_data.get('draw_odds') or (momentum_indicators or {}).get('draw_odds'),
+                'combined_momentum10': match_data.get('total_probability', 0),
+                'asian_odds_snapshot': match_data.get('active_odds', []),
                 
                 # New metrics from the enhanced system
-                'total_probability': score,  # Use the overall score
+                'total_probability': score,
                 'momentum_indicators': momentum_indicators or {},
-                'detected_patterns': detected_patterns or [],
-                'corners_last_15': match_data.get('corners_last_15', 0),
-                'dangerous_attacks_last_5': match_data.get('dangerous_attacks_last_5', 0),
-                'attacks_last_5': match_data.get('attacks_last_5', 0)
+                'detected_patterns': detected_patterns or []
             }
             
             # Add momentum indicators if available
@@ -129,6 +122,14 @@ class AlertTracker:
     def get_recent_alerts(self, limit: int = 10) -> list:
         """Get recent alerts for quick review"""
         return self.db.get_all_alerts(limit)
+
+    def reset_all_alerts(self) -> bool:
+        """Dangerous: wipe the alerts table to start fresh."""
+        try:
+            return self.db.truncate_alerts()
+        except Exception as e:
+            logger.error(f"❌ Failed to reset alerts: {e}")
+            return False
     
     def get_performance_summary(self) -> Dict:
         """Get current performance statistics"""

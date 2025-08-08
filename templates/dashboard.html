@@ -488,12 +488,9 @@
                             <div class="stat-value">${formatStatValue(stats.dangerous_attacks)}</div>
                             <div class="stat-name">Attacks</div>
                         </div>
+                        
                         <div class="stat-item">
-                            <div class="stat-value">${formatStatValue(stats.crosses_total)}</div>
-                            <div class="stat-name">Crosses</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.ball_possession ? stats.ball_possession + '%' : '0%'}</div>
+                            <div class="stat-value">${stats.possession ? stats.possession + '%' : '0%'}</div>
                             <div class="stat-name">Possession</div>
                         </div>
                     </div>
@@ -528,6 +525,40 @@
                             <div class="total-name">Total Attacks</div>
                 </div>
                 </div>
+                </div>
+            `;
+        }
+
+        function renderMomentumSection(match) {
+            // Only show for late games (80+')
+            if (!match.momentum || match.minute < 80) {
+                return '';
+            }
+            const m = match.momentum;
+            const home = m.home || 0;
+            const away = m.away || 0;
+            const combined = m.combined || (home + away);
+            return `
+                <div class="match-totals" style="margin-top:12px;">
+                    <div class="totals-title">⚡ Late Momentum (last 10m)</div>
+                    <div class="totals-grid">
+                        <div class="total-item">
+                            <div class="total-value">${home}</div>
+                            <div class="total-name">Home</div>
+                        </div>
+                        <div class="total-item">
+                            <div class="total-value">${away}</div>
+                            <div class="total-name">Away</div>
+                        </div>
+                        <div class="total-item">
+                            <div class="total-value">${combined}</div>
+                            <div class="total-name">Combined</div>
+                        </div>
+                        <div class="total-item">
+                            <div class="total-value">${match.minute >= 85 && match.minute <= 89 && combined >= 75 && ( (home+away) >= 9 ? '✅' : '—' )}</div>
+                            <div class="total-name">LM Trigger (viz)</div>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -682,6 +713,7 @@
                         </div>
                         
                         ${renderMatchTotals(homeStats, awayStats)}
+                        ${renderMomentumSection(match)}
                         ${renderCornerOdds(match)}
                         </div>
                     </div>

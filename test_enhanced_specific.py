@@ -147,7 +147,7 @@ if 'data' in fixture_data:
                     corner_score += total_val * 2  # High correlation with corners
                 elif type_id == 50:  # Shots outside box  
                     corner_score += total_val * 0.5  # Lower correlation
-                elif type_id == 58:  # Crosses
+                elif type_id == 58:  # Shots blocked
                     corner_score += total_val * 1.5  # Direct correlation
             else:
                 stat_name = official_stat_mapping.get(type_id, f"Type {type_id}")

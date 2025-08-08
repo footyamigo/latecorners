@@ -462,16 +462,21 @@ def extract_live_statistics(match):
     try:
         statistics = match.get('statistics', [])
         
-        # Key stat type IDs for corner betting (REVERTED to original working system)
+        # Minimal set we rely on across leagues
+        # - 33/34: corners
+        # - 45: possession %
+        # - 43: attacks (when present)
+        # - 44: dangerous attacks
+        # - 42: shots total
+        # - 86: shots on target
         stat_mapping = {
-            34: 'corners',            # Corners ✅ (Type 34 - original working system + official docs)
-            42: 'shots_total',        # Shots Total ✅ (Type 42 - confirmed)
-            86: 'shots_on_target',    # Shots on Target ✅ (Type 86 - confirmed)
-            44: 'dangerous_attacks',  # Dangerous Attacks ✅ (Type 44 - confirmed)
-            98: 'crosses_total',      # Total Crosses ✅ (Type 98 - official)
-            45: 'ball_possession',    # Ball Possession % ✅ (Type 45 - original working system)
-            41: 'shots_off_target',   # Shots Off Target ✅ (Type 41 - confirmed)
-            51: 'offsides'            # Offsides ✅ (Type 51 - confirmed)
+            33: 'corners',
+            34: 'corners',
+            42: 'shots_total',
+            86: 'shots_on_target',
+            44: 'dangerous_attacks',
+            45: 'possession',
+            43: 'attacks',
         }
         
         home_stats = {}
@@ -495,7 +500,7 @@ def extract_live_statistics(match):
             'total_stats_available': len(home_stats) + len(away_stats),
             'has_corners': 'corners' in home_stats or 'corners' in away_stats,
             'has_shots': 'shots_total' in home_stats or 'shots_total' in away_stats,
-            'has_premium_stats': 'shots_inside_box' in home_stats or 'shots_inside_box' in away_stats
+            'has_premium_stats': False
         }
         
     except Exception as e:
@@ -709,10 +714,10 @@ def update_live_data():
                         if 'odds_details' in odds_check and len(odds_check['odds_details']) > active_count:
                             print(f"   📊 ALL ODDS (including suspended): {', '.join(odds_check['odds_details'])}")
                             
-                        print(f"   ⚡ Elite system will use these LIVE odds if match qualifies at 85'")
+                        print(f"   ⚡ Late Momentum system will use these LIVE odds if match qualifies at 85'")
                     else:
                         print(f"❌ MINUTE {match['minute']}: No corner odds available for match {match['match_id']}")
-                        print(f"   ⚠️ Elite system will re-check for odds if this match qualifies at 85'")
+                        print(f"   ⚠️ Late Momentum system will re-check for odds if this match qualifies at 85'")
                         
                         # Attach "no odds" data so dashboard can show NO ODDS section
                         match['corner_odds'] = {
@@ -765,7 +770,7 @@ def update_live_data():
             }
             
             print(f"📈 Dashboard updated: {dashboard_stats['total_live']} live matches, {dashboard_stats['with_odds']} with odds at {dashboard_stats['last_update']}")
-            print(f"🎯 ELITE FILTER: Only alerting for DRAWS and UP TO 2-GOAL DIFFERENCE games (no blowouts)")
+            print(f"🎯 LATE MOMENTUM: Monitoring draws and up to 2-goal differences (no blowouts)")
             
         except Exception as e:
             print(f"❌ Error updating data: {e}")

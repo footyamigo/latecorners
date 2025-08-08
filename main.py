@@ -17,7 +17,8 @@ from new_telegram_system import send_corner_alert_new, send_system_message_new
 from alert_tracker import track_elite_alert
 from result_checker import check_pending_results
 from startup_flag import is_first_startup, mark_startup
-from reliable_corner_system import ReliableCornerSystem  # New scoring system
+# ReliableCornerSystem removed in favor of Late Momentum alerts
+from momentum_tracker import MomentumTracker
 
 class LateCornerMonitor:
     """Monitor live matches for late corner betting opportunities using shared dashboard data"""
@@ -35,6 +36,8 @@ class LateCornerMonitor:
         # Track discovery cycles
         self.match_discovery_counter = 0
         self.result_check_counter = 0  # For hourly result checking
+        # Momentum tracker (10-minute window)
+        self.momentum_tracker = MomentumTracker(window_minutes=10)
         
         self.logger = self._setup_logging()
         
@@ -64,25 +67,44 @@ class LateCornerMonitor:
     def _get_shared_live_matches(self):
         """Get live matches from the shared dashboard data source"""
         try:
-            # Import dashboard's live data
-            from web_dashboard import live_matches_data
-            
-            # Convert dashboard format to our expected format
+            # Try dashboard buffer if available; otherwise fallback to direct API client (no console prints)
+            try:
+                from web_dashboard import live_matches_data  # type: ignore
+                source_matches = list(live_matches_data) if live_matches_data else []
+            except Exception:
+                source_matches = []
+
+            if not source_matches:
+                # API fallback to avoid Unicode printing issues in web_dashboard
+                self.logger.info("Using API fallback for live matches (dashboard buffer empty)")
+                try:
+                    from sportmonks_client import SportmonksClient
+                    api_client = SportmonksClient()
+                    api_matches = api_client.get_live_matches(filter_by_minute=False) or []
+                    # Already SportMonks format → no conversion needed
+                    self.logger.info(f"API fallback returned {len(api_matches)} live matches")
+                    return api_matches
+                except Exception as e:
+                    self.logger.error(f"API fallback failed: {e}")
+                    return []
+
+            # Convert dashboard format to SportMonks-compatible format
             matches = []
-            for dashboard_match in live_matches_data:
-                # Convert dashboard match format to SportMonks format for compatibility
+            for dashboard_match in source_matches:
                 converted_match = self._convert_dashboard_to_sportmonks_format(dashboard_match)
                 if converted_match:
                     matches.append(converted_match)
-            
-            self.logger.info(f"📊 SHARED DATA: Got {len(matches)} live matches from dashboard")
+
+            self.logger.info(f"Dashboard buffer returned {len(matches)} live matches")
             return matches
             
         except ImportError:
-            self.logger.error("❌ Cannot import dashboard data - dashboard not running?")
+            # Avoid non-ASCII in error logs on some Windows terminals
+            self.logger.error("Error: Cannot import dashboard data - dashboard not running?")
             return []
         except Exception as e:
-            self.logger.error(f"❌ Error reading shared dashboard data: {e}")
+            # Avoid non-ASCII in error logs on some Windows terminals
+            self.logger.error(f"Error reading shared dashboard data: {e}")
             return []
     
     def _convert_dashboard_to_sportmonks_format(self, dashboard_match):
@@ -130,7 +152,7 @@ class LateCornerMonitor:
                 'league': {
                     'name': dashboard_match.get('league', 'Unknown League')
                 },
-                'statistics': self._convert_dashboard_stats_to_sportmonks(dashboard_match.get('statistics', {}))
+            'statistics': self._convert_dashboard_stats_to_sportmonks(dashboard_match.get('statistics', {}))
             }
             
             return sportmonks_format
@@ -176,12 +198,14 @@ class LateCornerMonitor:
     
     def _get_stat_type_id(self, stat_name: str) -> Optional[int]:
         """Map dashboard stat names to SportMonks type IDs"""
+        # Align dashboard->SportMonks type IDs with livescores/inplay mapping
         stat_mapping = {
-            'corners': 34,                # CORNERS
-            'ball_possession': 45,        # BALL POSSESSION
+            'corners': 33,                # CORNERS (live feed)
+            'possession': 45,             # POSSESSION % (live feed commonly uses 45)
             'shots_off_target': 41,       # SHOTS_OFF_TARGET
             'shots_total': 42,            # SHOTS_TOTAL
             'dangerous_attacks': 44,      # DANGEROUS_ATTACKS
+            'attacks': 43,                # ATTACKS (when present)
             'offsides': 51,               # OFFSIDES
             'goal_attempts': 54,          # GOAL_ATTEMPTS
             'throwins': 60,               # THROWINS
@@ -262,8 +286,25 @@ class LateCornerMonitor:
             if not match_stats:
                 return None
             
-            # Log detailed match information
-            self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
+            # Log minimal live stats only (avoid noisy unused fields)
+            try:
+                minimal_log = {
+                    'fixture_id': fixture_id,
+                    'minute': match_stats.minute,
+                    'home_team': match_stats.home_team,
+                    'away_team': match_stats.away_team,
+                    'score': f"{match_stats.home_score}-{match_stats.away_score}",
+                    'total_corners': match_stats.total_corners,
+                    'shots_on_target': match_stats.shots_on_target,
+                    'shots_total': match_stats.shots_total,
+                    'possession': match_stats.possession,
+                    'dangerous_attacks': match_stats.dangerous_attacks,
+                    'attacks': match_stats.attacks,
+                }
+                self.logger.info(f"🧪 DEBUG (minimal): {minimal_log}")
+            except Exception:
+                # Fallback to raw object if something goes wrong
+                self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
             
             # Store current stats for momentum tracking
             current_stats = {
@@ -272,6 +313,9 @@ class LateCornerMonitor:
                 'dangerous_attacks': (match_stats.dangerous_attacks or {}).copy(),
                 'shots_total': (match_stats.shots_total or {}).copy(),
                 'shots_on_target': (match_stats.shots_on_target or {}).copy(),
+                # Minimal reliable set only; ignore crosses/offsides/blocked/etc.
+                'shots_off_target': (match_stats.shots_off_target or {}).copy(),
+                'possession': (match_stats.possession or {}).copy(),
                 'total_corners': match_stats.total_corners,
                 'score_diff': match_stats.home_score - match_stats.away_score,
                 'is_home': True,  # We'll enhance this later
@@ -296,6 +340,38 @@ class LateCornerMonitor:
             self.logger.info(f"🔍 PRE-CHECKS: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
             self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85-89)")
             self.logger.info(f"   ⚽ Corners: {match_stats.total_corners}")
+            # Update momentum tracker and log 10-minute momentum
+            try:
+                self.momentum_tracker.add_snapshot(
+                    fixture_id=fixture_id,
+                    minute=match_stats.minute,
+                    home={
+                        'shots_on_target': current_stats['shots_on_target'].get('home', 0),
+                        'shots_off_target': current_stats['shots_off_target'].get('home', 0),
+                        'dangerous_attacks': current_stats['dangerous_attacks'].get('home', 0),
+                        'possession': current_stats['possession'].get('home', 0),
+                    },
+                    away={
+                        'shots_on_target': current_stats['shots_on_target'].get('away', 0),
+                        'shots_off_target': current_stats['shots_off_target'].get('away', 0),
+                        'dangerous_attacks': current_stats['dangerous_attacks'].get('away', 0),
+                        'possession': current_stats['possession'].get('away', 0),
+                    },
+                )
+                momentum_scores = self.momentum_tracker.compute_scores(fixture_id)
+                home_ms = momentum_scores['home']
+                away_ms = momentum_scores['away']
+                combined_total = home_ms['total'] + away_ms['total']
+                coverage_min = max(home_ms.get('window_covered', 0), away_ms.get('window_covered', 0))
+                self.logger.info(
+                    f"   ⚡ Momentum10 (window {coverage_min}m): HOME {home_ms['total']} pts (SOT {home_ms['on_target_points']}, SOFF {home_ms['off_target_points']}, DA {home_ms['dangerous_points']}, POS {home_ms['possession_points']})"
+                )
+                self.logger.info(
+                    f"                                 AWAY {away_ms['total']} pts (SOT {away_ms['on_target_points']}, SOFF {away_ms['off_target_points']}, DA {away_ms['dangerous_points']}, POS {away_ms['possession_points']})"
+                )
+                self.logger.info(f"   Σ Combined Momentum10: {combined_total} pts")
+            except Exception as e:
+                self.logger.error(f"❌ Momentum tracker error: {e}")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
             # First, check if we're in the alert window (85-89th minute)
@@ -322,12 +398,34 @@ class LateCornerMonitor:
             # Mark that live asian corners are available
             current_stats['has_live_asian_corners'] = True
 
+            # Fetch live draw odds (Fulltime Result market)
+            try:
+                from sportmonks_client import SportmonksClient
+                _client = SportmonksClient()
+                draw_odds = _client.get_live_draw_odds(fixture_id)
+                self.logger.info(f"   🧮 Draw odds: {draw_odds}")
+            except Exception as e:
+                draw_odds = None
+                self.logger.error(f"   ❌ Draw odds fetch error: {e}")
+
             # Get previous stats or empty dict if first time
             previous_stats = self.previous_stats.get(fixture_id, {})
+            # Compute minutes passed between snapshots (1-5 clamp)
+            if previous_stats and isinstance(previous_stats, dict) and 'minute' in previous_stats:
+                raw_minutes_passed = max(0, match_stats.minute - int(previous_stats.get('minute', match_stats.minute)))
+                minutes_passed = min(5, max(1, raw_minutes_passed))
+            else:
+                minutes_passed = 5
 
-            # Use the reliable corner system to make alert decision
-            corner_system = ReliableCornerSystem()
-            result = corner_system.should_alert(current_stats, previous_stats, 5)
+            # New Late Momentum system
+            combined_momentum = home_ms['total'] + away_ms['total']
+            self.logger.info(f"   🔢 Late Momentum combined: {combined_momentum} pts")
+            late_momentum_ok = (
+                85 <= match_stats.minute <= 89 and
+                current_stats.get('has_live_asian_corners', False) and
+                match_stats.total_corners >= 9 and
+                combined_momentum >= 75
+            )
 
             # Log the analysis
             self.logger.info(f"\n📊 ANALYZING MATCH {fixture_id}:")
@@ -336,48 +434,33 @@ class LateCornerMonitor:
             self.logger.info(f"   Minute: {match_stats.minute}")
             self.logger.info(f"   Corners: {match_stats.total_corners}")
 
-            # Use COMBINED match-level decision and best team context
-            combined = result.get('combined', {})
-            if not combined or not combined.get('alert'):
-                self.logger.info("\n❌ NO ALERT - Combined decision:")
-                for reason in combined.get('reasons', []):
-                    self.logger.info(f"   • {reason}")
+            # New system 2: Late Corner using Draw Odds
+            draw_odds_ok = (
+                85 <= match_stats.minute <= 89 and
+                current_stats.get('has_live_asian_corners', False) and
+                (draw_odds is not None and draw_odds <= 1.50)
+            )
+
+            if not (late_momentum_ok or draw_odds_ok):
+                self.logger.info("\n❌ NO ALERT - Late Momentum system:")
+                self.logger.info(f"   • Odds: {'OK' if current_stats.get('has_live_asian_corners') else 'MISSING'}")
+                self.logger.info(f"   • Combined Momentum10: {combined_momentum} (need ≥ 75)")
+                self.logger.info(f"   • Total corners: {match_stats.total_corners} (need ≥ 9)")
+                self.logger.info("❌ NO ALERT - Draw Odds system:")
+                self.logger.info(f"   • Draw odds: {draw_odds if draw_odds is not None else 'N/A'} (need ≤ 1.50)")
                 # Update previous stats for momentum tracking on next cycle
                 self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
 
-            best_team = combined.get('best_team', 'home')
-            team_result = result[best_team]
-
             # If we get here, the alert is triggered
-            self.logger.info("\n✅ ALERT TRIGGERED!")
-            
-            # Get the full probability calculation
-            probabilities = corner_system.calculate_corner_probability(current_stats, previous_stats, 5)
-            
-            # Extract metrics and patterns
-            metrics = team_result['metrics']
+            triggered_tier = "LATE_MOMENTUM" if late_momentum_ok else "LATE_MOMENTUM_DRAW"
+            self.logger.info(f"\n✅ ALERT TRIGGERED! ({'Late Momentum' if late_momentum_ok else 'Late Momentum using Draw Odds'})")
             momentum_indicators = {
-                'attack_intensity': metrics.get('attack_intensity', 0),
-                'shot_efficiency': metrics.get('shot_efficiency', 0),
-                'attack_volume': metrics.get('attack_volume', 0),
-                'corner_momentum': metrics.get('corner_momentum', 0),
-                'score_context': metrics.get('score_context', 0)
+                'combined_momentum10': combined_momentum,
+                'home_momentum10': home_ms['total'],
+                'away_momentum10': away_ms['total'],
+                'draw_odds': draw_odds if draw_odds is not None else 0.0,
             }
-            
-            # Log the metrics
-            self.logger.info("\n📈 ALERT METRICS:")
-            self.logger.info(f"   • Combined Probability: {combined.get('probability', 0.0):.1f}%")
-            self.logger.info(f"   • Team Probability ({best_team}): {metrics['total_probability']:.1f}%")
-            self.logger.info(f"   • Attack Intensity: {metrics['attack_intensity']:.1f}%")
-            self.logger.info(f"   • Corner Momentum: {metrics['corner_momentum']:.1f}%")
-            
-            # Get patterns
-            detected_patterns = probabilities[best_team].get('detected_patterns', [])
-            if detected_patterns:
-                self.logger.info("\n🎯 DETECTED PATTERNS:")
-                for pattern in detected_patterns:
-                    self.logger.info(f"   • {pattern['name']} (Weight: {pattern['weight']})")
 
             # Prepare alert info
             alert_info = {
@@ -388,31 +471,52 @@ class LateCornerMonitor:
                 'away_score': match_stats.away_score,
                 'minute': match_stats.minute,
                 'total_corners': match_stats.total_corners,
-                'tier': "TIER_1",
+                'tier': triggered_tier,
                 # Store combined probability as the alert score
-                'total_probability': combined.get('probability', metrics['total_probability']),
-                'best_team': best_team,
-                'team_probability': metrics['total_probability'],
+                'total_probability': float(combined_momentum),
+                'best_team': 'home' if home_ms['total'] >= away_ms['total'] else 'away',
+                'team_probability': float(max(home_ms['total'], away_ms['total'])),
                 'momentum_indicators': momentum_indicators,
-                'detected_patterns': detected_patterns,
+                'momentum_home': home_ms,
+                'momentum_away': away_ms,
+                'detected_patterns': [],
                 'odds_count': corner_odds.get('count', 0),
                 'active_odds_count': corner_odds.get('active_count', 0),
                 'odds_details': corner_odds.get('odds_details', []),
                 'active_odds': corner_odds.get('active_odds', [])
             }
 
+            # Build human-readable conditions for the alert
+            if triggered_tier == "LATE_MOMENTUM":
+                alert_conditions = [
+                    "Asian Odds Available",
+                    "Match time 85-89th",
+                    f"Combined Momentum ≥ 75 (now {combined_momentum:.0f})",
+                    f"Total Corners ≥ 9 (now {match_stats.total_corners})",
+                ]
+            else:
+                alert_conditions = [
+                    "Asian Odds Available",
+                    "Match time 85-89th",
+                    f"Draw odds ≤ 1.50 (now {draw_odds:.2f} )",
+                ]
+
             # SAVE ALERT TO DATABASE FIRST
-            self.logger.info(f"💾 SAVING ALERT TO DATABASE for TIER_1 match {fixture_id}...")
+            self.logger.info(f"💾 SAVING ALERT TO DATABASE for {triggered_tier} match {fixture_id}...")
             
             try:
                 # Save alert with new system metrics
+                # Add draw odds and alert_type into alert info for DB/Telegram visibility
+                alert_info['draw_odds'] = draw_odds
+                alert_info['alert_type'] = 'LATE_MOMENTUM' if late_momentum_ok else 'LATE_MOMENTUM_DRAW'
+
                 track_success = track_elite_alert(
                     alert_info=alert_info,
-                    tier="TIER_1",
+                    tier=triggered_tier,
                     score=alert_info['total_probability'],
-                    conditions=[p['name'] for p in detected_patterns],
+                    conditions=alert_conditions,
                     momentum_indicators=momentum_indicators,
-                    detected_patterns=detected_patterns
+                    detected_patterns=[]
                 )
                 
                 if track_success:
@@ -422,9 +526,7 @@ class LateCornerMonitor:
                     self.logger.info(f"   • Attack Quality: {momentum_indicators['attack_intensity']:.1f}%")
                     self.logger.info(f"   • Corner Momentum: {momentum_indicators['corner_momentum']:.1f}%")
                     self.logger.info(f"   • Score Context: {momentum_indicators['score_context']:.1f}%")
-                    self.logger.info(f"   • Patterns: {len(detected_patterns)}")
-                    for pattern in detected_patterns:
-                        self.logger.info(f"     - {pattern['name']} (Weight: {pattern['weight']})")
+                    self.logger.info(f"   • Patterns: 0")
                 else:
                     self.logger.error(f"❌ DATABASE SAVE FAILED: Alert not saved to database")
             except Exception as e:
@@ -433,14 +535,14 @@ class LateCornerMonitor:
                 self.logger.error(traceback.format_exc())
 
             # THEN ATTEMPT TO SEND TELEGRAM ALERT
-            self.logger.info(f"📱 SENDING TELEGRAM ALERT for TIER_1 match {fixture_id}...")
+            self.logger.info(f"📱 SENDING TELEGRAM ALERT for {triggered_tier} match {fixture_id}...")
             
             try:
                 telegram_success = send_corner_alert_new(
                     match_data=alert_info,
-                    tier="TIER_1",
+                    tier=triggered_tier,
                     score=alert_info['total_probability'],
-                    conditions=[p['name'] for p in detected_patterns]
+                    conditions=alert_conditions
                 )
                 
                 if telegram_success:
@@ -483,9 +585,9 @@ class LateCornerMonitor:
                 home_corners = 0
                 away_corners = 0
                 
-                # Look for type_id 34 (corners) in statistics
+                # Look for corners in statistics (33 or 34 depending on feed)
                 for stat in match_stats.statistics:
-                    if stat.get('type_id') == 34:  # Corners
+                    if stat.get('type_id') in (33, 34):  # Corners
                         value = stat.get('data', {}).get('value', 0)
                         location = stat.get('location', '')
                         
@@ -587,6 +689,33 @@ class LateCornerMonitor:
                     
                     if shared_live_matches:
                         self.logger.info(f"🔍 MONITORING: Processing {len(shared_live_matches)} live matches")
+                        # Always feed momentum tracker for ALL live matches from minute 0
+                        try:
+                            for m in shared_live_matches:
+                                try:
+                                    parsed = self._parse_match_data_from_shared(m)
+                                    if not parsed:
+                                        continue
+                                    self.momentum_tracker.add_snapshot(
+                                        fixture_id=parsed.fixture_id,
+                                        minute=parsed.minute,
+                                        home={
+                                            'shots_on_target': parsed.shots_on_target.get('home', 0),
+                                            'shots_off_target': parsed.shots_off_target.get('home', 0),
+                                            'dangerous_attacks': parsed.dangerous_attacks.get('home', 0),
+                                            'possession': parsed.possession.get('home', 0),
+                                        },
+                                        away={
+                                            'shots_on_target': parsed.shots_on_target.get('away', 0),
+                                            'shots_off_target': parsed.shots_off_target.get('away', 0),
+                                            'dangerous_attacks': parsed.dangerous_attacks.get('away', 0),
+                                            'possession': parsed.possession.get('away', 0),
+                                        },
+                                    )
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
                         
                         for match in shared_live_matches:
                             try:

@@ -1,3 +1,28 @@
+import sys
+import os
+import argparse
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Reset (truncate) alerts table")
+    parser.add_argument("--url", dest="url", help="PostgreSQL DATABASE_URL to use", default=None)
+    args = parser.parse_args()
+
+    # If a URL is provided, set it before importing DB modules that read env vars at import time
+    if args.url:
+        os.environ["DATABASE_URL"] = args.url
+
+    from latecorners.database_postgres import get_database
+
+    print("Truncating alerts table...")
+    db = get_database()
+    ok = db.truncate_alerts()
+    print("Done" if ok else "Failed")
+    return 0 if ok else 1
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
 #!/usr/bin/env python3
 """
 Reset Alerts to Pending

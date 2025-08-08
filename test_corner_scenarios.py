@@ -5,7 +5,7 @@ Test different corner prediction scenarios
 
 import logging
 from typing import Dict
-from reliable_corner_system import ReliableCornerSystem
+# Legacy reliable system removed
 
 # Configure logging
 logging.basicConfig(
@@ -45,7 +45,7 @@ def create_test_stats(
 def test_scenarios():
     """Test various corner prediction scenarios"""
     
-    system = ReliableCornerSystem()
+# Legacy reliable system removed
     
     # Test Scenario 1: Perfect Scenario (Should Alert)
     logger.info("\n🧪 TEST SCENARIO 1: Perfect Late Game Scenario")
