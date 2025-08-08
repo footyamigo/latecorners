@@ -274,16 +274,13 @@ class LateCornerMonitor:
                 'total_corners': match_stats.total_corners,
                 'score_diff': match_stats.home_score - match_stats.away_score,
                 'is_home': True,  # We'll enhance this later
-                'has_live_asian_corners': True,  # We'll check this properly later
+                'has_live_asian_corners': False,  # Set after odds check
                 'home_team': match_stats.home_team,
                 'away_team': match_stats.away_team,
                 'home_score': match_stats.home_score,
                 'away_score': match_stats.away_score,
                 'corners_last_15': 0  # We'll calculate this properly later
             }
-            
-            # Store stats for next cycle
-            self.previous_stats[fixture_id] = current_stats
             
             # Remove finished matches from monitoring
             if match_stats.state == 'FT' or match_stats.minute >= 100:
@@ -303,18 +300,26 @@ class LateCornerMonitor:
             # First, check if we're in the alert window (85-89th minute)
             if not (85 <= match_stats.minute <= 89):
                 self.logger.info(f"⏰ Match {fixture_id} outside alert window (need 85-89', currently {match_stats.minute}')")
+                # Update previous stats for momentum tracking on next cycle
+                self.previous_stats[fixture_id] = current_stats
                 return None
 
             # Check if we've already alerted on this match
             if fixture_id in self.alerted_matches:
                 self.logger.info(f"⏭️ Match {fixture_id} already alerted")
+                # Update previous stats for momentum tracking on next cycle
+                self.previous_stats[fixture_id] = current_stats
                 return None
 
             # Get corner odds first - no point calculating if we can't bet
             corner_odds = await self._get_corner_odds(fixture_id)
             if not corner_odds:
                 self.logger.warning(f"🚫 Match {fixture_id} - No corner odds available")
+                # Update previous stats for momentum tracking on next cycle
+                self.previous_stats[fixture_id] = current_stats
                 return None
+            # Mark that live asian corners are available
+            current_stats['has_live_asian_corners'] = True
 
             # Get previous stats or empty dict if first time
             previous_stats = self.previous_stats.get(fixture_id, {})
@@ -330,15 +335,18 @@ class LateCornerMonitor:
             self.logger.info(f"   Minute: {match_stats.minute}")
             self.logger.info(f"   Corners: {match_stats.total_corners}")
 
-            # Check home team first (we'll enhance for away team later)
-            team = 'home'
-            team_result = result[team]
-
-            if not team_result['alert']:
-                self.logger.info("\n❌ NO ALERT - Reasons:")
-                for reason in team_result['reasons']:
+            # Use COMBINED match-level decision and best team context
+            combined = result.get('combined', {})
+            if not combined or not combined.get('alert'):
+                self.logger.info("\n❌ NO ALERT - Combined decision:")
+                for reason in combined.get('reasons', []):
                     self.logger.info(f"   • {reason}")
+                # Update previous stats for momentum tracking on next cycle
+                self.previous_stats[fixture_id] = current_stats
                 return None
+
+            best_team = combined.get('best_team', 'home')
+            team_result = result[best_team]
 
             # If we get here, the alert is triggered
             self.logger.info("\n✅ ALERT TRIGGERED!")
@@ -358,12 +366,13 @@ class LateCornerMonitor:
             
             # Log the metrics
             self.logger.info("\n📈 ALERT METRICS:")
-            self.logger.info(f"   • Total Probability: {metrics['total_probability']:.1f}%")
+            self.logger.info(f"   • Combined Probability: {combined.get('probability', 0.0):.1f}%")
+            self.logger.info(f"   • Team Probability ({best_team}): {metrics['total_probability']:.1f}%")
             self.logger.info(f"   • Attack Intensity: {metrics['attack_intensity']:.1f}%")
             self.logger.info(f"   • Corner Momentum: {metrics['corner_momentum']:.1f}%")
             
             # Get patterns
-            detected_patterns = probabilities[team].get('detected_patterns', [])
+            detected_patterns = probabilities[best_team].get('detected_patterns', [])
             if detected_patterns:
                 self.logger.info("\n🎯 DETECTED PATTERNS:")
                 for pattern in detected_patterns:
@@ -379,7 +388,10 @@ class LateCornerMonitor:
                 'minute': match_stats.minute,
                 'total_corners': match_stats.total_corners,
                 'tier': "TIER_1",
-                'total_probability': metrics['total_probability'],
+                # Store combined probability as the alert score
+                'total_probability': combined.get('probability', metrics['total_probability']),
+                'best_team': best_team,
+                'team_probability': metrics['total_probability'],
                 'momentum_indicators': momentum_indicators,
                 'detected_patterns': detected_patterns,
                 'odds_count': corner_odds.get('count', 0),
@@ -396,7 +408,7 @@ class LateCornerMonitor:
                 track_success = track_elite_alert(
                     alert_info=alert_info,
                     tier="TIER_1",
-                    score=metrics['total_probability'],
+                    score=alert_info['total_probability'],
                     conditions=[p['name'] for p in detected_patterns],
                     momentum_indicators=momentum_indicators,
                     detected_patterns=detected_patterns
@@ -405,7 +417,7 @@ class LateCornerMonitor:
                 if track_success:
                     self.logger.info(f"✅ ALERT SAVED TO DATABASE")
                     self.logger.info("   Metrics saved:")
-                    self.logger.info(f"   • Total Probability: {metrics['total_probability']:.1f}%")
+                    self.logger.info(f"   • Combined Probability: {alert_info['total_probability']:.1f}%")
                     self.logger.info(f"   • Attack Quality: {momentum_indicators['attack_intensity']:.1f}%")
                     self.logger.info(f"   • Corner Momentum: {momentum_indicators['corner_momentum']:.1f}%")
                     self.logger.info(f"   • Score Context: {momentum_indicators['score_context']:.1f}%")
@@ -426,7 +438,7 @@ class LateCornerMonitor:
                 telegram_success = send_corner_alert_new(
                     match_data=alert_info,
                     tier="TIER_1",
-                    score=metrics['total_probability'],
+                    score=alert_info['total_probability'],
                     conditions=[p['name'] for p in detected_patterns]
                 )
                 
@@ -443,10 +455,18 @@ class LateCornerMonitor:
                 import traceback
                 self.logger.error(traceback.format_exc())
 
+            # Update previous stats at END of processing
+            self.previous_stats[fixture_id] = current_stats
+
             return alert_info
             
         except Exception as e:
             self.logger.error(f"❌ Error monitoring match {fixture_id}: {e}")
+            # Attempt to update previous stats on error as well
+            try:
+                self.previous_stats[fixture_id] = current_stats
+            except Exception:
+                pass
             return None
 
     def _parse_match_data_from_shared(self, match_data):

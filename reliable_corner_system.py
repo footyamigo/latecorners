@@ -410,7 +410,9 @@ class ReliableCornerSystem:
         
         result = {
             'home': {'alert': False, 'reasons': [], 'metrics': {}},
-            'away': {'alert': False, 'reasons': [], 'metrics': {}}
+            'away': {'alert': False, 'reasons': [], 'metrics': {}},
+            # Combined match-level decision (either team wins a corner)
+            'combined': {'alert': False, 'reasons': [], 'probability': 0.0, 'best_team': 'home'}
         }
         
         # CRITICAL CHECK 1: Time Window
@@ -506,6 +508,16 @@ class ReliableCornerSystem:
             # Set final alert decision
             result[team]['alert'] = all_passed
             
+            # Team strength guard (without the strict probability threshold)
+            team_strong = (
+                (metrics['attack_intensity'] >= 65) and
+                (metrics['corner_momentum'] >= 50) and
+                (len(patterns) >= 2) and
+                any(p['weight'] >= 2.5 for p in patterns) and
+                (metrics['score_diff'] <= 1)
+            )
+            result[team]['team_strong'] = team_strong
+            
             if all_passed:
                 logger.info(f"🎯 ALERT TRIGGERED for {team.upper()} team!")
                 logger.info("   Detected Patterns:")
@@ -514,4 +526,33 @@ class ReliableCornerSystem:
             else:
                 logger.info(f"⏭️ NO ALERT for {team.upper()} team - criteria not met")
         
+        # Compute combined match-level probability (either team wins a corner)
+        home_prob = result['home']['metrics'].get('total_probability', 0.0)
+        away_prob = result['away']['metrics'].get('total_probability', 0.0)
+        combined_probability = 100.0 * (1.0 - (1.0 - home_prob / 100.0) * (1.0 - away_prob / 100.0))
+
+        # Determine best team (higher standalone probability)
+        best_team = 'home' if home_prob >= away_prob else 'away'
+
+        # Combined decision: high combined probability AND at least one strong team
+        combined_reasons = []
+        if combined_probability >= 80.0:
+            combined_reasons.append("Combined probability >= 80%")
+        else:
+            combined_reasons.append(f"Low combined probability: {combined_probability:.1f}%")
+
+        if result['home'].get('team_strong') or result['away'].get('team_strong'):
+            combined_reasons.append("At least one team is strong (momentum/patterns)")
+            combined_guard = True
+        else:
+            combined_reasons.append("No strong team (momentum/patterns) detected")
+            combined_guard = False
+
+        result['combined'] = {
+            'alert': (combined_probability >= 80.0) and combined_guard,
+            'reasons': [f"✓ {r}" if r.startswith(('Combined probability', 'At least')) else f"✗ {r}" for r in combined_reasons],
+            'probability': combined_probability,
+            'best_team': best_team
+        }
+
         return result

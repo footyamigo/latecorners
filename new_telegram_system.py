@@ -249,8 +249,8 @@ class NewTelegramSystem:
         dynamic_action = f"Over {next_corner} Asian Corners"
         
         # Get momentum indicators if available
-        momentum = match_info.get('momentum_indicators', {})
-        patterns = match_info.get('detected_patterns', [])
+        momentum = match_data.get('momentum_indicators', {})
+        patterns = match_data.get('detected_patterns', [])
         
         # Format momentum stats
         attack_intensity = momentum.get('attack_intensity', 0)
@@ -262,6 +262,7 @@ class NewTelegramSystem:
         sorted_patterns = sorted(patterns, key=lambda x: x.get('weight', 0), reverse=True)
         pattern_text = "\n".join(f"• {p['name']} ({p['weight']})" for p in sorted_patterns[:3]) if patterns else "No patterns detected"
         
+        team_prob = match_data.get('team_probability', None)
         message = f"""🚨 {header}
 
 <b>{home_team} vs {away_team}</b>
@@ -269,7 +270,8 @@ class NewTelegramSystem:
 🏆 Corners: {corners}
 
 <b>🎯 ALERT METRICS:</b>
-• Total Score: {score}/{score_threshold}
+• Combined Probability: {score:.1f}%
+{'• Team Probability: ' + f"{team_prob:.1f}%" if team_prob is not None else ''}
 • Attack Quality: {attack_intensity:.1f}%
 • Shot Efficiency: {shot_efficiency:.1f}%
 • Corner Momentum: {corner_momentum:.1f}%
