@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from datetime import datetime
 from typing import List, Dict, Optional
 import psycopg2
@@ -31,7 +32,7 @@ class PostgreSQLDatabase:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Create alerts table
+            # Create alerts table (minimal schema for new systems)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS alerts (
                     id SERIAL PRIMARY KEY,
@@ -41,20 +42,16 @@ class PostgreSQLDatabase:
                     score_at_alert VARCHAR(50),
                     minute_sent INTEGER,
                     corners_at_alert INTEGER,
-                    elite_score FLOAT,
-                    high_priority_count INTEGER DEFAULT 0,
-                    high_priority_ratio VARCHAR(20),
-                    home_shots_on_target INTEGER DEFAULT 0,
-                    away_shots_on_target INTEGER DEFAULT 0,
-                    total_shots_on_target INTEGER DEFAULT 0,
-                    over_line VARCHAR(20),
-                    over_odds VARCHAR(20),
+                    alert_type VARCHAR(40),
+                    draw_odds FLOAT,
+                    combined_momentum10 FLOAT,
+                    momentum_home_total FLOAT,
+                    momentum_away_total FLOAT,
+                    asian_odds_snapshot TEXT,
                     final_corners INTEGER DEFAULT NULL,
                     result VARCHAR(20) DEFAULT NULL,
                     checked_at TIMESTAMP DEFAULT NULL,
-                    match_finished BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    tier_1 VARCHAR(3) DEFAULT 'No'
+                    match_finished BOOLEAN DEFAULT FALSE
                 )
             """)
             
@@ -82,6 +79,21 @@ class PostgreSQLDatabase:
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
             raise
+
+    def truncate_alerts(self) -> bool:
+        """Remove all rows from alerts table (for resetting)."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("TRUNCATE TABLE alerts RESTART IDENTITY;")
+            conn.commit()
+            cursor.close()
+            conn.close()
+            logger.info("🧹 Alerts table truncated.")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to truncate alerts: {e}")
+            return False
     
     def _run_migrations(self, cursor):
         """Run database migrations for schema updates"""
@@ -106,6 +118,29 @@ class PostgreSQLDatabase:
         except Exception as e:
             logger.error(f"❌ Migration failed: {e}")
             # Don't raise - migrations are non-critical for basic functionality
+
+        # Hard cleanup to minimal columns: drop anything not in the allowlist
+        try:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'alerts'
+            """)
+            current_cols = {row[0] for row in cursor.fetchall()}
+            desired_cols = {
+                'id','timestamp','fixture_id','teams','score_at_alert','minute_sent','corners_at_alert',
+                'alert_type','draw_odds','combined_momentum10','momentum_home_total','momentum_away_total',
+                'asian_odds_snapshot','final_corners','result','checked_at','match_finished'
+            }
+            to_drop = [c for c in current_cols if c not in desired_cols]
+            for col in to_drop:
+                try:
+                    cursor.execute(sql.SQL("ALTER TABLE alerts DROP COLUMN IF EXISTS {}" ).format(sql.Identifier(col)))
+                except Exception as _:
+                    # Ignore non-droppable system cols
+                    pass
+        except Exception as e:
+            logger.error(f"❌ Cleanup migration failed: {e}")
 
         # Migration: Add high_priority_ratio column if it doesn't exist
         try:
@@ -248,20 +283,16 @@ class PostgreSQLDatabase:
             except Exception as e:
                 logger.error(f"Failed to alter table: {e}")
                 
-            # Now insert with all the new metrics
+            # Now insert minimal columns for new systems
             cursor.execute("""
                 INSERT INTO alerts (
                     fixture_id, teams, score_at_alert, minute_sent,
-                    corners_at_alert, elite_score, high_priority_count, 
-                    high_priority_ratio, home_shots_on_target, away_shots_on_target,
-                    total_shots_on_target, over_line, over_odds, tier_1,
-                    attack_intensity, shot_efficiency, attack_volume, corner_momentum,
-                    score_context, total_probability, detected_patterns,
-                    corners_last_15, dangerous_attacks_last_5, attacks_last_5
+                    corners_at_alert, alert_type, draw_odds, combined_momentum10,
+                    momentum_home_total, momentum_away_total, asian_odds_snapshot
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s
                 )
             """, (
                 alert_data['fixture_id'],
@@ -269,25 +300,12 @@ class PostgreSQLDatabase:
                 alert_data['score_at_alert'],
                 alert_data['minute_sent'],
                 alert_data['corners_at_alert'],
-                alert_data.get('total_probability', 0),  # Use total_probability as elite_score
-                alert_data.get('high_priority_count', 0),
-                alert_data.get('high_priority_ratio', None),
-                alert_data.get('home_shots_on_target', 0),
-                alert_data.get('away_shots_on_target', 0),
-                alert_data.get('total_shots_on_target', 0),
-                alert_data['over_line'],
-                alert_data['over_odds'],
-                'Yes',  # All new alerts are TIER 1
-                alert_data.get('momentum_indicators', {}).get('attack_intensity', 0),
-                alert_data.get('momentum_indicators', {}).get('shot_efficiency', 0),
-                alert_data.get('momentum_indicators', {}).get('attack_volume', 0),
-                alert_data.get('momentum_indicators', {}).get('corner_momentum', 0),
-                alert_data.get('momentum_indicators', {}).get('score_context', 0),
-                alert_data.get('total_probability', 0),
-                [p['name'] for p in alert_data.get('detected_patterns', [])],
-                alert_data.get('corners_last_15', 0),
-                alert_data.get('dangerous_attacks_last_5', 0),
-                alert_data.get('attacks_last_5', 0)
+                alert_data.get('alert_type', None),
+                alert_data.get('draw_odds', None),
+                alert_data.get('combined_momentum10', None),
+                (alert_data.get('momentum_home') or {}).get('total', 0),
+                (alert_data.get('momentum_away') or {}).get('total', 0),
+                json.dumps(alert_data.get('asian_odds_snapshot') or alert_data.get('active_odds') or [])
             ))
             
             conn.commit()

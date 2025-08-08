@@ -3,7 +3,11 @@ import time
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from config import get_config
+try:
+    from config import get_config
+except Exception:
+    # When imported as a package (python -m latecorners.*)
+    from latecorners.config import get_config
 
 # Rate limiting tracker
 class RateLimitTracker:
@@ -181,7 +185,8 @@ class SportmonksClient:
         
         # 🎯 KEY FIX: Add includes to get live data + periods for minute
         params = {
-            'include': 'scores;participants;state;events;periods'  # 🎯 ADDED: periods for match minute
+            # Include statistics as well to receive full live stat set (e.g., shots_blocked type_id 58)
+            'include': 'scores;participants;state;events;periods;statistics'
         }
         
         data = self._make_request("/livescores/inplay", params=params)
@@ -492,37 +497,18 @@ class SportmonksClient:
             'pass_accuracy': {'home': 0, 'away': 0},        # Type 82
         }
         
-        # Map Sportmonks stat IDs to our stat names (REVERTED to original working system)
+        # Map Sportmonks stat IDs to our stat names (minimal set)
         stat_id_mapping = {
             # ORIGINAL WORKING MAPPINGS - restored from documentation
-            34: 'corners',                # ✅ CORNERS (Type 34 - confirmed by original docs + official Sportmonks)
-            45: 'ball_possession',        # ✅ BALL POSSESSION % (Type 45 - confirmed by original docs)
-            41: 'shots_off_target',       # ✅ SHOTS_OFF_TARGET (Type 41 - confirmed by original docs)
-            42: 'shots_total',            # ✅ SHOTS_TOTAL (confirmed)
-            44: 'dangerous_attacks',      # ✅ DANGEROUS_ATTACKS (confirmed)
-            47: 'penalties',              # ✅ PENALTIES
-            49: 'shots_inside_box',       # ✅ SHOTS_INSIDEBOX
-            50: 'shots_outside_box',      # ✅ SHOTS_OUTSIDEBOX
-            51: 'offsides',               # ✅ OFFSIDES (confirmed)
-            52: 'goals',                  # ✅ GOALS
-            54: 'goal_attempts',          # ✅ GOAL_ATTEMPTS
-            55: 'free_kicks',             # ✅ FREE_KICKS
-            56: 'fouls',                  # ✅ FOULS
-            57: 'saves',                  # ✅ SAVES
-            58: 'shots_blocked',          # ✅ SHOTS_BLOCKED
-            60: 'throwins',               # ✅ THROWINS
-            64: 'hit_woodwork',           # ✅ HIT_WOODWORK
-            78: 'tackles',                # ✅ TACKLES
-            79: 'assists',                # ✅ ASSISTS
-            80: 'passes',                 # ✅ PASSES
-            82: 'pass_accuracy',          # ✅ SUCCESSFUL_PASSES_PERCENTAGE
-            86: 'shots_on_target',        # ✅ SHOTS_ON_TARGET (confirmed)
-            98: 'crosses_total',          # ✅ TOTAL_CROSSES
-            109: 'successful_dribbles',   # ✅ SUCCESSFUL_DRIBBLES
-            117: 'key_passes',            # ✅ KEY_PASSES
-            580: 'big_chances_created',   # ✅ BIG_CHANCES_CREATED
-            581: 'big_chances_missed',    # ✅ BIG_CHANCES_MISSED
-            1527: 'counter_attacks',      # ✅ COUNTER_ATTACKS
+                34: 'corners',
+                41: 'shots_off_target',
+                42: 'shots_total',
+                44: 'dangerous_attacks',
+                45: 'ball_possession',
+                51: 'offsides',
+                52: 'goals',
+                54: 'goal_attempts',
+                86: 'shots_on_target',
         }
         
         total_corners = 0
@@ -543,7 +529,7 @@ class SportmonksClient:
                 continue
                 
             # Handle both legacy format (participant_id + value) and live format (location + data.value)
-                participant_id = stat.get('participant_id')
+            participant_id = stat.get('participant_id')
             location = stat.get('location')  # Live data format
             value = stat.get('value', stat.get('data', {}).get('value', 0))  # Support both formats
             
@@ -555,9 +541,9 @@ class SportmonksClient:
                 self.logger.info(f"   🎯 {stat_name}: type_id={stat_id}, location={location}, value={value}")
                 
             # Handle corners separately (total across both teams)
-                if stat_name == 'corners':
-                    total_corners += value
-                    self.logger.info(f"   ⚽ CORNER: +{value} (total: {total_corners})")
+            if stat_name == 'corners':
+                total_corners += value
+                self.logger.info(f"   ⚽ CORNER: +{value} (total: {total_corners})")
             
             # Assign stats to home/away teams
             if participant_id == home_team_id or location == 'home':
@@ -748,15 +734,15 @@ class SportmonksClient:
             # SportMonks type_id mapping for live data - REMOVED OLD INCONSISTENT MAPPINGS
             # Using only the official corrected mappings now
             stat_type_mapping = {
-                33: 'corners',                # ✅ CORNERS (official)
-                34: 'possession',             # ✅ POSSESSION (official)
-                41: 'shots_off_target',       # ✅ SHOTS_OFF_TARGET (official)
-                42: 'shots_total',            # ✅ SHOTS_TOTAL (confirmed)
-                44: 'dangerous_attacks',      # ✅ DANGEROUS_ATTACKS (confirmed)
-                45: 'attacks',                # ✅ ATTACKS (official)
-                51: 'offsides',               # ✅ OFFSIDES (confirmed)
-                54: 'goal_attempts',          # ✅ GOAL_ATTEMPTS (official)
-                86: 'shots_on_target',        # ✅ SHOTS_ON_TARGET (confirmed)
+                33: 'corners',
+                34: 'corners',
+                41: 'shots_off_target',
+                42: 'shots_total',
+                44: 'dangerous_attacks',
+                45: 'possession',
+                43: 'attacks',
+                52: 'goals',
+                86: 'shots_on_target',
             }
             
             # Initialize statistics dictionaries
@@ -773,7 +759,7 @@ class SportmonksClient:
                 if type_id in stat_type_mapping:
                     stat_name = stat_type_mapping[type_id]
                     
-                    if type_id == 33:  # Corners - special handling for total
+                    if type_id in (33, 34):  # Corners - special handling for total (handles both ids)
                         total_corners += value
                     elif location == 'home':
                         home_stats[stat_name] = value
@@ -951,3 +937,56 @@ class SportmonksClient:
         except Exception as e:
             self.logger.error(f"Error parsing live corner odds for fixture {fixture_id}: {e}")
             return None 
+
+    def get_live_draw_odds(self, fixture_id: int) -> Optional[float]:
+        """Get live in-play odds for a Draw using the same endpoint approach as Asian corner odds.
+
+        Uses /odds/in-play/by-fixture/{fixture_id} and searches Full Time Result / Match Result / 1x2 markets
+        for a draw selection (labels like 'X', 'Draw', 'Tie'). Returns the first decimal price found.
+        """
+        try:
+            exact_market_names = {
+                'fulltime result', 'full time result', 'match result', '1x2'
+            }
+            draw_labels = {'x', 'draw', 'tie'}
+
+            # Approach A: same helper used by Asian odds (nested by bookmaker/market) → strict market match
+            data_nested = self._make_request(f"/odds/in-play/by-fixture/{fixture_id}")
+            if data_nested and isinstance(data_nested.get('data'), list):
+                collected: List[float] = []
+                for bookmaker in data_nested['data']:
+                    markets = bookmaker.get('markets', [])
+                    for market in markets:
+                        name = (market.get('market_name') or '').strip().lower()
+                        if name in exact_market_names:
+                            for sel in market.get('selections', []):
+                                label = (sel.get('label') or '').strip().lower()
+                                if label in draw_labels:
+                                    odds = sel.get('odds') or sel.get('value') or sel.get('decimal') or sel.get('price')
+                                    try:
+                                        collected.append(float(odds))
+                                    except (TypeError, ValueError):
+                                        pass
+                if collected:
+                    return min(collected)
+
+            # Approach B: flat odds records with market_description/label/value → strict market match
+            data_flat = self._make_request(f"/odds/inplay/fixtures/{fixture_id}")
+            if data_flat and isinstance(data_flat.get('data'), list):
+                collected: List[float] = []
+                for odd in data_flat['data']:
+                    market_desc = (odd.get('market_description') or '').strip().lower()
+                    label = (odd.get('label') or '').strip().lower()
+                    if (market_desc in exact_market_names) and (label in draw_labels):
+                        odds = odd.get('value') or odd.get('odds') or odd.get('decimal') or odd.get('price')
+                        try:
+                            collected.append(float(odds))
+                        except (TypeError, ValueError):
+                            pass
+                if collected:
+                    return min(collected)
+
+            return None
+        except Exception as e:
+            self.logger.error(f"Error fetching live draw odds for fixture {fixture_id}: {e}")
+            return None

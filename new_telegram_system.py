@@ -226,7 +226,11 @@ class NewTelegramSystem:
         high_priority_count = match_data.get('high_priority_count', 0)
         
         # Tier-specific header and requirements
-        if tier == "ELITE":
+        if tier == "LATE_MOMENTUM":
+            header = "⚡ LATE MOMENTUM ALERT"
+            score_threshold = "75"
+            priority_required = 0
+        elif tier == "ELITE":
             header = "🏆 ELITE CORNER ALERT 🏆"
             score_threshold = "8.0"
             priority_required = 2
@@ -235,7 +239,7 @@ class NewTelegramSystem:
             score_threshold = "16.0"
             priority_required = 3
         else:
-            header = "💎 PREMIUM CORNER ALERT 💎"
+            header = "⚽ Corner Alert"
             score_threshold = "6.0"
             priority_required = 1
         
@@ -263,34 +267,44 @@ class NewTelegramSystem:
         pattern_text = "\n".join(f"• {p['name']} ({p['weight']})" for p in sorted_patterns[:3]) if patterns else "No patterns detected"
         
         team_prob = match_data.get('team_probability', None)
-        message = f"""🚨 {header}
 
-<b>{home_team} vs {away_team}</b>
-📊 Score: {home_score}-{away_score} | ⏱️ {minute}'
-🏆 Corners: {corners}
+        # Build metrics safely (avoid f-string expressions that embed backslashes)
+        metrics_lines = []
+        if tier == 'LATE_MOMENTUM':
+            metrics_lines.append(f"• Combined Momentum10: {score:.0f}")
+            if team_prob is not None:
+                metrics_lines.append(f"• Team Momentum10: {team_prob:.0f}")
+        else:
+            metrics_lines.append(f"• Combined Probability: {score:.1f}%")
+            if team_prob is not None:
+                metrics_lines.append(f"• Team Probability: {team_prob:.1f}%")
+        if attack_intensity:
+            metrics_lines.append(f"• Attack Quality: {attack_intensity:.1f}%")
+        if shot_efficiency:
+            metrics_lines.append(f"• Shot Efficiency: {shot_efficiency:.1f}%")
+        if corner_momentum:
+            metrics_lines.append(f"• Corner Momentum: {corner_momentum:.1f}%")
+        if score_context:
+            metrics_lines.append(f"• Score Context: {score_context:.1f}%")
 
-<b>🎯 ALERT METRICS:</b>
-• Combined Probability: {score:.1f}%
-{'• Team Probability: ' + f"{team_prob:.1f}%" if team_prob is not None else ''}
-• Attack Quality: {attack_intensity:.1f}%
-• Shot Efficiency: {shot_efficiency:.1f}%
-• Corner Momentum: {corner_momentum:.1f}%
-• Score Context: {score_context:.1f}%
+        conditions_lines = "\n".join([f"• {c}" for c in conditions[:3]])
+        patterns_block = ''
+        if tier != 'LATE_MOMENTUM':
+            patterns_block = "\n💡 <b>DETECTED PATTERNS:</b>\n" + pattern_text
 
-⭐ High Priority: {high_priority_count}/{priority_required}
-
-💡 <b>DETECTED PATTERNS:</b>
-{pattern_text}
-
-💫 <b>WHY THIS ALERT:</b>
-{chr(10).join(f'• {condition}' for condition in conditions[:3])}
-
-⚡ <b>ACTION:</b> {dynamic_action}
-🎯 <b>TIMING:</b> Live betting available now
-💰 <b>CONFIDENCE:</b> {tier} tier qualification
-
-<i>Alert sent at {datetime.now().strftime('%H:%M:%S')}</i>
-"""
+        message = (
+            f"🚨 {header}\n\n"
+            f"<b>{home_team} vs {away_team}</b>\n"
+            f"📊 Score: {home_score}-{away_score} | ⏱️ {minute}'\n"
+            f"🏆 Corners: {corners}\n\n"
+            f"<b>🎯 ALERT METRICS:</b>\n" + "\n".join(metrics_lines) + "\n\n"
+            + patterns_block + ("\n\n" if patterns_block else "") +
+            "💫 <b>WHY THIS ALERT:</b>\n" + conditions_lines + "\n\n"
+            f"⚡ <b>ACTION:</b> {dynamic_action}\n"
+            f"🎯 <b>TIMING:</b> Live betting available now\n"
+            f"💰 <b>CONFIDENCE:</b> {tier}\n\n"
+            f"<i>Alert sent at {datetime.now().strftime('%H:%M:%S')}</i>"
+        )
         
         logger.info(f"📝 NEW TELEGRAM: Message created ({len(message)} chars)")
         logger.info(f"   Preview: {message[:100]}...")

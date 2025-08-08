@@ -6,7 +6,7 @@ Test alert database integration
 import logging
 from typing import Dict
 from alert_tracker import track_elite_alert
-from reliable_corner_system import ReliableCornerSystem
+# Legacy reliable system removed
 
 # Configure logging
 logging.basicConfig(
