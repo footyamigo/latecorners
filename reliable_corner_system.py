@@ -226,8 +226,10 @@ class ReliableCornerSystem:
                 score_context = 0.0
                 
                 # Get current score state
-                score_diff = current_stats.get('score_diff', 0)
-                is_home = current_stats.get('is_home', False)
+                score_diff_global = current_stats.get('score_diff', 0)
+                # Team-relative score diff: positive if this team is leading
+                score_diff = score_diff_global if team == 'home' else -score_diff_global
+                is_home = (team == 'home')
                 minute = current_stats.get('minute', 0)
                 
                 # 1. Tight Score Scenarios (highest weight)
@@ -415,24 +417,19 @@ class ReliableCornerSystem:
             'combined': {'alert': False, 'reasons': [], 'probability': 0.0, 'best_team': 'home'}
         }
         
-        # CRITICAL CHECK 1: Time Window
+        # CRITICAL CHECKS (do not return early; we still want metrics)
         current_minute = current_stats.get('minute', 0)
-        if not (85 <= current_minute <= 89):
+        timing_ok = 85 <= current_minute <= 89
+        if not timing_ok:
             logger.info(f"⏱️ TIMING CHECK FAILED: Minute {current_minute} outside 85-89 window")
-            for team in ['home', 'away']:
-                result[team]['reasons'].append(f"Wrong timing: Minute {current_minute} (need 85-89)")
-            return result
-            
-        logger.info(f"✅ TIMING CHECK PASSED: Minute {current_minute}")
-            
-        # CRITICAL CHECK 2: Odds Availability
-        if not current_stats.get('has_live_asian_corners', False):
+        else:
+            logger.info(f"✅ TIMING CHECK PASSED: Minute {current_minute}")
+
+        odds_ok = current_stats.get('has_live_asian_corners', False)
+        if not odds_ok:
             logger.info("❌ ODDS CHECK FAILED: No live Asian corner odds available")
-            for team in ['home', 'away']:
-                result[team]['reasons'].append("No live Asian corner odds available")
-            return result
-            
-        logger.info("✅ ODDS CHECK PASSED: Live Asian corners available")
+        else:
+            logger.info("✅ ODDS CHECK PASSED: Live Asian corners available")
         
         # Calculate probabilities and patterns
         probabilities = self.calculate_corner_probability(
@@ -505,8 +502,8 @@ class ReliableCornerSystem:
                     result[team]['reasons'].append(f"✗ {failure_msg}")
                     all_passed = False
             
-            # Set final alert decision
-            result[team]['alert'] = all_passed
+            # Set final alert decision (only if timing and odds are OK)
+            result[team]['alert'] = all_passed and timing_ok and odds_ok
             
             # Team strength guard (without the strict probability threshold)
             team_strong = (
@@ -549,7 +546,7 @@ class ReliableCornerSystem:
             combined_guard = False
 
         result['combined'] = {
-            'alert': (combined_probability >= 80.0) and combined_guard,
+            'alert': (combined_probability >= 80.0) and combined_guard and timing_ok and odds_ok,
             'reasons': [f"✓ {r}" if r.startswith(('Combined probability', 'At least')) else f"✗ {r}" for r in combined_reasons],
             'probability': combined_probability,
             'best_team': best_team

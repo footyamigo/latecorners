@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
+import copy
 import logging
 import time
 from datetime import datetime
@@ -267,10 +268,10 @@ class LateCornerMonitor:
             # Store current stats for momentum tracking
             current_stats = {
                 'minute': match_stats.minute,
-                'attacks': match_stats.attacks,
-                'dangerous_attacks': match_stats.dangerous_attacks,
-                'shots_total': match_stats.shots_total,
-                'shots_on_target': match_stats.shots_on_target,
+                'attacks': (match_stats.attacks or {}).copy(),
+                'dangerous_attacks': (match_stats.dangerous_attacks or {}).copy(),
+                'shots_total': (match_stats.shots_total or {}).copy(),
+                'shots_on_target': (match_stats.shots_on_target or {}).copy(),
                 'total_corners': match_stats.total_corners,
                 'score_diff': match_stats.home_score - match_stats.away_score,
                 'is_home': True,  # We'll enhance this later
@@ -301,14 +302,14 @@ class LateCornerMonitor:
             if not (85 <= match_stats.minute <= 89):
                 self.logger.info(f"⏰ Match {fixture_id} outside alert window (need 85-89', currently {match_stats.minute}')")
                 # Update previous stats for momentum tracking on next cycle
-                self.previous_stats[fixture_id] = current_stats
+                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
 
             # Check if we've already alerted on this match
             if fixture_id in self.alerted_matches:
                 self.logger.info(f"⏭️ Match {fixture_id} already alerted")
                 # Update previous stats for momentum tracking on next cycle
-                self.previous_stats[fixture_id] = current_stats
+                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
 
             # Get corner odds first - no point calculating if we can't bet
@@ -316,7 +317,7 @@ class LateCornerMonitor:
             if not corner_odds:
                 self.logger.warning(f"🚫 Match {fixture_id} - No corner odds available")
                 # Update previous stats for momentum tracking on next cycle
-                self.previous_stats[fixture_id] = current_stats
+                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
             # Mark that live asian corners are available
             current_stats['has_live_asian_corners'] = True
@@ -342,7 +343,7 @@ class LateCornerMonitor:
                 for reason in combined.get('reasons', []):
                     self.logger.info(f"   • {reason}")
                 # Update previous stats for momentum tracking on next cycle
-                self.previous_stats[fixture_id] = current_stats
+                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
 
             best_team = combined.get('best_team', 'home')
@@ -456,7 +457,7 @@ class LateCornerMonitor:
                 self.logger.error(traceback.format_exc())
 
             # Update previous stats at END of processing
-            self.previous_stats[fixture_id] = current_stats
+            self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
 
             return alert_info
             
