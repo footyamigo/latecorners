@@ -489,7 +489,11 @@ class LateCornerMonitor:
                 'odds_count': corner_odds.get('count', 0),
                 'active_odds_count': corner_odds.get('active_count', 0),
                 'odds_details': corner_odds.get('odds_details', []),
-                'active_odds': corner_odds.get('active_odds', [])
+                'active_odds': corner_odds.get('active_odds', []),
+                # Add shots on target statistics for database storage
+                'home_shots_on_target': match_stats.shots_on_target.get('home', 0),
+                'away_shots_on_target': match_stats.shots_on_target.get('away', 0),
+                'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
             }
 
             # Build human-readable conditions for the alert

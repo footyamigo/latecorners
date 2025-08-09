@@ -264,15 +264,17 @@ class PostgreSQLDatabase:
                 return True  # Return True since alert data exists (not an error)
             
             # Insert new alert - no auto-adding columns
-            # Only use existing essential columns
+            # Only use existing essential columns including shots on target stats
             cursor.execute("""
                 INSERT INTO alerts (
                     fixture_id, teams, score_at_alert, minute_sent,
                     corners_at_alert, alert_type, draw_odds, combined_momentum10,
-                    momentum_home_total, momentum_away_total, asian_odds_snapshot
+                    momentum_home_total, momentum_away_total, asian_odds_snapshot,
+                    home_shots_on_target, away_shots_on_target, total_shots_on_target
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s, %s,
+                    %s, %s, %s,
                     %s, %s, %s
                 )
             """, (
@@ -286,7 +288,10 @@ class PostgreSQLDatabase:
                 alert_data.get('combined_momentum10', None),
                 (alert_data.get('momentum_home') or {}).get('total', 0),
                 (alert_data.get('momentum_away') or {}).get('total', 0),
-                json.dumps(alert_data.get('asian_odds_snapshot') or alert_data.get('active_odds') or [])
+                json.dumps(alert_data.get('asian_odds_snapshot') or alert_data.get('active_odds') or []),
+                alert_data.get('home_shots_on_target', 0),
+                alert_data.get('away_shots_on_target', 0),
+                alert_data.get('total_shots_on_target', 0)
             ))
             
             conn.commit()

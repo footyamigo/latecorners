@@ -40,6 +40,10 @@ class AlertTracker:
                 'momentum_home_total': (momentum_indicators or {}).get('momentum_home_total', 0),
                 'momentum_away_total': (momentum_indicators or {}).get('momentum_away_total', 0),
                 'asian_odds_snapshot': over_odds_text,
+                # Add shots on target statistics
+                'home_shots_on_target': match_data.get('home_shots_on_target', 0),
+                'away_shots_on_target': match_data.get('away_shots_on_target', 0),
+                'total_shots_on_target': match_data.get('total_shots_on_target', 0),
             }
             
             success = self.db.save_alert(alert_data)
