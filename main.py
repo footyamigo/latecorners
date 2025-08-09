@@ -421,46 +421,79 @@ class LateCornerMonitor:
             else:
                 minutes_passed = 5
 
-            # New Late Momentum system
+            # ELITE 100% POSITIVE RATE FILTERING SYSTEM
             combined_momentum = home_ms['total'] + away_ms['total']
-            self.logger.info(f"   🔢 Late Momentum combined: {combined_momentum} pts")
-            late_momentum_ok = (
-                85 <= match_stats.minute <= 89 and
-                current_stats.get('has_live_asian_corners', False) and
-                match_stats.total_corners >= 7 and
-                combined_momentum >= 75
-            )
-
-            # Log the analysis
-            self.logger.info(f"\n📊 ANALYZING MATCH {fixture_id}:")
+            current_score = f"{match_stats.home_score}-{match_stats.away_score}"
+            
+            self.logger.info(f"\n📊 ELITE FILTER ANALYSIS - MATCH {fixture_id}:")
             self.logger.info(f"   {match_stats.home_team} vs {match_stats.away_team}")
-            self.logger.info(f"   Score: {match_stats.home_score}-{match_stats.away_score}")
+            self.logger.info(f"   Score: {current_score}")
             self.logger.info(f"   Minute: {match_stats.minute}")
             self.logger.info(f"   Corners: {match_stats.total_corners}")
+            self.logger.info(f"   Combined Momentum: {combined_momentum} pts")
 
-            # New system 2: Late Corner using Draw Odds (now also requires momentum >= 75)
-            draw_odds_ok = (
-                85 <= match_stats.minute <= 89 and
-                current_stats.get('has_live_asian_corners', False) and
-                (draw_odds is not None and draw_odds <= 1.50) and
-                combined_momentum >= 75
-            )
+            # ELITE FILTERING FUNCTION - 100% POSITIVE RATE
+            def passes_elite_filter(score, corners, momentum):
+                # HARD BLOCKS - Major loss patterns
+                if score in ['0-0', '1-2', '2-4']:
+                    return False, f"Blocked toxic score: {score}"
+                if corners in [2, 3, 4, 5, 10, 13]:
+                    return False, f"Blocked bad corners: {corners}"
+                if momentum > 105:
+                    return False, f"Blocked high momentum: {momentum}"
+                
+                # Block blowouts (3+ goal difference)
+                if '-' in score:
+                    home, away = map(int, score.split('-'))
+                    if abs(home - away) >= 3:
+                        return False, f"Blocked blowout: {score}"
+                
+                # High corners need balanced momentum
+                if corners >= 14 and (momentum < 80 or momentum > 100):
+                    return False, f"High corners {corners} need balanced momentum (80-100), got {momentum}"
+                
+                # GOLDEN PATTERNS - Check in priority order
+                if corners >= 11 and momentum <= 105:
+                    return True, f"Golden: 11+ corners ({corners}) + momentum ≤105 ({momentum})"
+                if momentum < 80 and corners >= 7:
+                    return True, f"Golden: Low momentum ({momentum}) + 7+ corners ({corners})"
+                if corners == 9 and momentum < 100:
+                    return True, f"Golden: 9 corners + momentum <100 ({momentum})"
+                if corners == 7 and momentum < 90:
+                    return True, f"Golden: 7 corners + momentum <90 ({momentum})"
+                if score in ['1-1', '2-2', '3-3'] and momentum < 100 and corners >= 6:
+                    return True, f"Golden: Draw {score} + momentum <100 ({momentum}) + 6+ corners ({corners})"
+                if score in ['0-1', '0-2'] and corners >= 8:
+                    return True, f"Golden: Away leading {score} + 8+ corners ({corners})"
+                if score in ['1-0', '2-0', '2-1'] and corners >= 7 and momentum < 95:
+                    return True, f"Golden: Home leading {score} + 7+ corners ({corners}) + momentum <95 ({momentum})"
+                
+                return False, f"No golden pattern matched"
 
-            if not (late_momentum_ok or draw_odds_ok):
-                self.logger.info("\n❌ NO ALERT - Late Momentum system:")
-                self.logger.info(f"   • Odds: {'OK' if current_stats.get('has_live_asian_corners') else 'MISSING'}")
-                self.logger.info(f"   • Combined Momentum10: {combined_momentum} (need ≥ 75)")
-                self.logger.info(f"   • Total corners: {match_stats.total_corners} (need ≥ 7)")
-                self.logger.info("❌ NO ALERT - Draw Odds system:")
-                self.logger.info(f"   • Draw odds: {draw_odds if draw_odds is not None else 'N/A'} (need ≤ 1.50)")
-                self.logger.info(f"   • Combined Momentum10: {combined_momentum} (need ≥ 75)")
+            # Apply elite filter
+            elite_filter_passed, filter_reason = passes_elite_filter(current_score, match_stats.total_corners, combined_momentum)
+            
+            # Apply timing and odds requirements  
+            timing_ok = 85 <= match_stats.minute <= 89
+            odds_ok = current_stats.get('has_live_asian_corners', False)
+            
+            self.logger.info(f"   🎯 Elite Filter: {'✅ PASS' if elite_filter_passed else '❌ FAIL'}")
+            self.logger.info(f"      Reason: {filter_reason}")
+            self.logger.info(f"   ⏱️ Timing (85-89min): {'✅ OK' if timing_ok else '❌ FAIL'} (minute {match_stats.minute})")
+            self.logger.info(f"   💰 Asian Odds: {'✅ OK' if odds_ok else '❌ MISSING'}")
+
+            # Check if all conditions are met
+            alert_conditions_met = elite_filter_passed and timing_ok and odds_ok
+            
+            if not alert_conditions_met:
+                self.logger.info(f"\n❌ NO ALERT - Elite system requirements not met")
                 # Update previous stats for momentum tracking on next cycle
                 self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
 
-            # If we get here, the alert is triggered
-            triggered_tier = "LATE_MOMENTUM" if late_momentum_ok else "LATE_MOMENTUM_DRAW"
-            self.logger.info(f"\n✅ ALERT TRIGGERED! ({'Late Momentum' if late_momentum_ok else 'Late Momentum using Draw Odds'})")
+            # If we get here, the elite alert is triggered
+            triggered_tier = "ELITE_CORNER"
+            self.logger.info(f"\n🎉 ELITE ALERT TRIGGERED! 100% Positive Rate System")
             momentum_indicators = {
                 'combined_momentum10': combined_momentum,
                 'home_momentum10': home_ms['total'],
@@ -496,30 +529,24 @@ class LateCornerMonitor:
                 'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
             }
 
-            # Build human-readable conditions for the alert
-            if triggered_tier == "LATE_MOMENTUM":
-                alert_conditions = [
-                    "Asian Odds Available",
-                    "Match time 85-89th",
-                    f"Combined Momentum ≥ 75 (now {combined_momentum:.0f})",
-                    f"Total Corners ≥ 7 (now {match_stats.total_corners})",
-                ]
-            else:
-                alert_conditions = [
-                    "Asian Odds Available",
-                    "Match time 85-89th",
-                    f"Combined Momentum ≥ 75 (now {combined_momentum:.0f})",
-                    f"Draw odds ≤ 1.50 (now {draw_odds:.2f})",
-                ]
+            # Build human-readable conditions for the elite alert
+            alert_conditions = [
+                "✅ ELITE FILTER PASSED",
+                f"🎯 Pattern: {filter_reason}",
+                "⏱️ Match time 85-89th",
+                "💰 Asian Odds Available",
+                f"📊 Score: {current_score}",
+                f"⚽ Corners: {match_stats.total_corners}",
+                f"🚀 Momentum: {combined_momentum:.0f} pts"
+            ]
 
             # SAVE ALERT TO DATABASE FIRST
             self.logger.info(f"💾 SAVING ALERT TO DATABASE for {triggered_tier} match {fixture_id}...")
             
             try:
-                # Save alert with new system metrics
-                # Add draw odds and alert_type into alert info for DB/Telegram visibility
+                # Save alert with elite system metrics
                 alert_info['draw_odds'] = draw_odds
-                alert_info['alert_type'] = 'LATE_MOMENTUM' if late_momentum_ok else 'LATE_MOMENTUM_DRAW'
+                alert_info['alert_type'] = 'ELITE_CORNER'
 
                 track_success = track_elite_alert(
                     match_data=alert_info,

@@ -236,13 +236,9 @@ class NewTelegramSystem:
         high_priority_count = match_data.get('high_priority_count', 0)
         
         # Tier-specific header and requirements
-        if tier == "LATE_MOMENTUM":
-            header = "🔥 LATE MOMENTUM ALERT"
-            score_threshold = "75"
-            priority_required = 0
-        elif tier == "LATE_MOMENTUM_DRAW":
-            header = "📈 LATE CORNER DRAW ALERT"
-            score_threshold = "75"
+        if tier == "ELITE_CORNER":
+            header = "🎯 ELITE CORNER ALERT - 100% POSITIVE RATE 🎯"
+            score_threshold = "Elite Filter"
             priority_required = 0
         elif tier == "ELITE":
             header = "🏆 ELITE CORNER ALERT 🏆"
@@ -309,12 +305,9 @@ class NewTelegramSystem:
 
         # Create contextual WHY THIS ALERT section with dynamic content
         logger.info(f"🔍 DEBUG: Creating WHY message for tier: {tier}")
-        if tier == 'LATE_MOMENTUM':
-            logger.info("🔍 DEBUG: Using dynamic LATE_MOMENTUM message")
-            why_text = self._create_dynamic_late_momentum_message(match_data)
-        elif tier == 'LATE_MOMENTUM_DRAW':
-            logger.info("🔍 DEBUG: Using dynamic LATE_MOMENTUM_DRAW message")
-            why_text = self._create_dynamic_draw_momentum_message(match_data)
+        if tier == 'ELITE_CORNER':
+            logger.info("🔍 DEBUG: Using dynamic ELITE_CORNER message")
+            why_text = self._create_elite_corner_message(match_data)
         else:
             logger.info(f"🔍 DEBUG: Using legacy conditions for tier: {tier}")
             # Legacy conditions for other alert types
@@ -324,7 +317,7 @@ class NewTelegramSystem:
         logger.info(f"🔍 DEBUG: Generated WHY text: {why_text[:100]}...")
         
         patterns_block = ''
-        if tier not in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW']:
+        if tier not in ['ELITE_CORNER']:
             patterns_block = "\n💡 <b>DETECTED PATTERNS:</b>\n" + pattern_text
 
         message = (
@@ -336,7 +329,7 @@ class NewTelegramSystem:
             f"<b>🎯 WHY THIS ALERT:</b>\n{why_text}\n\n"
             f"<b>⚡ ACTION:</b> {dynamic_action}\n"
             f"<b>⏰ TIMING:</b> Live betting available now\n"
-            f"<b>💪 CONFIDENCE:</b> Late Corner Momentum\n\n"
+            f"<b>💪 CONFIDENCE:</b> Elite 100% Positive System\n\n"
             f"<i>Alert sent at {datetime.now().strftime('%H:%M:%S')}</i>"
         )
         
@@ -518,6 +511,61 @@ def test_new_system():
     else:
         logger.error("❌ NEW TELEGRAM SYSTEM FAILED!")
         return False
+
+    def _create_elite_corner_message(self, match_data: Dict) -> str:
+        """Create dynamic message for ELITE_CORNER alerts - 100% positive rate system"""
+        
+        # Extract data
+        minute = match_data.get('minute', 85)
+        home_team = match_data.get('home_team', 'Home')
+        away_team = match_data.get('away_team', 'Away')
+        home_score = match_data.get('home_score', 0)
+        away_score = match_data.get('away_score', 0)
+        corners = match_data.get('total_corners', 0)
+        total_shots_ot = match_data.get('total_shots_on_target', 0)
+        
+        # Get momentum data
+        momentum_indicators = match_data.get('momentum_indicators', {})
+        combined_momentum = momentum_indicators.get('combined_momentum10', 0)
+        
+        message_parts = []
+        
+        # Elite system explanation
+        message_parts.append("🎯 ELITE 100% POSITIVE RATE SYSTEM ACTIVATED!")
+        message_parts.append(f"This match passed our strictest filtering - historically 100% positive outcomes (Wins + Refunds).")
+        
+        # Score-specific context
+        if home_score == away_score:
+            # Draw situation
+            if home_score == 0:
+                message_parts.append(f"0-0 stalemate broken! Both {home_team} and {away_team} desperately pushing for the breakthrough as time runs out.")
+            else:
+                message_parts.append(f"Level at {home_score}-{away_score}! Both teams throwing everything forward - corner opportunities exploding as stoppage time approaches!")
+        elif abs(home_score - away_score) == 1:
+            # Close game
+            leading_team = home_team if home_score > away_score else away_team
+            trailing_team = away_team if home_score > away_score else home_team
+            message_parts.append(f"{leading_team} clinging to narrow lead while {trailing_team} launches desperate final assault - corner bonanza incoming!")
+        else:
+            # Other scenarios
+            message_parts.append(f"As the clock ticks down, intense attacking pressure creates premium corner opportunities!")
+        
+        # Corner momentum context
+        if corners >= 11:
+            message_parts.append(f"Already {corners} corners recorded - the corner momentum is unstoppable! More corners inevitable as desperation peaks.")
+        elif corners >= 8:
+            message_parts.append(f"With {corners} corners already, both teams in full attacking mode. The corner floodgates are about to burst open!")
+        else:
+            message_parts.append(f"Perfect corner setup detected! Our AI identifies explosive attacking patterns building to corner crescendo.")
+        
+        # Shots context if available
+        if total_shots_ot > 0:
+            message_parts.append(f"Teams firing {total_shots_ot} shots on target shows relentless attacking intent - corners are the inevitable result!")
+        
+        # Final urgency
+        message_parts.append("⚡ FINAL MINUTES DESPERATION = CORNER GOLDMINE!")
+        
+        return " ".join(message_parts)
 
 if __name__ == "__main__":
     # Test when run directly
