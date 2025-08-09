@@ -37,8 +37,8 @@ class AlertTracker:
                 'alert_type': tier,
                 'draw_odds': match_data.get('draw_odds') or (momentum_indicators or {}).get('draw_odds'),
                 'combined_momentum10': (momentum_indicators or {}).get('combined_momentum10', 0),
-                'momentum_home_total': (momentum_indicators or {}).get('momentum_home_total', 0),
-                'momentum_away_total': (momentum_indicators or {}).get('momentum_away_total', 0),
+                'momentum_home_total': (momentum_indicators or {}).get('home_momentum10', 0),
+                'momentum_away_total': (momentum_indicators or {}).get('away_momentum10', 0),
                 'asian_odds_snapshot': over_odds_text,
                 # Add shots on target statistics
                 'home_shots_on_target': match_data.get('home_shots_on_target', 0),
