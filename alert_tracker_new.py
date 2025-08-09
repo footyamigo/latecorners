@@ -4,10 +4,7 @@
 import logging
 import re
 from typing import Dict, List
-try:
-    from latecorners.database_postgres import get_database
-except ImportError:
-    from database_postgres import get_database
+from latecorners.database_postgres import get_database
 
 logger = logging.getLogger(__name__)
 
@@ -66,34 +63,26 @@ class AlertTracker:
             return False
     
     def _extract_over_odds_only(self, active_odds: List[str]) -> str:
-        """Extract only the Over odds VALUE from active_odds list.
+        """Extract only the Over odds from active_odds list.
         
         Args:
             active_odds: List of odds strings like ["Over 11 = 2.1", "Under 11 = 1.8"]
             
         Returns:
-            Just the odds value, e.g., "2.1"
+            String with only Over odds, e.g., "Over 11 = 2.1"
         """
         for odds_str in active_odds:
             if "Over" in odds_str:
                 try:
-                    # Parse "Over 11.5 = 2.1" and extract just the odds value as float
-                    import re
-                    match = re.search(r"Over\s+[\d.]+\s*=\s*([\d.]+)", odds_str)
-                    if match:
-                        odds_value = float(match.group(1))
-                        logger.info(f"📊 EXTRACTED OVER ODDS VALUE: {odds_value}")
-                        return odds_value
-                    else:
-                        # Fallback: return the full string if parsing fails
-                        logger.info(f"📊 EXTRACTED OVER ODDS (fallback): {odds_str}")
-                        return odds_str
+                    # Return the Over odds string as-is
+                    logger.info(f"📊 EXTRACTED OVER ODDS: {odds_str}")
+                    return odds_str
                 except Exception as e:
                     logger.warning(f"⚠️ Error parsing odds string '{odds_str}': {e}")
         
         # Fallback if no Over odds found
         logger.warning(f"⚠️ No Over odds found in: {active_odds}")
-        return 2.00  # Default assumption as float
+        return "Over 10.5 = 2.00"  # Default assumption
     
     def get_recent_alerts(self, limit: int = 10) -> list:
         """Get recent alerts for quick review"""

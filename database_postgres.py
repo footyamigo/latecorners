@@ -263,27 +263,8 @@ class PostgreSQLDatabase:
                 conn.close()
                 return True  # Return True since alert data exists (not an error)
             
-            # Insert new alert if no duplicate found
-            # First, let's alter the table to add new columns if they don't exist
-            try:
-                cursor.execute("""
-                    ALTER TABLE alerts
-                    ADD COLUMN IF NOT EXISTS attack_intensity FLOAT,
-                    ADD COLUMN IF NOT EXISTS shot_efficiency FLOAT,
-                    ADD COLUMN IF NOT EXISTS attack_volume FLOAT,
-                    ADD COLUMN IF NOT EXISTS corner_momentum FLOAT,
-                    ADD COLUMN IF NOT EXISTS score_context FLOAT,
-                    ADD COLUMN IF NOT EXISTS total_probability FLOAT,
-                    ADD COLUMN IF NOT EXISTS detected_patterns TEXT[],
-                    ADD COLUMN IF NOT EXISTS corners_last_15 INTEGER,
-                    ADD COLUMN IF NOT EXISTS dangerous_attacks_last_5 INTEGER,
-                    ADD COLUMN IF NOT EXISTS attacks_last_5 INTEGER;
-                """)
-                conn.commit()
-            except Exception as e:
-                logger.error(f"Failed to alter table: {e}")
-                
-            # Now insert minimal columns for new systems
+            # Insert new alert - no auto-adding columns
+            # Only use existing essential columns
             cursor.execute("""
                 INSERT INTO alerts (
                     fixture_id, teams, score_at_alert, minute_sent,

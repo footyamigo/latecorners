@@ -9,6 +9,10 @@ from typing import Dict, Set, Optional
 import sys
 import os
 
+# Ensure DATABASE_URL is set for production deployment
+if 'DATABASE_URL' not in os.environ:
+    os.environ['DATABASE_URL'] = 'postgresql://postgres:jIwhlnuBmXDEiHjndVZzCmxNEkpquJAL@trolley.proxy.rlwy.net:24044/railway'
+
 # Add the current directory to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -94,7 +98,7 @@ class LateCornerMonitor:
                 converted_match = self._convert_dashboard_to_sportmonks_format(dashboard_match)
                 if converted_match:
                     matches.append(converted_match)
-
+            
             self.logger.info(f"Dashboard buffer returned {len(matches)} live matches")
             return matches
             
@@ -152,7 +156,7 @@ class LateCornerMonitor:
                 'league': {
                     'name': dashboard_match.get('league', 'Unknown League')
                 },
-            'statistics': self._convert_dashboard_stats_to_sportmonks(dashboard_match.get('statistics', {}))
+                'statistics': self._convert_dashboard_stats_to_sportmonks(dashboard_match.get('statistics', {}))
             }
             
             return sportmonks_format
@@ -304,7 +308,7 @@ class LateCornerMonitor:
                 self.logger.info(f"🧪 DEBUG (minimal): {minimal_log}")
             except Exception:
                 # Fallback to raw object if something goes wrong
-                self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
+            self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
             
             # Store current stats for momentum tracking
             current_stats = {
@@ -434,11 +438,12 @@ class LateCornerMonitor:
             self.logger.info(f"   Minute: {match_stats.minute}")
             self.logger.info(f"   Corners: {match_stats.total_corners}")
 
-            # New system 2: Late Corner using Draw Odds
+            # New system 2: Late Corner using Draw Odds (now also requires momentum >= 75)
             draw_odds_ok = (
                 85 <= match_stats.minute <= 89 and
                 current_stats.get('has_live_asian_corners', False) and
-                (draw_odds is not None and draw_odds <= 1.50)
+                (draw_odds is not None and draw_odds <= 1.50) and
+                combined_momentum >= 75
             )
 
             if not (late_momentum_ok or draw_odds_ok):
@@ -448,6 +453,7 @@ class LateCornerMonitor:
                 self.logger.info(f"   • Total corners: {match_stats.total_corners} (need ≥ 9)")
                 self.logger.info("❌ NO ALERT - Draw Odds system:")
                 self.logger.info(f"   • Draw odds: {draw_odds if draw_odds is not None else 'N/A'} (need ≤ 1.50)")
+                self.logger.info(f"   • Combined Momentum10: {combined_momentum} (need ≥ 75)")
                 # Update previous stats for momentum tracking on next cycle
                 self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
@@ -498,7 +504,8 @@ class LateCornerMonitor:
                 alert_conditions = [
                     "Asian Odds Available",
                     "Match time 85-89th",
-                    f"Draw odds ≤ 1.50 (now {draw_odds:.2f} )",
+                    f"Combined Momentum ≥ 75 (now {combined_momentum:.0f})",
+                    f"Draw odds ≤ 1.50 (now {draw_odds:.2f})",
                 ]
 
             # SAVE ALERT TO DATABASE FIRST
@@ -511,7 +518,7 @@ class LateCornerMonitor:
                 alert_info['alert_type'] = 'LATE_MOMENTUM' if late_momentum_ok else 'LATE_MOMENTUM_DRAW'
 
                 track_success = track_elite_alert(
-                    alert_info=alert_info,
+                    match_data=alert_info,
                     tier=triggered_tier,
                     score=alert_info['total_probability'],
                     conditions=alert_conditions,
