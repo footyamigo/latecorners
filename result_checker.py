@@ -85,8 +85,14 @@ class ResultChecker:
                 logger.warning(f"⚠️ Could not extract final corners for fixture {fixture_id}")
                 return
             
-            # Calculate result
-            result = self._calculate_over_result(alert['over_line'], final_corners)
+            # Calculate result - handle NULL over_line for older alerts
+            over_line = alert['over_line']
+            if over_line is None:
+                # For older alerts without over_line, calculate as corners_at_alert + 1
+                over_line = str(alert['corners_at_alert'] + 1)
+                logger.info(f"🔧 NULL over_line detected, calculated as: {over_line}")
+            
+            result = self._calculate_over_result(over_line, final_corners)
             
             # Update database
             success = self.db.update_alert_result(alert['id'], final_corners, result)
