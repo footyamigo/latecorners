@@ -270,12 +270,14 @@ class PostgreSQLDatabase:
                     fixture_id, teams, score_at_alert, minute_sent,
                     corners_at_alert, alert_type, draw_odds, combined_momentum10,
                     momentum_home_total, momentum_away_total, asian_odds_snapshot,
-                    home_shots_on_target, away_shots_on_target, total_shots_on_target
+                    home_shots_on_target, away_shots_on_target, total_shots_on_target,
+                    over_line
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s, %s,
+                    %s
                 )
             """, (
                 alert_data['fixture_id'],
@@ -286,12 +288,13 @@ class PostgreSQLDatabase:
                 alert_data.get('alert_type', None),
                 alert_data.get('draw_odds', None),
                 alert_data.get('combined_momentum10', None),
-                (alert_data.get('momentum_home') or {}).get('total', 0),
-                (alert_data.get('momentum_away') or {}).get('total', 0),
+                alert_data.get('momentum_home_total', 0),
+                alert_data.get('momentum_away_total', 0),
                 json.dumps(alert_data.get('asian_odds_snapshot') or alert_data.get('active_odds') or []),
                 alert_data.get('home_shots_on_target', 0),
                 alert_data.get('away_shots_on_target', 0),
-                alert_data.get('total_shots_on_target', 0)
+                alert_data.get('total_shots_on_target', 0),
+                alert_data.get('over_line', None)
             ))
             
             conn.commit()

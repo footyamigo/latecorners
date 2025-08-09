@@ -44,6 +44,8 @@ class AlertTracker:
                 'home_shots_on_target': match_data.get('home_shots_on_target', 0),
                 'away_shots_on_target': match_data.get('away_shots_on_target', 0),
                 'total_shots_on_target': match_data.get('total_shots_on_target', 0),
+                # Add over line for result tracking
+                'over_line': str(match_data.get('total_corners', 0) + 1),
             }
             
             success = self.db.save_alert(alert_data)
