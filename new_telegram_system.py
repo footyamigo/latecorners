@@ -212,6 +212,15 @@ class NewTelegramSystem:
         
         return "Check available corner markets"
     
+    def _get_momentum_level(self, momentum: float) -> str:
+        """Get momentum intensity level and emojis based on value"""
+        if momentum >= 95:
+            return "Extreme attacking pressure 🔥🔥🔥"
+        elif momentum >= 85:
+            return "Explosive attacking pressure 🔥🔥"
+        else:  # 75-85
+            return "High attacking pressure 🔥"
+    
     def _create_message(self, match_data: Dict, tier: str, score: float, conditions: list, active_odds: list) -> str:
         """Create a simple, effective alert message"""
         
@@ -227,7 +236,11 @@ class NewTelegramSystem:
         
         # Tier-specific header and requirements
         if tier == "LATE_MOMENTUM":
-            header = "⚡ LATE MOMENTUM ALERT"
+            header = "🔥 LATE MOMENTUM ALERT"
+            score_threshold = "75"
+            priority_required = 0
+        elif tier == "LATE_MOMENTUM_DRAW":
+            header = "📈 LATE CORNER DRAW ALERT"
             score_threshold = "75"
             priority_required = 0
         elif tier == "ELITE":
@@ -270,10 +283,14 @@ class NewTelegramSystem:
 
         # Build metrics safely (avoid f-string expressions that embed backslashes)
         metrics_lines = []
-        if tier == 'LATE_MOMENTUM':
-            metrics_lines.append(f"• Combined Momentum10: {score:.0f}")
-            if team_prob is not None:
-                metrics_lines.append(f"• Team Momentum10: {team_prob:.0f}")
+        if tier == 'LATE_MOMENTUM' or tier == 'LATE_MOMENTUM_DRAW':
+            # Use new momentum format with dynamic levels
+            momentum_level = self._get_momentum_level(score)
+            metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
+            # Add Asian odds
+            if active_odds:
+                best_odds = active_odds[0]  # First (best) odds
+                metrics_lines.append(f"• Asian Corners: {best_odds}")
         else:
             metrics_lines.append(f"• Combined Probability: {score:.1f}%")
             if team_prob is not None:
@@ -287,22 +304,31 @@ class NewTelegramSystem:
         if score_context:
             metrics_lines.append(f"• Score Context: {score_context:.1f}%")
 
-        conditions_lines = "\n".join([f"• {c}" for c in conditions[:3]])
+        # Create contextual WHY THIS ALERT section
+        if tier == 'LATE_MOMENTUM':
+            why_text = f"Intense late-game pressure detected! Our smart momentum system tracks real-time attacking patterns and has identified both teams in aggressive attacking mode. With approximately 7+ minutes remaining (including stoppage time), this creates perfect conditions for corner opportunities as teams desperately chase the result."
+        elif tier == 'LATE_MOMENTUM_DRAW':
+            draw_odds = match_data.get('draw_odds', 0)
+            why_text = f"Critical scenario detected! Low draw odds ({draw_odds:.2f}) show bookmakers expect goals, while our momentum AI confirms both teams are in high attacking pressure mode based on recent shot and attack patterns. With approximately 7+ minutes remaining (including stoppage time), this combination typically produces corner opportunities as teams desperately seek a winner."
+        else:
+            # Legacy conditions for other alert types
+            conditions_lines = "\n".join([f"• {c}" for c in conditions[:3]])
+            why_text = conditions_lines
+        
         patterns_block = ''
-        if tier != 'LATE_MOMENTUM':
+        if tier not in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW']:
             patterns_block = "\n💡 <b>DETECTED PATTERNS:</b>\n" + pattern_text
 
         message = (
-            f"🚨 {header}\n\n"
+            f"{header}\n\n"
             f"<b>{home_team} vs {away_team}</b>\n"
-            f"📊 Score: {home_score}-{away_score} | ⏱️ {minute}'\n"
-            f"🏆 Corners: {corners}\n\n"
-            f"<b>🎯 ALERT METRICS:</b>\n" + "\n".join(metrics_lines) + "\n\n"
+            f"⚽ Score: {home_score}-{away_score} | ⏱️ {minute}' | 🚩 Corners: {corners}\n\n"
+            f"<b>📊 ALERT METRICS:</b>\n" + "\n".join(metrics_lines) + "\n\n"
             + patterns_block + ("\n\n" if patterns_block else "") +
-            "💫 <b>WHY THIS ALERT:</b>\n" + conditions_lines + "\n\n"
-            f"⚡ <b>ACTION:</b> {dynamic_action}\n"
-            f"🎯 <b>TIMING:</b> Live betting available now\n"
-            f"💰 <b>CONFIDENCE:</b> {tier}\n\n"
+            f"<b>🎯 WHY THIS ALERT:</b>\n{why_text}\n\n"
+            f"<b>⚡ ACTION:</b> {dynamic_action}\n"
+            f"<b>⏰ TIMING:</b> Live betting available now\n"
+            f"<b>💪 CONFIDENCE:</b> Late Corner Momentum\n\n"
             f"<i>Alert sent at {datetime.now().strftime('%H:%M:%S')}</i>"
         )
         
