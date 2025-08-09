@@ -8,6 +8,7 @@ This system uses basic HTTP requests and WILL work.
 
 import os
 import json
+import re
 import logging
 from typing import Dict, Optional
 import requests
@@ -287,10 +288,34 @@ class NewTelegramSystem:
             # Use new momentum format with dynamic levels
             momentum_level = self._get_momentum_level(score)
             metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
-            # Add Asian odds
+            # Add betting recommendation - always recommend OVER bets
             if active_odds:
-                best_odds = active_odds[0]  # First (best) odds
-                metrics_lines.append(f"• Asian Corners: {best_odds}")
+                over_recommendation = None
+                
+                # Look for the best Over bet
+                for odds in active_odds:
+                    if "Over" in odds:
+                        line_match = re.search(r'Over (\d+)', odds)
+                        if line_match:
+                            line_num = line_match.group(1)
+                            over_recommendation = f"Over {line_num}"
+                            break
+                
+                # If no Over bet found, look for Under and suggest the next higher Over
+                if not over_recommendation:
+                    for odds in active_odds:
+                        if "Under" in odds:
+                            line_match = re.search(r'Under (\d+)', odds)
+                            if line_match:
+                                under_line = int(line_match.group(1))
+                                suggested_over = under_line + 1
+                                over_recommendation = f"Over {suggested_over} (estimated)"
+                                break
+                
+                if over_recommendation:
+                    metrics_lines.append(f"• Asian Corners: {over_recommendation}")
+                else:
+                    metrics_lines.append(f"• Asian Corners: Check Over markets")
         else:
             metrics_lines.append(f"• Combined Probability: {score:.1f}%")
             if team_prob is not None:
@@ -304,16 +329,21 @@ class NewTelegramSystem:
         if score_context:
             metrics_lines.append(f"• Score Context: {score_context:.1f}%")
 
-        # Create contextual WHY THIS ALERT section
+        # Create contextual WHY THIS ALERT section with dynamic content
+        logger.info(f"🔍 DEBUG: Creating WHY message for tier: {tier}")
         if tier == 'LATE_MOMENTUM':
-            why_text = f"Intense late-game pressure detected! Our smart momentum system tracks real-time attacking patterns and has identified both teams in aggressive attacking mode. With approximately 7+ minutes remaining (including stoppage time), this creates perfect conditions for corner opportunities as teams desperately chase the result."
+            logger.info("🔍 DEBUG: Using dynamic LATE_MOMENTUM message")
+            why_text = self._create_dynamic_late_momentum_message(match_data)
         elif tier == 'LATE_MOMENTUM_DRAW':
-            draw_odds = match_data.get('draw_odds', 0)
-            why_text = f"Critical scenario detected! Low draw odds ({draw_odds:.2f}) show bookmakers expect goals, while our momentum AI confirms both teams are in high attacking pressure mode based on recent shot and attack patterns. With approximately 7+ minutes remaining (including stoppage time), this combination typically produces corner opportunities as teams desperately seek a winner."
+            logger.info("🔍 DEBUG: Using dynamic LATE_MOMENTUM_DRAW message")
+            why_text = self._create_dynamic_draw_momentum_message(match_data)
         else:
+            logger.info(f"🔍 DEBUG: Using legacy conditions for tier: {tier}")
             # Legacy conditions for other alert types
             conditions_lines = "\n".join([f"• {c}" for c in conditions[:3]])
             why_text = conditions_lines
+        
+        logger.info(f"🔍 DEBUG: Generated WHY text: {why_text[:100]}...")
         
         patterns_block = ''
         if tier not in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW']:
@@ -415,6 +445,77 @@ class NewTelegramSystem:
         except Exception as e:
             logger.error(f"❌ SYSTEM MESSAGE ERROR: {e}")
             return False
+
+    def _create_dynamic_late_momentum_message(self, match_data: Dict) -> str:
+        """Create a dynamic LATE_MOMENTUM alert message based on actual match statistics"""
+        home_team = match_data.get('home_team', 'Home')
+        away_team = match_data.get('away_team', 'Away')
+        minute = match_data.get('minute', 85)
+        combined_momentum = match_data.get('total_probability', 0)
+        
+        # Get shots on target data
+        home_shots = match_data.get('home_shots_on_target', 0)
+        away_shots = match_data.get('away_shots_on_target', 0)
+        total_shots = match_data.get('total_shots_on_target', 0)
+        
+        # Get momentum breakdown
+        momentum_home = match_data.get('momentum_home', {})
+        momentum_away = match_data.get('momentum_away', {})
+        home_momentum = momentum_home.get('total', 0)
+        away_momentum = momentum_away.get('total', 0)
+        
+        # Determine leading team in momentum
+        if home_momentum > away_momentum:
+            leading_team = home_team
+            leading_momentum = home_momentum
+        else:
+            leading_team = away_team
+            leading_momentum = away_momentum
+        
+        # Build dynamic message based on actual stats
+        message_parts = []
+        message_parts.append(f"🔥 Explosive late-game attacking detected at {minute}'!")
+        
+        if total_shots > 0:
+            message_parts.append(f"Both teams combining for {total_shots} shots on target ({home_shots}-{away_shots}), showing relentless pressure.")
+        
+        message_parts.append(f"{leading_team} leading the momentum charge with intense attacking pressure.")
+        
+        message_parts.append(f"As the game enters its final phase with stoppage time approaching, desperate attacking creates prime corner opportunities as teams push for the result!")
+        
+        return " ".join(message_parts)
+
+    def _create_dynamic_draw_momentum_message(self, match_data: Dict) -> str:
+        """Create a dynamic LATE_MOMENTUM_DRAW alert message based on actual match statistics"""
+        home_team = match_data.get('home_team', 'Home')
+        away_team = match_data.get('away_team', 'Away')
+        minute = match_data.get('minute', 85)
+        combined_momentum = match_data.get('total_probability', 0)
+        draw_odds = match_data.get('draw_odds', 0)
+        
+        # Get shots on target data
+        home_shots = match_data.get('home_shots_on_target', 0)
+        away_shots = match_data.get('away_shots_on_target', 0)
+        total_shots = match_data.get('total_shots_on_target', 0)
+        
+        # Get score context
+        home_score = match_data.get('home_score', 0)
+        away_score = match_data.get('away_score', 0)
+        
+        # Build dynamic message
+        message_parts = []
+        message_parts.append(f"📈 Perfect storm scenario at {minute}'!")
+        message_parts.append(f"Low draw market odds show bookmakers expect goals, while our AI confirms explosive combined attacking momentum.")
+        
+        if total_shots > 0:
+            message_parts.append(f"Match intensity evident: {total_shots} shots on target ({home_shots}-{away_shots}) proves both teams are pushing hard.")
+        
+        if home_score == away_score:
+            message_parts.append(f"With scores level in the closing stages, both {home_team} and {away_team} will commit everything forward - creating corner goldmine as stoppage time looms!")
+        else:
+            message_parts.append(f"Score pressure drives desperate attacking in the final moments - expect corner opportunities as teams chase the result with stoppage time approaching!")
+        
+        return " ".join(message_parts)
 
 # Global instance
 new_telegram = NewTelegramSystem()
