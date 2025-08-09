@@ -288,34 +288,12 @@ class NewTelegramSystem:
             # Use new momentum format with dynamic levels
             momentum_level = self._get_momentum_level(score)
             metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
-            # Add betting recommendation - always recommend OVER bets
+            # Add betting recommendation - always recommend OVER the next corner
             if active_odds:
-                over_recommendation = None
-                
-                # Look for the best Over bet
-                for odds in active_odds:
-                    if "Over" in odds:
-                        line_match = re.search(r'Over (\d+)', odds)
-                        if line_match:
-                            line_num = line_match.group(1)
-                            over_recommendation = f"Over {line_num}"
-                            break
-                
-                # If no Over bet found, look for Under and suggest the next higher Over
-                if not over_recommendation:
-                    for odds in active_odds:
-                        if "Under" in odds:
-                            line_match = re.search(r'Under (\d+)', odds)
-                            if line_match:
-                                under_line = int(line_match.group(1))
-                                suggested_over = under_line + 1
-                                over_recommendation = f"Over {suggested_over} (estimated)"
-                                break
-                
-                if over_recommendation:
-                    metrics_lines.append(f"• Asian Corners: {over_recommendation}")
-                else:
-                    metrics_lines.append(f"• Asian Corners: Check Over markets")
+                # Simple logic: recommend Over (current corners + 1)
+                current_corners = match_data.get('total_corners', 0)
+                next_corner = current_corners + 1
+                metrics_lines.append(f"• Asian Corners: Over {next_corner}")
         else:
             metrics_lines.append(f"• Combined Probability: {score:.1f}%")
             if team_prob is not None:
