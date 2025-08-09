@@ -244,6 +244,26 @@ class PostgreSQLDatabase:
         except Exception as e:
             logger.error(f"❌ Migration failed: {e}")
 
+        # Migration: Add over_line column if it doesn't exist
+        try:
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'alerts' AND column_name = 'over_line'
+            """)
+            
+            if not cursor.fetchone():
+                logger.info("🔄 MIGRATION: Adding over_line column...")
+                cursor.execute("""
+                    ALTER TABLE alerts 
+                    ADD COLUMN over_line VARCHAR(20)
+                """)
+                logger.info("✅ MIGRATION: over_line column added")
+            else:
+                logger.debug("⏭️ MIGRATION: over_line column already exists")
+                
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+
     def save_alert(self, alert_data: Dict) -> bool:
         """Save alert to database with duplicate prevention"""
         try:
