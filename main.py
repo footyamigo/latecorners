@@ -427,7 +427,7 @@ class LateCornerMonitor:
             late_momentum_ok = (
                 85 <= match_stats.minute <= 89 and
                 current_stats.get('has_live_asian_corners', False) and
-                match_stats.total_corners >= 9 and
+                match_stats.total_corners >= 7 and
                 combined_momentum >= 75
             )
 
@@ -450,7 +450,7 @@ class LateCornerMonitor:
                 self.logger.info("\n❌ NO ALERT - Late Momentum system:")
                 self.logger.info(f"   • Odds: {'OK' if current_stats.get('has_live_asian_corners') else 'MISSING'}")
                 self.logger.info(f"   • Combined Momentum10: {combined_momentum} (need ≥ 75)")
-                self.logger.info(f"   • Total corners: {match_stats.total_corners} (need ≥ 9)")
+                self.logger.info(f"   • Total corners: {match_stats.total_corners} (need ≥ 7)")
                 self.logger.info("❌ NO ALERT - Draw Odds system:")
                 self.logger.info(f"   • Draw odds: {draw_odds if draw_odds is not None else 'N/A'} (need ≤ 1.50)")
                 self.logger.info(f"   • Combined Momentum10: {combined_momentum} (need ≥ 75)")
@@ -502,7 +502,7 @@ class LateCornerMonitor:
                     "Asian Odds Available",
                     "Match time 85-89th",
                     f"Combined Momentum ≥ 75 (now {combined_momentum:.0f})",
-                    f"Total Corners ≥ 9 (now {match_stats.total_corners})",
+                    f"Total Corners ≥ 7 (now {match_stats.total_corners})",
                 ]
             else:
                 alert_conditions = [
