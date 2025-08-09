@@ -308,7 +308,7 @@ class LateCornerMonitor:
                 self.logger.info(f"🧪 DEBUG (minimal): {minimal_log}")
             except Exception:
                 # Fallback to raw object if something goes wrong
-            self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
+                self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
             
             # Store current stats for momentum tracking
             current_stats = {
