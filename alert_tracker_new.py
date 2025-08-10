@@ -4,7 +4,7 @@
 import logging
 import re
 from typing import Dict, List
-from latecorners.database_postgres import get_database
+from database_postgres import get_database
 
 logger = logging.getLogger(__name__)
 
