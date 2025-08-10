@@ -314,7 +314,8 @@ class LateCornerMonitor:
                 self.logger.info(f"🧪 DEBUG (minimal): {minimal_log}")
             except Exception:
                 # Fallback to raw object if something goes wrong
-                self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
+                pass
+            self.logger.info(f"🧪 DEBUG: Stats for match {fixture_id}: {match_stats}")
             
             # Store current stats for momentum tracking
             current_stats = {
@@ -437,7 +438,7 @@ class LateCornerMonitor:
                 momentum_scores = self.momentum_tracker.compute_scores(fixture_id)
                 home_ms = momentum_scores['home']
                 away_ms = momentum_scores['away']
-                combined_momentum = home_ms['total'] + away_ms['total']
+            combined_momentum = home_ms['total'] + away_ms['total']
             current_score = f"{match_stats.home_score}-{match_stats.away_score}"
             
             self.logger.info(f"\n🧠 PSYCHOLOGY ANALYSIS - MATCH {fixture_id}:")
@@ -469,8 +470,8 @@ class LateCornerMonitor:
                     'home_score': match_stats.home_score,
                     'away_score': match_stats.away_score,
                     'total_corners': match_stats.total_corners,
-                    'total_shots': match_stats.total_shots,
-                    'total_shots_on_target': match_stats.total_shots_on_target
+                    'total_shots': match_stats.shots_total.get('home', 0) + match_stats.shots_total.get('away', 0),
+                    'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
                 },
                 momentum_data={
                     'home_momentum10': home_ms['total'],
@@ -488,8 +489,8 @@ class LateCornerMonitor:
                         'home_score': match_stats.home_score,
                         'away_score': match_stats.away_score,
                         'total_corners': match_stats.total_corners,
-                        'total_shots': match_stats.total_shots,
-                        'total_shots_on_target': match_stats.total_shots_on_target
+                        'total_shots': match_stats.shots_total.get('home', 0) + match_stats.shots_total.get('away', 0),
+                        'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
                     },
                     momentum_data={
                         'home_momentum10': home_ms['total'],
