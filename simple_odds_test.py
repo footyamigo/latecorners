@@ -1,97 +1,74 @@
+#!/usr/bin/env python3
+"""Simple test of odds extraction"""
+
+import sys
 import os
-import requests
-from dotenv import load_dotenv
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-load_dotenv()
-
-def test_live_odds():
-    api_key = os.getenv('SPORTMONKS_API_KEY')
-    match_id = "19471693"  # The match from the screenshot
-    
-    print(f"🎯 Testing Live Odds for Match {match_id}")
-    print("=" * 50)
-    
-    # Test the correct inplay odds endpoint from SportMonks documentation
-    url = f"https://api.sportmonks.com/v3/football/odds/inplay/fixtures/{match_id}"
-    params = {'api_token': api_key}
+def simple_odds_test():
+    print("🧪 SIMPLE ODDS EXTRACTION TEST")
+    print("=" * 40)
     
     try:
-        print(f"🌐 URL: {url}")
-        response = requests.get(url, params=params, timeout=30)
-        print(f"📡 Status Code: {response.status_code}")
+        from panicking_favorite_system import PanickingFavoriteSystem
+        pf_system = PanickingFavoriteSystem()
+        print("✅ Import successful")
         
-        if response.status_code == 200:
-            data = response.json().get('data', [])
-            print(f"📊 Total odds returned: {len(data)}")
-            
-            if data:
-                # Analyze markets
-                markets = {}
-                corner_odds = []
-                bet365_odds = []
-                
-                for odds in data:
-                    market_desc = odds.get('market_description', 'Unknown')
-                    bookmaker_id = odds.get('bookmaker_id', 0)
-                    
-                    if market_desc not in markets:
-                        markets[market_desc] = 0
-                    markets[market_desc] += 1
-                    
-                    # Check for corner odds
-                    if 'corner' in market_desc.lower():
-                        corner_odds.append(odds)
-                    
-                    # Check for bet365 odds
-                    if bookmaker_id == 2:
-                        bet365_odds.append(odds)
-                
-                print(f"\n🎯 CORNER ODDS FOUND: {len(corner_odds)}")
-                for corner in corner_odds:
-                    print(f"   ✅ {corner.get('market_description')} | Bookmaker: {corner.get('bookmaker_id')}")
-                    print(f"      Label: {corner.get('label')} | Value: {corner.get('value')}")
-                    if corner.get('total'): print(f"      Total: {corner.get('total')}")
-                    if corner.get('handicap'): print(f"      Handicap: {corner.get('handicap')}")
-                    print()
-                
-                print(f"🎯 BET365 ODDS FOUND: {len(bet365_odds)}")
-                bet365_corner = [odds for odds in bet365_odds if 'corner' in odds.get('market_description', '').lower()]
-                print(f"🎯 BET365 CORNER ODDS: {len(bet365_corner)}")
-                
-                for corner in bet365_corner:
-                    print(f"   ✅ {corner.get('market_description')}")
-                    print(f"      Label: {corner.get('label')} | Value: {corner.get('value')}")
-                    if corner.get('total'): print(f"      Total: {corner.get('total')}")
-                    if corner.get('handicap'): print(f"      Handicap: {corner.get('handicap')}")
-                
-                print(f"\n📋 TOP 10 AVAILABLE MARKETS:")
-                for market, count in sorted(markets.items(), key=lambda x: x[1], reverse=True)[:10]:
-                    print(f"   {market}: {count} odds")
-                
-                # Show all bookmakers
-                bookmakers = {}
-                for odds in data:
-                    bid = odds.get('bookmaker_id', 0)
-                    if bid not in bookmakers:
-                        bookmakers[bid] = 0
-                    bookmakers[bid] += 1
-                
-                print(f"\n📋 AVAILABLE BOOKMAKERS:")
-                for bid, count in sorted(bookmakers.items(), key=lambda x: x[1], reverse=True):
-                    status = " ✅ (bet365)" if bid == 2 else ""
-                    print(f"   Bookmaker {bid}: {count} odds{status}")
-            
-            else:
-                print("❌ No odds data returned")
+        # Test 1: Man City vs Luton
+        print("\n📊 Test 1: Man City (1.20) vs Luton (15.00)")
+        fixture_data = {
+            'odds': [{
+                'bookmaker_id': 2,
+                'markets': [{
+                    'market_id': 1,
+                    'selections': [
+                        {'label': '1', 'odds': 1.20},
+                        {'label': '2', 'odds': 15.00}
+                    ]
+                }]
+            }]
+        }
         
-        elif response.status_code == 404:
-            print("❌ Match not found or no inplay odds available")
+        odds = pf_system.get_1x2_odds_from_fixture(fixture_data)
+        if odds:
+            print(f"   Home odds: {odds['home_odds']}")
+            print(f"   Away odds: {odds['away_odds']}")
+            
+            psychology = pf_system.analyze_psychology_profile(odds['home_odds'], odds['away_odds'])
+            print(f"   Favorite: {psychology.favorite_team}")
+            print(f"   Match type: {psychology.match_type}")
+            print(f"   Pressure: {psychology.pressure_multiplier}x")
         else:
-            print(f"❌ API Error: {response.status_code}")
-            print(f"Response: {response.text[:300]}")
-    
+            print("   ❌ No odds extracted")
+        
+        # Test 2: Different label format
+        print("\n📊 Test 2: Different label format")
+        fixture_data2 = {
+            'odds': [{
+                'bookmaker_id': 2,
+                'markets': [{
+                    'name': 'Match Winner',
+                    'selections': [
+                        {'label': 'home', 'odds': 1.35},
+                        {'label': 'away', 'odds': 6.00}
+                    ]
+                }]
+            }]
+        }
+        
+        odds2 = pf_system.get_1x2_odds_from_fixture(fixture_data2)
+        if odds2:
+            print(f"   Home odds: {odds2['home_odds']}")
+            print(f"   Away odds: {odds2['away_odds']}")
+        else:
+            print("   ❌ No odds extracted")
+            
+        print("\n🎉 Test complete!")
+        
     except Exception as e:
-        print(f"❌ Exception: {e}")
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    test_live_odds() 
+    simple_odds_test()

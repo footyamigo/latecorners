@@ -23,6 +23,8 @@ from result_checker import check_pending_results
 from startup_flag import is_first_startup, mark_startup
 # ReliableCornerSystem removed in favor of Late Momentum alerts
 from momentum_tracker import MomentumTracker
+from panicking_favorite_system import PanickingFavoriteSystem
+from fighting_underdog_system import FightingUnderdogSystem
 
 class LateCornerMonitor:
     """Monitor live matches for late corner betting opportunities using shared dashboard data"""
@@ -42,6 +44,10 @@ class LateCornerMonitor:
         self.result_check_counter = 0  # For hourly result checking
         # Momentum tracker (10-minute window)
         self.momentum_tracker = MomentumTracker(window_minutes=10)
+        
+        # Psychology-driven corner systems
+        self.panicking_favorite_system = PanickingFavoriteSystem()
+        self.fighting_underdog_system = FightingUnderdogSystem()
         
         self.logger = self._setup_logging()
         
@@ -434,78 +440,112 @@ class LateCornerMonitor:
                 combined_momentum = home_ms['total'] + away_ms['total']
             current_score = f"{match_stats.home_score}-{match_stats.away_score}"
             
-            self.logger.info(f"\n📊 ELITE FILTER ANALYSIS - MATCH {fixture_id}:")
+            self.logger.info(f"\n🧠 PSYCHOLOGY ANALYSIS - MATCH {fixture_id}:")
             self.logger.info(f"   {match_stats.home_team} vs {match_stats.away_team}")
             self.logger.info(f"   Score: {current_score}")
             self.logger.info(f"   Minute: {match_stats.minute}")
             self.logger.info(f"   Corners: {match_stats.total_corners}")
             self.logger.info(f"   Combined Momentum: {combined_momentum} pts")
-
-            # ELITE FILTERING FUNCTION - 100% POSITIVE RATE
-            def passes_elite_filter(score, corners, momentum):
-                # HARD BLOCKS - Major loss patterns
-                if score in ['0-0', '1-2', '2-4']:
-                    return False, f"Blocked toxic score: {score}"
-                if corners in [2, 3, 4, 5, 10, 13]:
-                    return False, f"Blocked bad corners: {corners}"
-                if momentum > 105:
-                    return False, f"Blocked high momentum: {momentum}"
-                
-                # Block blowouts (3+ goal difference)
-                if '-' in score:
-                    home, away = map(int, score.split('-'))
-                    if abs(home - away) >= 3:
-                        return False, f"Blocked blowout: {score}"
-                
-                # High corners need balanced momentum
-                if corners >= 14 and (momentum < 80 or momentum > 100):
-                    return False, f"High corners {corners} need balanced momentum (80-100), got {momentum}"
-                
-                # ULTIMATE ELITE PATTERNS - Only the absolute best scenarios
-                # Pattern 1: VERY HIGH MOMENTUM (85+) with decent corners
-                if momentum >= 85 and momentum <= 105 and corners >= 8:
-                    return True, f"Ultimate: Very high momentum ({momentum}) + 8+ corners ({corners})"
-                
-                # Pattern 2: VERY HIGH CORNERS (14+) with good momentum
-                if corners >= 14 and momentum >= 75 and momentum <= 105:
-                    return True, f"Ultimate: Very high corners ({corners}) + good momentum 75-105 ({momentum})"
-                
-                # Pattern 3: PERFECT STORM - High corners + high momentum
-                if corners >= 12 and momentum >= 85 and momentum <= 105:
-                    return True, f"Ultimate: High corners ({corners}) + very high momentum ({momentum})"
-                
-                return False, f"No golden pattern matched"
-
-            # Apply elite filter
-            elite_filter_passed, filter_reason = passes_elite_filter(current_score, match_stats.total_corners, combined_momentum)
             
             # Apply timing and odds requirements  
             timing_ok = 85 <= match_stats.minute <= 89
             odds_ok = current_stats.get('has_live_asian_corners', False)
             
-            self.logger.info(f"   🎯 Elite Filter: {'✅ PASS' if elite_filter_passed else '❌ FAIL'}")
-            self.logger.info(f"      Reason: {filter_reason}")
             self.logger.info(f"   ⏱️ Timing (85-89min): {'✅ OK' if timing_ok else '❌ FAIL'} (minute {match_stats.minute})")
             self.logger.info(f"   💰 Asian Odds: {'✅ OK' if odds_ok else '❌ MISSING'}")
 
-            # Check if all conditions are met
-            alert_conditions_met = elite_filter_passed and timing_ok and odds_ok
+            # DUAL PSYCHOLOGY SYSTEMS - Elite system disabled
+            self.logger.info(f"\n🧠 CHECKING DUAL PSYCHOLOGY SYSTEMS (Elite system disabled)...")
             
-            if not alert_conditions_met:
-                self.logger.info(f"\n❌ NO ALERT - Elite system requirements not met")
+            triggered_tier = None
+            alert_source = None
+            psychology_alert = None
+            
+            # Try panicking favorite system first
+            psychology_alert = self.panicking_favorite_system.evaluate_panicking_favorite_alert(
+                fixture_data=match_data,  # Pass the full match data which includes fixture info
+                match_data={
+                    'minute': match_stats.minute,
+                    'home_score': match_stats.home_score,
+                    'away_score': match_stats.away_score,
+                    'total_corners': match_stats.total_corners,
+                    'total_shots': match_stats.total_shots,
+                    'total_shots_on_target': match_stats.total_shots_on_target
+                },
+                momentum_data={
+                    'home_momentum10': home_ms['total'],
+                    'away_momentum10': away_ms['total']
+                }
+            )
+            
+            # If panicking favorite didn't trigger, try fighting underdog system
+            if not psychology_alert:
+                self.logger.info(f"   🧠 Panicking favorite not triggered - trying FIGHTING UNDERDOG system...")
+                psychology_alert = self.fighting_underdog_system.evaluate_fighting_underdog_alert(
+                    fixture_data=match_data,
+                    match_data={
+                        'minute': match_stats.minute,
+                        'home_score': match_stats.home_score,
+                        'away_score': match_stats.away_score,
+                        'total_corners': match_stats.total_corners,
+                        'total_shots': match_stats.total_shots,
+                        'total_shots_on_target': match_stats.total_shots_on_target
+                    },
+                    momentum_data={
+                        'home_momentum10': home_ms['total'],
+                        'away_momentum10': away_ms['total']
+                    }
+                )
+            
+            # Check if any psychology system triggered with timing and odds requirements
+            if psychology_alert and timing_ok and odds_ok:
+                if psychology_alert['alert_type'] == 'PANICKING_FAVORITE':
+                    triggered_tier = "PANICKING_FAVORITE"
+                    self.logger.info(f"\n🧠 PANICKING_FAVORITE ALERT TRIGGERED!")
+                else:  # FIGHTING_UNDERDOG
+                    triggered_tier = "FIGHTING_UNDERDOG"
+                    self.logger.info(f"\n🥊 FIGHTING_UNDERDOG ALERT TRIGGERED!")
+                
+                alert_source = "psychology"
+                self.logger.info(f"      {psychology_alert['reasoning']}")
+                
+                if psychology_alert['alert_type'] == 'PANICKING_FAVORITE':
+                    self.logger.info(f"      Psychology Score: {psychology_alert['psychology_score']:.1f}")
+                else:
+                    self.logger.info(f"      Giant-Killing Score: {psychology_alert['giant_killing_score']:.1f}")
+                
+                self.logger.info(f"      ⏱️ Timing requirement: 85-89 minutes ✅")
+            elif psychology_alert and not timing_ok:
+                alert_type = psychology_alert['alert_type']
+                self.logger.info(f"\n⏰ {alert_type} detected but outside 85-89 minute window (currently {match_stats.minute}')")
+            elif psychology_alert and not odds_ok:
+                alert_type = psychology_alert['alert_type']
+                self.logger.info(f"\n💰 {alert_type} detected but no Asian corner odds available")
+            else:
+                self.logger.info(f"\n❌ NO ALERT - Neither panicking favorite nor fighting underdog conditions met")
                 # Update previous stats for momentum tracking on next cycle
                 self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
-
-            # If we get here, the elite alert is triggered
-            triggered_tier = "ELITE_CORNER"
-            self.logger.info(f"\n🎉 ELITE ALERT TRIGGERED! 100% Positive Rate System")
+            # Set up momentum indicators based on psychology system type
             momentum_indicators = {
                 'combined_momentum10': combined_momentum,
                 'home_momentum10': home_ms['total'],
                 'away_momentum10': away_ms['total'],
-                'draw_odds': draw_odds if draw_odds is not None else 0.0,
             }
+            
+            # Add system-specific indicators
+            if psychology_alert['alert_type'] == 'PANICKING_FAVORITE':
+                momentum_indicators.update({
+                    'psychology_score': psychology_alert['psychology_score'],
+                    'favorite_odds': psychology_alert['favorite_odds'],
+                    'panic_level': psychology_alert['panic_level'],
+                })
+            else:  # FIGHTING_UNDERDOG
+                momentum_indicators.update({
+                    'giant_killing_score': psychology_alert['giant_killing_score'],
+                    'underdog_odds': psychology_alert['underdog_odds'],
+                    'giant_killing_level': psychology_alert['giant_killing_level'],
+                })
 
             # Prepare alert info
             alert_info = {
@@ -535,25 +575,35 @@ class LateCornerMonitor:
                 'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
             }
 
-            # Build human-readable conditions for the elite alert
-            alert_conditions = [
-                "✅ ELITE FILTER PASSED",
-                f"🎯 Pattern: {filter_reason}",
-                "⏱️ Match time 85-89th",
-                "💰 Asian Odds Available",
-                f"📊 Score: {current_score}",
-                f"⚽ Corners: {match_stats.total_corners}",
-                f"🚀 Momentum: {combined_momentum:.0f} pts"
-            ]
+            # Build human-readable conditions based on psychology system type
+            if psychology_alert['alert_type'] == 'PANICKING_FAVORITE':
+                alert_conditions = [
+                    "🧠 PANICKING FAVORITE DETECTED",
+                    f"🎯 {psychology_alert['panic_level']}: {psychology_alert['favorite_odds']:.2f} favorite under pressure",
+                    f"⏱️ Match time: {match_stats.minute}th minute", 
+                    "💰 Asian Odds Available",
+                    f"📊 Score: {current_score}",
+                    f"⚽ Corners: {match_stats.total_corners}",
+                    f"🧠 Psychology Score: {psychology_alert['psychology_score']:.0f} pts"
+                ]
+            else:  # FIGHTING_UNDERDOG
+                alert_conditions = [
+                    "🥊 FIGHTING UNDERDOG DETECTED",
+                    f"🎯 {psychology_alert['giant_killing_level']}: {psychology_alert['underdog_odds']:.2f} underdog in giant-killing mode",
+                    f"⏱️ Match time: {match_stats.minute}th minute", 
+                    "💰 Asian Odds Available",
+                    f"📊 Score: {current_score}",
+                    f"⚽ Corners: {match_stats.total_corners}",
+                    f"🥊 Giant-Killing Score: {psychology_alert['giant_killing_score']:.0f} pts"
+                ]
+            
+            alert_info['alert_type'] = psychology_alert['alert_type']
+            alert_info['psychology_data'] = psychology_alert
 
             # SAVE ALERT TO DATABASE FIRST
             self.logger.info(f"💾 SAVING ALERT TO DATABASE for {triggered_tier} match {fixture_id}...")
             
             try:
-                # Save alert with elite system metrics
-                alert_info['draw_odds'] = draw_odds
-                alert_info['alert_type'] = 'ELITE_CORNER'
-
                 track_success = track_elite_alert(
                     match_data=alert_info,
                     tier=triggered_tier,

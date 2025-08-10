@@ -84,14 +84,19 @@ class NewTelegramSystem:
                 # Non-corner odds, include as-is
                 filtered_active_odds.append(odds_str)
         
-        # 🚨 CRITICAL: Only send alert if we have whole number odds available (EXCEPT for ELITE_CORNER)
-        if not filtered_active_odds and tier != 'ELITE_CORNER':
+        # 🚨 CRITICAL: Only send alert if we have whole number odds available (EXCEPT for premium systems)
+        if not filtered_active_odds and tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
             logger.info(f"📵 NEW TELEGRAM: No whole number odds available for {alert_id} - SKIPPING ALERT")
             logger.info(f"   Raw odds available: {active_odds}")
             logger.info(f"   Reason: Only sending alerts when whole number corner markets are available")
             return False
-        elif tier == 'ELITE_CORNER' and not filtered_active_odds:
-            logger.info(f"🎯 ELITE OVERRIDE: No specific odds but ELITE_CORNER filter passed - SENDING ALERT")
+        elif tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG'] and not filtered_active_odds:
+            if tier == 'ELITE_CORNER':
+                logger.info(f"🎯 ELITE OVERRIDE: No specific odds but ELITE_CORNER filter passed - SENDING ALERT")
+            elif tier == 'PANICKING_FAVORITE':
+                logger.info(f"🧠 PSYCHOLOGY OVERRIDE: No specific odds but PANICKING_FAVORITE detected - SENDING ALERT")
+            else:  # FIGHTING_UNDERDOG
+                logger.info(f"🥊 UNDERDOG OVERRIDE: No specific odds but FIGHTING_UNDERDOG detected - SENDING ALERT")
             filtered_active_odds = ["Over X Asian Corners (check live markets)"]
         
         logger.info(f"✅ NEW TELEGRAM: {len(filtered_active_odds)} whole number odds found - PROCEEDING WITH ALERT")
@@ -243,6 +248,14 @@ class NewTelegramSystem:
             header = "🎯 ELITE CORNER ALERT - 100% POSITIVE RATE 🎯"
             score_threshold = "Elite Filter"
             priority_required = 0
+        elif tier == "PANICKING_FAVORITE":
+            header = "🧠 PANICKING FAVORITE ALERT - PSYCHOLOGY EDGE 🧠"
+            score_threshold = "Psychology System"
+            priority_required = 0
+        elif tier == "FIGHTING_UNDERDOG":
+            header = "🥊 FIGHTING UNDERDOG ALERT - GIANT-KILLING MODE 🥊"
+            score_threshold = "Giant-Killing System"
+            priority_required = 0
         elif tier == "ELITE":
             header = "🏆 ELITE CORNER ALERT 🏆"
             score_threshold = "8.0"
@@ -311,6 +324,12 @@ class NewTelegramSystem:
         if tier == 'ELITE_CORNER':
             logger.info("🔍 DEBUG: Using dynamic ELITE_CORNER message")
             why_text = self._create_elite_corner_message(match_data)
+        elif tier == 'PANICKING_FAVORITE':
+            logger.info("🔍 DEBUG: Using dynamic PANICKING_FAVORITE message")
+            why_text = self._create_panicking_favorite_message(match_data)
+        elif tier == 'FIGHTING_UNDERDOG':
+            logger.info("🔍 DEBUG: Using dynamic FIGHTING_UNDERDOG message")
+            why_text = self._create_fighting_underdog_message(match_data)
         else:
             logger.info(f"🔍 DEBUG: Using legacy conditions for tier: {tier}")
             # Legacy conditions for other alert types
@@ -320,7 +339,7 @@ class NewTelegramSystem:
         logger.info(f"🔍 DEBUG: Generated WHY text: {why_text[:100]}...")
         
         patterns_block = ''
-        if tier not in ['ELITE_CORNER']:
+        if tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
             patterns_block = "\n💡 <b>DETECTED PATTERNS:</b>\n" + pattern_text
 
         message = (
@@ -332,7 +351,7 @@ class NewTelegramSystem:
             f"<b>🎯 WHY THIS ALERT:</b>\n{why_text}\n\n"
             f"<b>⚡ ACTION:</b> {dynamic_action}\n"
             f"<b>⏰ TIMING:</b> Live betting available now\n"
-            f"<b>💪 CONFIDENCE:</b> Elite 100% Positive System\n\n"
+            f"<b>💪 CONFIDENCE:</b> {self._get_confidence_text(tier)}\n\n"
             f"<i>Alert sent at {datetime.now().strftime('%H:%M:%S')}</i>"
         )
         
@@ -567,6 +586,146 @@ def test_new_system():
         
         # Final urgency
         message_parts.append("⚡ FINAL MINUTES DESPERATION = CORNER GOLDMINE!")
+        
+        return " ".join(message_parts)
+    
+    def _get_confidence_text(self, tier: str) -> str:
+        """Get confidence text based on alert tier"""
+        if tier == "ELITE_CORNER":
+            return "Elite 100% Positive System"
+        elif tier == "PANICKING_FAVORITE":
+            return "Psychology-Driven Edge System"
+        elif tier == "FIGHTING_UNDERDOG":
+            return "Giant-Killing Psychology System"
+        else:
+            return "High Confidence System"
+    
+    def _create_panicking_favorite_message(self, match_data: Dict) -> str:
+        """Create dynamic message for PANICKING_FAVORITE alerts - psychology-driven system"""
+        
+        # Extract data
+        minute = match_data.get('minute', 75)
+        home_team = match_data.get('home_team', 'Home')
+        away_team = match_data.get('away_team', 'Away')
+        home_score = match_data.get('home_score', 0)
+        away_score = match_data.get('away_score', 0)
+        corners = match_data.get('total_corners', 0)
+        
+        # Get psychology data if available
+        psychology_data = match_data.get('psychology_data', {})
+        favorite_team = psychology_data.get('favorite_team', 'home')
+        favorite_odds = psychology_data.get('favorite_odds', 1.50)
+        panic_level = psychology_data.get('panic_level', 'HIGH_PANIC')
+        
+        message_parts = []
+        
+        # Psychology system explanation
+        message_parts.append("🧠 PSYCHOLOGY ALERT: Heavy favorite under extreme pressure!")
+        message_parts.append(f"Market expectations completely shattered - {favorite_odds:.2f} odds favorite failing to deliver.")
+        
+        # Identify the teams
+        if favorite_team == 'home':
+            fav_name = home_team
+            und_name = away_team
+        else:
+            fav_name = away_team
+            und_name = home_team
+        
+        # Panic level specific context
+        if panic_level == 'MAXIMUM_PANIC':
+            message_parts.append(f"🚨 MAXIMUM PANIC MODE: {fav_name} was supposed to dominate but can't even take the lead!")
+        elif panic_level == 'HIGH_PANIC':
+            message_parts.append(f"⚠️ HIGH PRESSURE: {fav_name} desperately trying to avoid embarrassment!")
+        else:
+            message_parts.append(f"📈 BUILDING PRESSURE: {fav_name} feeling the heat as time runs out!")
+        
+        # Score-specific psychological context
+        goal_difference = abs(home_score - away_score)
+        if home_score == away_score:
+            message_parts.append(f"Level at {home_score}-{away_score}! {fav_name} expected easy win but reality hits hard - desperation corners incoming!")
+        elif goal_difference == 1:
+            if (favorite_team == 'home' and home_score > away_score) or (favorite_team == 'away' and away_score > home_score):
+                message_parts.append(f"Only leading by 1 goal! {fav_name} needs more cushion - expect frantic attacking and corner explosion!")
+            else:
+                message_parts.append(f"SHOCK! {und_name} defying all odds! {fav_name} in absolute panic mode throwing everything forward!")
+        
+        # Corner psychology
+        if corners >= 10:
+            message_parts.append(f"Already {corners} corners shows the relentless pressure - {fav_name} won't stop until they get the result their odds demanded!")
+        elif corners >= 7:
+            message_parts.append(f"With {corners} corners building, {fav_name}'s desperation creates perfect corner storm!")
+        else:
+            message_parts.append(f"Corner explosion imminent! Psychological pressure forces {fav_name} into panic attack mode!")
+        
+        # Psychology insight
+        message_parts.append(f"🎯 PSYCHOLOGY EDGE: When heavy favorites panic, tactical discipline disappears and corners multiply exponentially!")
+        
+        return " ".join(message_parts)
+    
+    def _create_fighting_underdog_message(self, match_data: Dict) -> str:
+        """Create dynamic message for FIGHTING_UNDERDOG alerts - giant-killing system"""
+        
+        # Extract data
+        minute = match_data.get('minute', 75)
+        home_team = match_data.get('home_team', 'Home')
+        away_team = match_data.get('away_team', 'Away')
+        home_score = match_data.get('home_score', 0)
+        away_score = match_data.get('away_score', 0)
+        corners = match_data.get('total_corners', 0)
+        
+        # Get psychology data if available
+        psychology_data = match_data.get('psychology_data', {})
+        underdog_team = psychology_data.get('underdog_team', 'home')
+        underdog_odds = psychology_data.get('underdog_odds', 4.00)
+        giant_killing_level = psychology_data.get('giant_killing_level', 'HIGH_GIANT_KILLING')
+        
+        message_parts = []
+        
+        # Giant-killing system explanation
+        message_parts.append("🥊 GIANT-KILLING ALERT: Massive underdog defying all expectations!")
+        message_parts.append(f"Market gave them just {(100/underdog_odds):.1f}% chance - but they're writing their own story!")
+        
+        # Identify the teams
+        if underdog_team == 'home':
+            underdog_name = home_team
+            favorite_name = away_team
+        else:
+            underdog_name = away_team
+            favorite_name = home_team
+        
+        # Giant-killing level specific context
+        if giant_killing_level == 'MAXIMUM_GIANT_KILLING':
+            message_parts.append(f"🚨 MAXIMUM GIANT-KILLING: {underdog_name} ({underdog_odds:.2f} odds) AHEAD OR LEVEL! This is David vs Goliath!")
+        elif giant_killing_level == 'HIGH_GIANT_KILLING':
+            message_parts.append(f"⚡ HIGH GIANT-KILLING: {underdog_name} ({underdog_odds:.2f} odds) smelling the upset of a lifetime!")
+        elif giant_killing_level == 'NOTHING_TO_LOSE':
+            message_parts.append(f"💥 NOTHING TO LOSE: {underdog_name} ({underdog_odds:.2f} odds) throwing everything forward - miracle within reach!")
+        else:
+            message_parts.append(f"🔥 FINAL DESPERATION: {underdog_name} ({underdog_odds:.2f} odds) in last-chance saloon mode!")
+        
+        # Score-specific giant-killing context
+        goal_difference = abs(home_score - away_score)
+        if home_score == away_score:
+            message_parts.append(f"Level at {home_score}-{away_score}! {underdog_name} proving everyone wrong - the script is being rewritten!")
+        elif goal_difference == 1:
+            if (underdog_team == 'home' and home_score > away_score) or (underdog_team == 'away' and away_score > home_score):
+                message_parts.append(f"SHOCK LEAD! {underdog_name} ahead {home_score}-{away_score}! They taste victory and want MORE!")
+            else:
+                message_parts.append(f"Only 1 goal behind! {underdog_name} can feel the miracle - one moment of magic needed!")
+        
+        # Corner psychology for underdogs
+        if corners >= 8:
+            message_parts.append(f"Already {corners} corners shows {underdog_name} refusing to give up - they're creating chaos and corners follow!")
+        elif corners >= 5:
+            message_parts.append(f"With {corners} corners, {underdog_name} showing they belong here - giant-killing corner storm brewing!")
+        else:
+            message_parts.append(f"When underdogs fight for their lives, corners explode! {underdog_name} ready to throw everything at {favorite_name}!")
+        
+        # Giant-killing psychology insight
+        message_parts.append(f"🎯 GIANT-KILLING EDGE: When massive underdogs smell upset, they attack with zero fear - corners are inevitable!")
+        
+        # Final inspiration
+        message_parts.append("⚡ DAVID vs GOLIATH = CORNER CHAOS!")
         
         return " ".join(message_parts)
 
