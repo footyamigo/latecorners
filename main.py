@@ -18,7 +18,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config import get_config
 from new_telegram_system import send_corner_alert_new, send_system_message_new
-from alert_tracker import track_elite_alert
+from alert_tracker_new import track_elite_alert
 from result_checker import check_pending_results
 from startup_flag import is_first_startup, mark_startup
 # ReliableCornerSystem removed in favor of Late Momentum alerts
@@ -422,7 +422,16 @@ class LateCornerMonitor:
                 minutes_passed = 5
 
             # ELITE 100% POSITIVE RATE FILTERING SYSTEM
-            combined_momentum = home_ms['total'] + away_ms['total']
+            # Ensure momentum is calculated (in case of earlier error)
+            try:
+                combined_momentum = home_ms['total'] + away_ms['total']
+            except (NameError, KeyError):
+                # Fallback momentum calculation if home_ms/away_ms not available
+                self.logger.warning("⚠️ Using fallback momentum calculation")
+                momentum_scores = self.momentum_tracker.compute_scores(fixture_id)
+                home_ms = momentum_scores['home']
+                away_ms = momentum_scores['away']
+                combined_momentum = home_ms['total'] + away_ms['total']
             current_score = f"{match_stats.home_score}-{match_stats.away_score}"
             
             self.logger.info(f"\n📊 ELITE FILTER ANALYSIS - MATCH {fixture_id}:")
@@ -452,21 +461,18 @@ class LateCornerMonitor:
                 if corners >= 14 and (momentum < 80 or momentum > 100):
                     return False, f"High corners {corners} need balanced momentum (80-100), got {momentum}"
                 
-                # GOLDEN PATTERNS - Check in priority order
-                if corners >= 11 and momentum <= 105:
-                    return True, f"Golden: 11+ corners ({corners}) + momentum ≤105 ({momentum})"
-                if momentum < 80 and corners >= 7:
-                    return True, f"Golden: Low momentum ({momentum}) + 7+ corners ({corners})"
-                if corners == 9 and momentum < 100:
-                    return True, f"Golden: 9 corners + momentum <100 ({momentum})"
-                if corners == 7 and momentum < 90:
-                    return True, f"Golden: 7 corners + momentum <90 ({momentum})"
-                if score in ['1-1', '2-2', '3-3'] and momentum < 100 and corners >= 6:
-                    return True, f"Golden: Draw {score} + momentum <100 ({momentum}) + 6+ corners ({corners})"
-                if score in ['0-1', '0-2'] and corners >= 8:
-                    return True, f"Golden: Away leading {score} + 8+ corners ({corners})"
-                if score in ['1-0', '2-0', '2-1'] and corners >= 7 and momentum < 95:
-                    return True, f"Golden: Home leading {score} + 7+ corners ({corners}) + momentum <95 ({momentum})"
+                # ULTIMATE ELITE PATTERNS - Only the absolute best scenarios
+                # Pattern 1: VERY HIGH MOMENTUM (85+) with decent corners
+                if momentum >= 85 and momentum <= 105 and corners >= 8:
+                    return True, f"Ultimate: Very high momentum ({momentum}) + 8+ corners ({corners})"
+                
+                # Pattern 2: VERY HIGH CORNERS (14+) with good momentum
+                if corners >= 14 and momentum >= 75 and momentum <= 105:
+                    return True, f"Ultimate: Very high corners ({corners}) + good momentum 75-105 ({momentum})"
+                
+                # Pattern 3: PERFECT STORM - High corners + high momentum
+                if corners >= 12 and momentum >= 85 and momentum <= 105:
+                    return True, f"Ultimate: High corners ({corners}) + very high momentum ({momentum})"
                 
                 return False, f"No golden pattern matched"
 
@@ -559,12 +565,12 @@ class LateCornerMonitor:
                 
                 if track_success:
                     self.logger.info(f"✅ ALERT SAVED TO DATABASE")
-                    self.logger.info("   Metrics saved:")
-                    self.logger.info(f"   • Combined Probability: {alert_info['total_probability']:.1f}%")
-                    self.logger.info(f"   • Attack Quality: {momentum_indicators['attack_intensity']:.1f}%")
-                    self.logger.info(f"   • Corner Momentum: {momentum_indicators['corner_momentum']:.1f}%")
-                    self.logger.info(f"   • Score Context: {momentum_indicators['score_context']:.1f}%")
-                    self.logger.info(f"   • Patterns: 0")
+                    self.logger.info("   Elite system metrics saved:")
+                    self.logger.info(f"   • Combined Momentum: {alert_info['total_probability']:.1f} pts")
+                    self.logger.info(f"   • Home Momentum: {momentum_indicators['home_momentum10']:.1f} pts")
+                    self.logger.info(f"   • Away Momentum: {momentum_indicators['away_momentum10']:.1f} pts")
+                    self.logger.info(f"   • Draw Odds: {momentum_indicators.get('draw_odds', 0):.2f}")
+                    self.logger.info(f"   • Elite Filter: PASSED")
                 else:
                     self.logger.error(f"❌ DATABASE SAVE FAILED: Alert not saved to database")
             except Exception as e:

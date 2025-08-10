@@ -84,12 +84,15 @@ class NewTelegramSystem:
                 # Non-corner odds, include as-is
                 filtered_active_odds.append(odds_str)
         
-        # 🚨 CRITICAL: Only send alert if we have whole number odds available
-        if not filtered_active_odds:
+        # 🚨 CRITICAL: Only send alert if we have whole number odds available (EXCEPT for ELITE_CORNER)
+        if not filtered_active_odds and tier != 'ELITE_CORNER':
             logger.info(f"📵 NEW TELEGRAM: No whole number odds available for {alert_id} - SKIPPING ALERT")
             logger.info(f"   Raw odds available: {active_odds}")
             logger.info(f"   Reason: Only sending alerts when whole number corner markets are available")
             return False
+        elif tier == 'ELITE_CORNER' and not filtered_active_odds:
+            logger.info(f"🎯 ELITE OVERRIDE: No specific odds but ELITE_CORNER filter passed - SENDING ALERT")
+            filtered_active_odds = ["Over X Asian Corners (check live markets)"]
         
         logger.info(f"✅ NEW TELEGRAM: {len(filtered_active_odds)} whole number odds found - PROCEEDING WITH ALERT")
         logger.info(f"   Whole number odds: {filtered_active_odds}")
