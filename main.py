@@ -455,13 +455,32 @@ class LateCornerMonitor:
             # DUAL PSYCHOLOGY SYSTEMS - Elite system disabled
             self.logger.info(f"\n🧠 CHECKING DUAL PSYCHOLOGY SYSTEMS (Elite system disabled)...")
             
+            # Fetch odds data for psychology analysis
+            try:
+                odds_data = _client._make_request(f"/odds/in-play/by-fixture/{fixture_id}")
+                fixture_data_with_odds = {
+                    'fixture_id': fixture_id,
+                    'home_team': match_stats.home_team,
+                    'away_team': match_stats.away_team,
+                    'odds': odds_data.get('data', []) if odds_data else []
+                }
+                self.logger.info(f"   📊 Fetched odds data: {len(fixture_data_with_odds['odds'])} bookmakers")
+            except Exception as e:
+                self.logger.error(f"   ❌ Failed to fetch odds: {e}")
+                fixture_data_with_odds = {
+                    'fixture_id': fixture_id,
+                    'home_team': match_stats.home_team,
+                    'away_team': match_stats.away_team,
+                    'odds': []
+                }
+            
             triggered_tier = None
             alert_source = None
             psychology_alert = None
             
             # Try panicking favorite system first
             psychology_alert = self.panicking_favorite_system.evaluate_panicking_favorite_alert(
-                fixture_data=match_data,  # Pass the full match data which includes fixture info
+                fixture_data=fixture_data_with_odds,  # Pass fixture data with odds
                 match_data={
                     'minute': match_stats.minute,
                     'home_score': match_stats.home_score,
@@ -480,7 +499,7 @@ class LateCornerMonitor:
             if not psychology_alert:
                 self.logger.info(f"   🧠 Panicking favorite not triggered - trying FIGHTING UNDERDOG system...")
                 psychology_alert = self.fighting_underdog_system.evaluate_fighting_underdog_alert(
-                    fixture_data=match_data,
+                    fixture_data=fixture_data_with_odds,
                     match_data={
                         'minute': match_stats.minute,
                         'home_score': match_stats.home_score,
