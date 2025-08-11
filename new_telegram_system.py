@@ -62,7 +62,17 @@ class NewTelegramSystem:
         
         # Pre-filter to check if we have whole number corner odds available
         filtered_active_odds = []
-        for odds_str in active_odds:
+        
+        # ENHANCED ODDS DETECTION: Also check suspended odds for premium tiers
+        all_odds_available = active_odds if active_odds else []
+        
+        # For premium tiers, also include suspended odds from odds_details if active_odds is empty
+        if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG'] and not all_odds_available:
+            odds_details = match_data.get('odds_details', [])
+            logger.info(f"🔍 Premium tier detected with no active odds - checking suspended odds: {len(odds_details)} total")
+            all_odds_available = odds_details
+            
+        for odds_str in all_odds_available:
             # Check if this is a corner odds string with a whole number
             if "Over" in odds_str or "Under" in odds_str:
                 try:
@@ -74,33 +84,54 @@ class NewTelegramSystem:
                     
                     if len(parts) >= 1:
                         line = float(parts[0])
-                        # Only include if it's a whole number
-                        if line == int(line):
-                            filtered_active_odds.append(odds_str)
+                        current_corners = match_data.get('total_corners', 0)
+                        
+                        # ENHANCED LOGIC: Include if it's a whole number OR if it's X.5 where X = current corners
+                        is_whole_number = line == int(line)
+                        is_current_half = line == current_corners + 0.5
+                        
+                        if is_whole_number or is_current_half:
+                            # For premium tiers, include even suspended odds
+                            if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
+                                # Remove suspended status for clean display
+                                clean_odds = odds_str.replace(" (suspended)", "")
+                                filtered_active_odds.append(clean_odds)
+                                if is_current_half:
+                                    logger.info(f"🎯 Including .5 odds: {clean_odds} (current corners: {current_corners})")
+                            else:
+                                # For regular tiers, only include non-suspended
+                                if "(suspended)" not in odds_str:
+                                    filtered_active_odds.append(odds_str)
+                                    if is_current_half:
+                                        logger.info(f"🎯 Including .5 odds: {odds_str} (current corners: {current_corners})")
                 except (ValueError, TypeError):
                     # If we can't parse it, include it anyway (might be a different format)
-                    filtered_active_odds.append(odds_str)
+                    if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
+                        clean_odds = odds_str.replace(" (suspended)", "")
+                        filtered_active_odds.append(clean_odds)
+                    elif "(suspended)" not in odds_str:
+                        filtered_active_odds.append(odds_str)
             else:
                 # Non-corner odds, include as-is
                 filtered_active_odds.append(odds_str)
         
         # 🚨 CRITICAL: Only send alert if we have whole number odds available (EXCEPT for premium systems)
         if not filtered_active_odds and tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
-            logger.info(f"📵 NEW TELEGRAM: No whole number odds available for {alert_id} - SKIPPING ALERT")
+            logger.info(f"📵 NEW TELEGRAM: No compatible odds available for {alert_id} - SKIPPING ALERT")
             logger.info(f"   Raw odds available: {active_odds}")
-            logger.info(f"   Reason: Only sending alerts when whole number corner markets are available")
+            logger.info(f"   Reason: Only sending alerts when whole number OR current+0.5 corner markets are available")
             return False
         elif tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG'] and not filtered_active_odds:
             if tier == 'ELITE_CORNER':
-                logger.info(f"🎯 ELITE OVERRIDE: No specific odds but ELITE_CORNER filter passed - SENDING ALERT")
+                logger.info(f"🎯 ELITE OVERRIDE: No odds available but ELITE_CORNER filter passed - SENDING ALERT")
             elif tier == 'PANICKING_FAVORITE':
-                logger.info(f"🧠 PSYCHOLOGY OVERRIDE: No specific odds but PANICKING_FAVORITE detected - SENDING ALERT")
+                logger.info(f"🧠 PSYCHOLOGY OVERRIDE: No odds available but PANICKING_FAVORITE detected - SENDING ALERT")
             else:  # FIGHTING_UNDERDOG
-                logger.info(f"🥊 UNDERDOG OVERRIDE: No specific odds but FIGHTING_UNDERDOG detected - SENDING ALERT")
+                logger.info(f"🥊 UNDERDOG OVERRIDE: No odds available but FIGHTING_UNDERDOG detected - SENDING ALERT")
             filtered_active_odds = ["Over X Asian Corners (check live markets)"]
         
-        logger.info(f"✅ NEW TELEGRAM: {len(filtered_active_odds)} whole number odds found - PROCEEDING WITH ALERT")
-        logger.info(f"   Whole number odds: {filtered_active_odds}")
+        logger.info(f"✅ NEW TELEGRAM: {len(filtered_active_odds)} compatible odds found - PROCEEDING WITH ALERT")
+        logger.info(f"   Compatible odds: {filtered_active_odds}")
         
         # Create message (now guaranteed to have odds available)
         message = self._create_message(match_data, tier, score, conditions, filtered_active_odds)
@@ -260,7 +291,7 @@ class NewTelegramSystem:
             header = "🏆 ELITE CORNER ALERT 🏆"
             score_threshold = "8.0"
             priority_required = 2
-        elif tier.startswith("TIER_1"):
+        elif tier and tier.startswith("TIER_1"):
             header = "💎 PREMIUM CORNER ALERT 💎"
             score_threshold = "16.0"
             priority_required = 3
@@ -510,30 +541,6 @@ class NewTelegramSystem:
         
         return " ".join(message_parts)
 
-# Global instance
-new_telegram = NewTelegramSystem()
-
-def send_corner_alert_new(match_data: Dict, tier: str, score: float, conditions: list) -> bool:
-    """Simple function to send alerts using the new system"""
-    return new_telegram.send_alert(match_data, tier, score, conditions)
-
-def send_system_message_new(message: str) -> bool:
-    """Simple function to send system messages using the new system"""
-    return new_telegram.send_system_message(message)
-
-def test_new_system():
-    """Test the new telegram system"""
-    
-    logger.info("🧪 TESTING NEW TELEGRAM SYSTEM...")
-    
-    # Test connection
-    if new_telegram.test_connection():
-        logger.info("✅ NEW TELEGRAM SYSTEM WORKS!")
-        return True
-    else:
-        logger.error("❌ NEW TELEGRAM SYSTEM FAILED!")
-        return False
-
     def _create_elite_corner_message(self, match_data: Dict) -> str:
         """Create dynamic message for ELITE_CORNER alerts - 100% positive rate system"""
         
@@ -728,6 +735,32 @@ def test_new_system():
         message_parts.append("⚡ DAVID vs GOLIATH = CORNER CHAOS!")
         
         return " ".join(message_parts)
+
+# Global instance
+new_telegram = NewTelegramSystem()
+
+def send_corner_alert_new(match_data: Dict, tier: str, score: float, conditions: list) -> bool:
+    """Simple function to send alerts using the new system"""
+    return new_telegram.send_alert(match_data, tier, score, conditions)
+
+def send_system_message_new(message: str) -> bool:
+    """Simple function to send system messages using the new system"""
+    return new_telegram.send_system_message(message)
+
+def test_new_system():
+    """Test the new telegram system"""
+    
+    logger.info("🧪 TESTING NEW TELEGRAM SYSTEM...")
+    
+    # Test connection
+    if new_telegram.test_connection():
+        logger.info("✅ NEW TELEGRAM SYSTEM WORKS!")
+        return True
+    else:
+        logger.error("❌ NEW TELEGRAM SYSTEM FAILED!")
+        return False
+
+
 
 if __name__ == "__main__":
     # Test when run directly

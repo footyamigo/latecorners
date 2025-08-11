@@ -428,7 +428,7 @@ class LateCornerMonitor:
             # ELITE 100% POSITIVE RATE FILTERING SYSTEM
             # Ensure momentum is calculated (in case of earlier error)
             try:
-                combined_momentum = home_ms['total'] + away_ms['total']
+            combined_momentum = home_ms['total'] + away_ms['total']
             except (NameError, KeyError):
                 # Fallback momentum calculation if home_ms/away_ms not available
                 self.logger.warning("⚠️ Using fallback momentum calculation")
@@ -623,6 +623,7 @@ class LateCornerMonitor:
                 'minute': match_stats.minute,
                 'total_corners': match_stats.total_corners,
                 'tier': triggered_tier,
+                'alert_type': triggered_tier,  # Ensure alert_type is ALWAYS set to triggered_tier
                 # Store combined probability as the alert score
                 'total_probability': float(combined_momentum),
                 'best_team': 'home' if home_ms['total'] >= away_ms['total'] else 'away',
