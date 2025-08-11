@@ -385,9 +385,14 @@ class LateCornerMonitor:
                 self.logger.error(f"❌ Momentum tracker error: {e}")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
-            # Note: Timing checks moved to psychology systems - they handle timing internally
-            # This allows psychology systems to run analysis even outside 85-89 window
-            self.logger.info(f"⏰ Match timing: {match_stats.minute}' (psychology systems will check 85-89 requirement)")
+            # 🚨 MANDATORY TIMING CHECK: Only proceed with alert analysis if in 85-89 minute window
+            if not (85 <= match_stats.minute <= 89):
+                self.logger.info(f"⏰ TIMING CHECK FAILED: Match at {match_stats.minute}' (need 85-89 minutes) - SKIPPING ALERT ANALYSIS")
+                # Update previous stats for momentum tracking on next cycle
+                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
+                return None
+            
+            self.logger.info(f"✅ TIMING CHECK PASSED: Match at {match_stats.minute}' (within 85-89 minute window)")
 
             # Check if we've already alerted on this match
             if fixture_id in self.alerted_matches:
