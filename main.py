@@ -428,14 +428,14 @@ class LateCornerMonitor:
             # ELITE 100% POSITIVE RATE FILTERING SYSTEM
             # Ensure momentum is calculated (in case of earlier error)
             try:
-            combined_momentum = home_ms['total'] + away_ms['total']
+                combined_momentum = home_ms['total'] + away_ms['total']
             except (NameError, KeyError):
                 # Fallback momentum calculation if home_ms/away_ms not available
                 self.logger.warning("⚠️ Using fallback momentum calculation")
                 momentum_scores = self.momentum_tracker.compute_scores(fixture_id)
                 home_ms = momentum_scores['home']
                 away_ms = momentum_scores['away']
-            combined_momentum = home_ms['total'] + away_ms['total']
+                combined_momentum = home_ms['total'] + away_ms['total']
             current_score = f"{match_stats.home_score}-{match_stats.away_score}"
             
             self.logger.info(f"\n🧠 PSYCHOLOGY ANALYSIS - MATCH {fixture_id}:")
