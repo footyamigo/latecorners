@@ -455,16 +455,65 @@ class LateCornerMonitor:
             # DUAL PSYCHOLOGY SYSTEMS - Elite system disabled
             self.logger.info(f"\n🧠 CHECKING DUAL PSYCHOLOGY SYSTEMS (Elite system disabled)...")
             
-            # Fetch odds data for psychology analysis
+            # Fetch odds data for psychology analysis using same approach as draw odds
             try:
+                # Try approach A first (nested format)
                 odds_data = _client._make_request(f"/odds/in-play/by-fixture/{fixture_id}")
-                fixture_data_with_odds = {
-                    'fixture_id': fixture_id,
-                    'home_team': match_stats.home_team,
-                    'away_team': match_stats.away_team,
-                    'odds': odds_data.get('data', []) if odds_data else []
-                }
-                self.logger.info(f"   📊 Fetched odds data: {len(fixture_data_with_odds['odds'])} bookmakers")
+                if odds_data and isinstance(odds_data.get('data'), list) and len(odds_data['data']) > 0:
+                    fixture_data_with_odds = {
+                        'fixture_id': fixture_id,
+                        'home_team': match_stats.home_team,
+                        'away_team': match_stats.away_team,
+                        'odds': odds_data['data']
+                    }
+                    self.logger.info(f"   📊 Fetched odds data (nested): {len(fixture_data_with_odds['odds'])} bookmakers")
+                else:
+                    # Try approach B (flat format) - same as draw odds fallback
+                    self.logger.info(f"   🔄 Trying fallback odds endpoint...")
+                    odds_data_flat = _client._make_request(f"/odds/inplay/fixtures/{fixture_id}")
+                    if odds_data_flat and isinstance(odds_data_flat.get('data'), list):
+                        # Convert flat format to nested format for psychology systems
+                        bookmaker_odds = {}
+                        for odd in odds_data_flat['data']:
+                            bookmaker_id = odd.get('bookmaker_id', 2)  # Default to bet365
+                            market_desc = odd.get('market_description', '').lower()
+                            label = odd.get('label', '')
+                            value = odd.get('value') or odd.get('odds')
+                            
+                            # Look for 1X2 markets
+                            if any(keyword in market_desc for keyword in ['1x2', 'match result', 'full time result', 'fulltime result']):
+                                if bookmaker_id not in bookmaker_odds:
+                                    bookmaker_odds[bookmaker_id] = {
+                                        'bookmaker_id': bookmaker_id,
+                                        'markets': [{
+                                            'market_id': 1,
+                                            'name': 'Full Time Result',
+                                            'selections': []
+                                        }]
+                                    }
+                                
+                                if value:
+                                    bookmaker_odds[bookmaker_id]['markets'][0]['selections'].append({
+                                        'label': label,
+                                        'odds': float(value)
+                                    })
+                        
+                        fixture_data_with_odds = {
+                            'fixture_id': fixture_id,
+                            'home_team': match_stats.home_team,
+                            'away_team': match_stats.away_team,
+                            'odds': list(bookmaker_odds.values())
+                        }
+                        self.logger.info(f"   📊 Fetched odds data (flat): {len(fixture_data_with_odds['odds'])} bookmakers")
+                    else:
+                        # No odds available
+                        fixture_data_with_odds = {
+                            'fixture_id': fixture_id,
+                            'home_team': match_stats.home_team,
+                            'away_team': match_stats.away_team,
+                            'odds': []
+                        }
+                        self.logger.info(f"   📊 No odds data available from either endpoint")
             except Exception as e:
                 self.logger.error(f"   ❌ Failed to fetch odds: {e}")
                 fixture_data_with_odds = {
