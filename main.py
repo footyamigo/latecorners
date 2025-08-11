@@ -669,8 +669,14 @@ class LateCornerMonitor:
                     f"🥊 Giant-Killing Score: {psychology_alert['giant_killing_score']:.0f} pts"
                 ]
             
-            alert_info['alert_type'] = psychology_alert['alert_type']
+            # CRITICAL: Ensure alert_type is ALWAYS set to triggered_tier (not psychology_alert which might be None/empty)
+            alert_info['alert_type'] = triggered_tier  # Use triggered_tier instead of psychology_alert['alert_type']
             alert_info['psychology_data'] = psychology_alert
+            
+            # VERIFY alert_type is correctly set
+            self.logger.info(f"🔍 ALERT_TYPE VERIFICATION:")
+            self.logger.info(f"   triggered_tier: {triggered_tier}")
+            self.logger.info(f"   alert_info['alert_type']: {alert_info['alert_type']}")
 
             # SAVE ALERT TO DATABASE FIRST
             self.logger.info(f"💾 SAVING ALERT TO DATABASE for {triggered_tier} match {fixture_id}...")
