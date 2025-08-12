@@ -253,13 +253,15 @@ class NewTelegramSystem:
         return "Check available corner markets"
     
     def _get_momentum_level(self, momentum: float) -> str:
-        """Get momentum intensity level and emojis based on value"""
-        if momentum >= 95:
-            return "Extreme attacking pressure 🔥🔥🔥"
-        elif momentum >= 85:
-            return "Explosive attacking pressure 🔥🔥"
-        else:  # 75-85
-            return "High attacking pressure 🔥"
+        """Get momentum intensity level and emojis based on optimized values"""
+        if momentum >= 180:
+            return "Corner storm explosive! 🔥🔥🔥"
+        elif momentum >= 150:
+            return "Extreme corner pressure 🔥🔥"
+        elif momentum >= 120:
+            return "High corner-creating momentum 🔥"
+        else:
+            return "Building pressure ⚡"
     
     def _create_message(self, match_data: Dict, tier: str, score: float, conditions: list, active_odds: list) -> str:
         """Create a simple, effective alert message"""
@@ -327,8 +329,8 @@ class NewTelegramSystem:
 
         # Build metrics safely (avoid f-string expressions that embed backslashes)
         metrics_lines = []
-        if tier == 'LATE_MOMENTUM' or tier == 'LATE_MOMENTUM_DRAW':
-            # Use new momentum format with dynamic levels
+        if tier in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
+            # Use momentum format for all modern alert types
             momentum_level = self._get_momentum_level(score)
             metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
             # Add betting recommendation - always recommend OVER the next corner
@@ -338,6 +340,7 @@ class NewTelegramSystem:
                 next_corner = current_corners + 1
                 metrics_lines.append(f"• Asian Corners: Over {next_corner}")
         else:
+            # Legacy format for old tiers
             metrics_lines.append(f"• Combined Probability: {score:.1f}%")
             if team_prob is not None:
                 metrics_lines.append(f"• Team Probability: {team_prob:.1f}%")
