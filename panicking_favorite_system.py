@@ -41,12 +41,12 @@ class PanickingFavoriteSystem:
         self.MASSIVE_FAVORITE_THRESHOLD = 1.25
         self.CLEAR_FAVORITE_THRESHOLD = 1.80
         
-        # Minimum stats requirements
-        self.MIN_MOMENTUM = 75  # Pressure building
-        self.MIN_CORNERS = 6    # Some corner activity established
-        self.MIN_SHOTS_TOTAL = 12  # Attacking volume
-        self.MIN_SHOTS_TARGET = 4  # Quality attempts
-        self.MIN_MINUTE = 75    # Final phase only
+        # STRICTER stats requirements - focus on corner storm potential
+        self.MIN_MOMENTUM = 120  # INCREASED: Explosive momentum only (was 75)
+        self.MIN_CORNERS = 6     # Some corner activity established
+        self.MIN_SHOTS_TOTAL = 15  # INCREASED: High attacking volume (was 12)
+        self.MIN_SHOTS_TARGET = 6   # INCREASED: Quality attempts showing desperation (was 4)
+        self.MIN_MINUTE = 75     # Final phase only
         
     def get_1x2_odds_from_fixture(self, fixture_data: Dict) -> Optional[Dict]:
         """Extract 1X2 odds from fixture data (prematch or live)"""
@@ -292,7 +292,7 @@ class PanickingFavoriteSystem:
             'shots_ok': total_shots >= self.MIN_SHOTS_TOTAL,
             'shots_target_ok': shots_on_target >= self.MIN_SHOTS_TARGET,
             'momentum_ok': favorite_momentum >= adjusted_momentum_threshold,
-            'intensity_ok': combined_momentum >= 100  # High overall intensity
+            'intensity_ok': combined_momentum >= 150  # STRICTER: Very high overall intensity (was 100)
         }
         
         # Log validation details
@@ -302,7 +302,7 @@ class PanickingFavoriteSystem:
         self.logger.info(f"      Shots: {total_shots} >= {self.MIN_SHOTS_TOTAL} = {validations['shots_ok']}")
         self.logger.info(f"      Shots on Target: {shots_on_target} >= {self.MIN_SHOTS_TARGET} = {validations['shots_target_ok']}")
         self.logger.info(f"      Favorite Momentum: {favorite_momentum:.1f} >= {adjusted_momentum_threshold:.1f} = {validations['momentum_ok']}")
-        self.logger.info(f"      Combined Intensity: {combined_momentum:.1f} >= 100 = {validations['intensity_ok']}")
+        self.logger.info(f"      Combined Intensity: {combined_momentum:.1f} >= 150 = {validations['intensity_ok']}")
         
         # All criteria must pass
         return all(validations.values())

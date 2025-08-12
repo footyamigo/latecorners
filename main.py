@@ -360,12 +360,14 @@ class LateCornerMonitor:
                         'shots_on_target': current_stats['shots_on_target'].get('home', 0),
                         'shots_off_target': current_stats['shots_off_target'].get('home', 0),
                         'dangerous_attacks': current_stats['dangerous_attacks'].get('home', 0),
+                        'attacks': current_stats['attacks'].get('home', 0),
                         'possession': current_stats['possession'].get('home', 0),
                     },
                     away={
                         'shots_on_target': current_stats['shots_on_target'].get('away', 0),
                         'shots_off_target': current_stats['shots_off_target'].get('away', 0),
                         'dangerous_attacks': current_stats['dangerous_attacks'].get('away', 0),
+                        'attacks': current_stats['attacks'].get('away', 0),
                         'possession': current_stats['possession'].get('away', 0),
                     },
                 )

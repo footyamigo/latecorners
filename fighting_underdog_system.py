@@ -41,11 +41,11 @@ class FightingUnderdogSystem:
         self.HEAVY_UNDERDOG_THRESHOLD = 4.00      # 4.00+ odds = heavy underdog
         self.MODERATE_UNDERDOG_THRESHOLD = 2.50   # 2.50+ odds = moderate underdog
         
-        # Minimum stats requirements
-        self.MIN_MOMENTUM = 60   # Lower than favorites - underdogs fight with heart
+        # STRICTER stats requirements - focus on true underdog explosions
+        self.MIN_MOMENTUM = 100  # INCREASED: True fighting spirit momentum (was 60)
         self.MIN_CORNERS = 5     # Lower requirement - chaos creates corners
-        self.MIN_SHOTS_TOTAL = 10  # Lower volume but high desperation
-        self.MIN_SHOTS_TARGET = 3   # Quality attempts showing they mean business
+        self.MIN_SHOTS_TOTAL = 13  # INCREASED: High desperation volume (was 10)
+        self.MIN_SHOTS_TARGET = 5   # INCREASED: Quality attempts showing real threat (was 3)
         self.MIN_MINUTE = 70     # Earlier than favorites - desperation builds sooner
         
     def get_1x2_odds_from_fixture(self, fixture_data: Dict) -> Optional[Dict]:
@@ -309,7 +309,7 @@ class FightingUnderdogSystem:
             'shots_ok': total_shots >= self.MIN_SHOTS_TOTAL,
             'shots_target_ok': shots_on_target >= self.MIN_SHOTS_TARGET,
             'momentum_ok': underdog_momentum >= adjusted_momentum_threshold,
-            'intensity_ok': combined_momentum >= 80  # Lower than favorites - underdogs create chaos
+            'intensity_ok': combined_momentum >= 120  # STRICTER: High intensity required (was 80)
         }
         
         # Log validation details
@@ -319,7 +319,7 @@ class FightingUnderdogSystem:
         self.logger.info(f"      Shots: {total_shots} >= {self.MIN_SHOTS_TOTAL} = {validations['shots_ok']}")
         self.logger.info(f"      Shots on Target: {shots_on_target} >= {self.MIN_SHOTS_TARGET} = {validations['shots_target_ok']}")
         self.logger.info(f"      Underdog Momentum: {underdog_momentum:.1f} >= {adjusted_momentum_threshold:.1f} = {validations['momentum_ok']}")
-        self.logger.info(f"      Combined Intensity: {combined_momentum:.1f} >= 80 = {validations['intensity_ok']}")
+        self.logger.info(f"      Combined Intensity: {combined_momentum:.1f} >= 120 = {validations['intensity_ok']}")
         
         # All criteria must pass
         return all(validations.values())
