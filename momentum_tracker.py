@@ -186,4 +186,136 @@ class MomentumTracker:
             'home': self._compute_team(home_q),
             'away': self._compute_team(away_q),
         }
+    
+    def compute_scores_fh(self, fixture_id: int) -> Dict[str, Dict[str, int]]:
+        """Compute 10-minute momentum scores for first-half analysis (20-30min window)"""
+        home_q, away_q = self._get_fixture_deques(fixture_id)
+        return {
+            'home': self._compute_team_window(home_q, 10),
+            'away': self._compute_team_window(away_q, 10),
+        }
+    
+    def _compute_team_window(self, queue: Deque[TeamSnapshot], window_minutes: int) -> Dict[str, int]:
+        """Compute team momentum for custom window size"""
+        if not queue:
+            return {
+                'total': 0,
+                'on_target_points': 0,
+                'off_target_points': 0,
+                'dangerous_points': 0,
+                'attack_points': 0,
+                'possession_points': 0,
+                'window_covered': 0,
+            }
+
+        # Filter queue for custom window
+        if len(queue) == 0:
+            return self._get_empty_scores()
+            
+        last_minute = queue[-1].minute
+        cutoff = max(0, last_minute - window_minutes)
+        
+        # Create filtered queue for window
+        windowed_queue = deque()
+        for snapshot in queue:
+            if snapshot.minute >= cutoff:
+                windowed_queue.append(snapshot)
+        
+        if len(windowed_queue) < 2:
+            # Not enough data for window analysis
+            return self._get_empty_scores()
+            
+        # Use same computation logic as _compute_team but with windowed queue
+        first = windowed_queue[0]
+        last = windowed_queue[-1]
+        window_covered = last.minute - first.minute
+
+        # Time-decayed diffs of cumulative stats across window
+        weights = {0: 4, 1: 3, 2: 2, 3: 1}
+
+        def diff(a: int, b: int) -> int:
+            return max(0, a - b)
+
+        sot = diff(last.shots_on_target, first.shots_on_target)
+        soff = diff(last.shots_off_target, first.shots_off_target)
+        dang = diff(last.dangerous_attacks, first.dangerous_attacks)
+        attacks = diff(last.attacks, first.attacks)
+
+        # Apply time weighting if enough snapshots
+        if len(windowed_queue) >= 2:
+            by_minute = {s.minute: s for s in windowed_queue}
+            recent_sot = recent_soff = recent_dang = recent_attacks = 0
+            
+            # Weight recent 4 minutes more heavily
+            for i in range(4):
+                m = last.minute - i
+                prev = by_minute.get(m - 1)
+                cur = by_minute.get(m)
+                if prev and cur:
+                    w = weights.get(i, 1)
+                    recent_sot += w * diff(cur.shots_on_target, prev.shots_on_target)
+                    recent_soff += w * diff(cur.shots_off_target, prev.shots_off_target)
+                    recent_dang += w * diff(cur.dangerous_attacks, prev.dangerous_attacks)
+                    recent_attacks += w * diff(cur.attacks, prev.attacks)
+            
+            # Calculate older portions
+            unweighted_recent_sot = unweighted_recent_soff = unweighted_recent_dang = unweighted_recent_attacks = 0
+            for i in range(4):
+                m = last.minute - i
+                prev = by_minute.get(m - 1)
+                cur = by_minute.get(m)
+                if prev and cur:
+                    unweighted_recent_sot += diff(cur.shots_on_target, prev.shots_on_target)
+                    unweighted_recent_soff += diff(cur.shots_off_target, prev.shots_off_target)
+                    unweighted_recent_dang += diff(cur.dangerous_attacks, prev.dangerous_attacks)
+                    unweighted_recent_attacks += diff(cur.attacks, prev.attacks)
+
+            older_sot = max(0, sot - unweighted_recent_sot)
+            older_soff = max(0, soff - unweighted_recent_soff)
+            older_dang = max(0, dang - unweighted_recent_dang)
+            older_attacks = max(0, attacks - unweighted_recent_attacks)
+
+            # Recompose with weighting
+            sot = recent_sot + older_sot
+            soff = recent_soff + older_soff
+            dang = recent_dang + older_dang
+            attacks = recent_attacks + older_attacks
+
+        # Average possession across window
+        if len(windowed_queue) == 1:
+            avg_pos = last.possession
+        else:
+            avg_pos = sum(s.possession for s in windowed_queue) // len(windowed_queue)
+
+        # Calculate points using same formula
+        on_target_points = 10 * sot
+        off_target_points = 4 * soff
+        dangerous_points = 12 * dang
+        attack_points = 4 * attacks
+        excess_pos = max(0, avg_pos - 45)
+        possession_points = (excess_pos // 10)
+
+        total = on_target_points + off_target_points + dangerous_points + attack_points + possession_points
+
+        return {
+            'total': total,
+            'on_target_points': on_target_points,
+            'off_target_points': off_target_points,
+            'dangerous_points': dangerous_points,
+            'attack_points': attack_points,
+            'possession_points': possession_points,
+            'window_covered': window_covered,
+        }
+    
+    def _get_empty_scores(self) -> Dict[str, int]:
+        """Return empty score dictionary"""
+        return {
+            'total': 0,
+            'on_target_points': 0,
+            'off_target_points': 0,
+            'dangerous_points': 0,
+            'attack_points': 0,
+            'possession_points': 0,
+            'window_covered': 0,
+        }
 

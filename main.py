@@ -25,6 +25,7 @@ from startup_flag import is_first_startup, mark_startup
 from momentum_tracker import MomentumTracker
 from panicking_favorite_system import PanickingFavoriteSystem
 from fighting_underdog_system import FightingUnderdogSystem
+from enhanced_first_half_system import EnhancedFirstHalfSystem
 
 class LateCornerMonitor:
     """Monitor live matches for late corner betting opportunities using shared dashboard data"""
@@ -48,6 +49,7 @@ class LateCornerMonitor:
         # Psychology-driven corner systems
         self.panicking_favorite_system = PanickingFavoriteSystem()
         self.fighting_underdog_system = FightingUnderdogSystem()
+        self.first_half_system = EnhancedFirstHalfSystem()
         
         self.logger = self._setup_logging()
         
@@ -387,6 +389,7 @@ class LateCornerMonitor:
                 self.logger.error(f"❌ Momentum tracker error: {e}")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
+
             # 🚨 MANDATORY TIMING CHECK: Only proceed with alert analysis if in 85-89 minute window
             if not (85 <= match_stats.minute <= 89):
                 self.logger.info(f"⏰ TIMING CHECK FAILED: Match at {match_stats.minute}' (need 85-89 minutes) - SKIPPING ALERT ANALYSIS")
@@ -529,6 +532,55 @@ class LateCornerMonitor:
                     'away_team': match_stats.away_team,
                     'odds': []
                 }
+            
+            # 🕐 ENHANCED FIRST HALF ANALYSIS: Check for 30-35 minute psychology (all 4 types)
+            if 30 <= match_stats.minute <= 35:
+                self.logger.info(f"🕐 ENHANCED FH WINDOW: Analyzing {match_stats.minute}min psychology...")
+                
+                try:
+                    # Get 10-minute momentum for first-half analysis (20-30min window)
+                    momentum_scores_fh = self.momentum_tracker.compute_scores_fh(fixture_id)
+                    home_ms_fh = momentum_scores_fh['home'] 
+                    away_ms_fh = momentum_scores_fh['away']
+                    
+                    # Build momentum data for enhanced first-half system
+                    fh_momentum_data = {
+                        'home_momentum_fh': home_ms_fh['total'],
+                        'away_momentum_fh': away_ms_fh['total'],
+                    }
+                    
+                    # Evaluate enhanced first-half psychology (all 4 types) - REQUIRES Asian odds
+                    fh_alert = self.first_half_system.evaluate_first_half_alert(
+                        fixture_data=fixture_data_with_odds,  # Pass actual fixture data with odds
+                        match_data={
+                            'minute': match_stats.minute,
+                            'home_score': match_stats.home_score,
+                            'away_score': match_stats.away_score,
+                            'total_corners': match_stats.total_corners,
+                            'shots_on_target': current_stats['shots_on_target'],
+                            'shots_off_target': current_stats['shots_off_target']
+                        },
+                        momentum_data=fh_momentum_data
+                    )
+                    
+                    if fh_alert:
+                        self.logger.info(f"🚨 ENHANCED FIRST HALF ALERT TRIGGERED!")
+                        self.logger.info(f"   Type: {fh_alert['psychology_type']}")
+                        self.logger.info(f"   Target team: {fh_alert['target_team']}")
+                        self.logger.info(f"   Pressure: {fh_alert['pressure_level']}")
+                        self.logger.info(f"   Reasoning: {fh_alert['reasoning']}")
+                        self.logger.info(f"   Predicted FH corners: {fh_alert['predicted_fh_corners']:.1f}")
+                        self.logger.info(f"   Available odds: {len(fh_alert['available_asian_odds'])} lines")
+                        
+                        # TODO: Send enhanced first-half telegram alert
+                        # TODO: Save first-half alert to database
+                        
+                        self.logger.info("📱 Enhanced first-half system (4 psychology types) ready!")
+                    else:
+                        self.logger.info("😌 No first-half psychology detected (strict standards + Asian odds required)")
+                        
+                except Exception as e:
+                    self.logger.error(f"❌ Enhanced first-half analysis error: {e}")
             
             triggered_tier = None
             alert_source = None
