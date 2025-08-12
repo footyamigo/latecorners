@@ -645,9 +645,35 @@ class LateCornerMonitor:
                             import traceback
                             self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
                         
-                        # TODO: Send enhanced first-half telegram alert
+                        # 📱 SEND ENHANCED FIRST-HALF TELEGRAM ALERT
+                        self.logger.info(f"📱 SENDING FIRST-HALF TELEGRAM ALERT for {fh_alert['psychology_type']} match {fixture_id}...")
                         
-                        self.logger.info("📱 Enhanced first-half system (4 psychology types) ready!")
+                        try:
+                            fh_telegram_success = send_corner_alert_new(
+                                match_data=fh_alert_info,
+                                tier=fh_alert['psychology_type'],
+                                score=fh_alert['psychology_score'],
+                                conditions=fh_conditions
+                            )
+                            
+                            if fh_telegram_success:
+                                self.alerted_matches.add(fixture_id)
+                                self.logger.info(f"🎉 FIRST-HALF TELEGRAM ALERT SENT SUCCESSFULLY")
+                                self.logger.info(f"   ✅ Match added to alerted list (prevents late-game duplicate)")
+                                
+                                # Update previous stats for successful alert
+                                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
+                                return fh_alert_info  # Return alert data to skip late-game analysis
+                            else:
+                                self.logger.error(f"❌ FIRST-HALF TELEGRAM ALERT FAILED")
+                                self.logger.error(f"   ❌ Check Telegram configuration and network")
+                                self.logger.error(f"   ❌ Alert will be retried next cycle")
+                        except Exception as e:
+                            self.logger.error(f"❌ FIRST-HALF TELEGRAM SEND ERROR: {e}")
+                            import traceback
+                            self.logger.error(traceback.format_exc())
+                        
+                        self.logger.info("📱 Enhanced first-half system (4 psychology types) complete!")
                     else:
                         self.logger.info("😌 No first-half psychology detected (strict standards + Asian odds required)")
                         
