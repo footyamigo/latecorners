@@ -515,7 +515,7 @@ class LateCornerMonitor:
                                 'odds': odds_data['data']
                             }
                             self.logger.info(f"   📊 Fetched FH odds data (nested): {len(fixture_data_with_odds['odds'])} bookmakers")
-            else:
+                        else:
                             # Try approach B (flat format)
                             odds_data_flat = _client._make_request(f"/odds/inplay/fixtures/{fixture_id}")
                             if odds_data_flat and isinstance(odds_data_flat.get('data'), list):
@@ -718,7 +718,7 @@ class LateCornerMonitor:
                 return None
 
             # Get corner odds first - no point calculating if we can't bet
-                        corner_odds = await self._get_corner_odds(fixture_id)
+            corner_odds = await self._get_corner_odds(fixture_id)
             if not corner_odds:
                 self.logger.warning(f"🚫 Match {fixture_id} - No corner odds available")
                 # Update previous stats for momentum tracking on next cycle
@@ -743,7 +743,7 @@ class LateCornerMonitor:
             if previous_stats and isinstance(previous_stats, dict) and 'minute' in previous_stats:
                 raw_minutes_passed = max(0, match_stats.minute - int(previous_stats.get('minute', match_stats.minute)))
                 minutes_passed = min(5, max(1, raw_minutes_passed))
-                        else:
+            else:
                 minutes_passed = 5
 
             # ELITE 100% POSITIVE RATE FILTERING SYSTEM
@@ -788,7 +788,7 @@ class LateCornerMonitor:
                         'odds': odds_data['data']
                     }
                     self.logger.info(f"   📊 Fetched odds data (nested): {len(fixture_data_with_odds['odds'])} bookmakers")
-                    else:
+                else:
                     # Try approach B (flat format) - same as draw odds fallback
                     self.logger.info(f"   🔄 Trying fallback odds endpoint...")
                     odds_data_flat = _client._make_request(f"/odds/inplay/fixtures/{fixture_id}")
@@ -826,7 +826,7 @@ class LateCornerMonitor:
                             'odds': list(bookmaker_odds.values())
                         }
                         self.logger.info(f"   📊 Fetched odds data (flat): {len(fixture_data_with_odds['odds'])} bookmakers")
-                else:
+                    else:
                         # No odds available
                         fixture_data_with_odds = {
                             'fixture_id': fixture_id,
