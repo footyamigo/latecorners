@@ -389,10 +389,226 @@ class LateCornerMonitor:
                 self.logger.error(f"❌ Momentum tracker error: {e}")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
+            # 🕐 ENHANCED FIRST HALF ANALYSIS: Check for 30-35 minute psychology (all 4 types)
+            if 30 <= match_stats.minute <= 35:
+                self.logger.info(f"🕐 ENHANCED FH WINDOW: Analyzing {match_stats.minute}min psychology...")
+                
+                try:
+                    # Get 10-minute momentum for first-half analysis (20-30min window)
+                    momentum_scores_fh = self.momentum_tracker.compute_scores_fh(fixture_id)
+                    home_ms_fh = momentum_scores_fh['home'] 
+                    away_ms_fh = momentum_scores_fh['away']
+                    
+                    # Build momentum data for enhanced first-half system
+                    fh_momentum_data = {
+                        'home_momentum_fh': home_ms_fh['total'],
+                        'away_momentum_fh': away_ms_fh['total'],
+                    }
+                    
+                    # Get odds for first-half analysis
+                    try:
+                        from sportmonks_client import SportmonksClient
+                        _client = SportmonksClient()
+                        
+                        # Try approach A first (nested format)
+                        odds_data = _client._make_request(f"/odds/in-play/by-fixture/{fixture_id}")
+                        if odds_data and isinstance(odds_data.get('data'), list) and len(odds_data['data']) > 0:
+                            fixture_data_with_odds = {
+                                'fixture_id': fixture_id,
+                                'home_team': match_stats.home_team,
+                                'away_team': match_stats.away_team,
+                                'odds': odds_data['data']
+                            }
+                            self.logger.info(f"   📊 Fetched FH odds data (nested): {len(fixture_data_with_odds['odds'])} bookmakers")
+                        else:
+                            # Try approach B (flat format)
+                            odds_data_flat = _client._make_request(f"/odds/inplay/fixtures/{fixture_id}")
+                            if odds_data_flat and isinstance(odds_data_flat.get('data'), list):
+                                # Convert flat format to nested format
+                                bookmaker_odds = {}
+                                for odd in odds_data_flat['data']:
+                                    bookmaker_id = odd.get('bookmaker_id', 2)
+                                    market_desc = odd.get('market_description', '').lower()
+                                    label = odd.get('label', '')
+                                    value = odd.get('value') or odd.get('odds')
+                                    
+                                    # Look for 1X2 markets for psychology analysis
+                                    if any(keyword in market_desc for keyword in ['1x2', 'match result', 'full time result', 'fulltime result']):
+                                        if bookmaker_id not in bookmaker_odds:
+                                            bookmaker_odds[bookmaker_id] = {
+                                                'bookmaker_id': bookmaker_id,
+                                                'markets': [{
+                                                    'market_id': 1,
+                                                    'name': 'Full Time Result',
+                                                    'selections': []
+                                                }]
+                                            }
+                                        
+                                        if value:
+                                            bookmaker_odds[bookmaker_id]['markets'][0]['selections'].append({
+                                                'label': label,
+                                                'odds': float(value)
+                                            })
+                                
+                                fixture_data_with_odds = {
+                                    'fixture_id': fixture_id,
+                                    'home_team': match_stats.home_team,
+                                    'away_team': match_stats.away_team,
+                                    'odds': list(bookmaker_odds.values())
+                                }
+                                self.logger.info(f"   📊 Fetched FH odds data (flat): {len(fixture_data_with_odds['odds'])} bookmakers")
+                            else:
+                                # No odds available for FH analysis
+                                fixture_data_with_odds = {
+                                    'fixture_id': fixture_id,
+                                    'home_team': match_stats.home_team,
+                                    'away_team': match_stats.away_team,
+                                    'odds': []
+                                }
+                                self.logger.info(f"   📊 No FH odds data available from either endpoint")
+                    except Exception as e:
+                        self.logger.error(f"   ❌ Failed to fetch FH odds: {e}")
+                        fixture_data_with_odds = {
+                            'fixture_id': fixture_id,
+                            'home_team': match_stats.home_team,
+                            'away_team': match_stats.away_team,
+                            'odds': []
+                        }
+                    
+                    # Evaluate enhanced first-half psychology (all 4 types) - REQUIRES Asian odds
+                    fh_alert = self.first_half_system.evaluate_first_half_alert(
+                        fixture_data=fixture_data_with_odds,  # Pass actual fixture data with odds
+                        match_data={
+                            'minute': match_stats.minute,
+                            'home_score': match_stats.home_score,
+                            'away_score': match_stats.away_score,
+                            'total_corners': match_stats.total_corners,
+                            'shots_on_target': current_stats['shots_on_target'],
+                            'shots_off_target': current_stats['shots_off_target']
+                        },
+                        momentum_data=fh_momentum_data
+                    )
+                    
+                    if fh_alert:
+                        self.logger.info(f"🚨 ENHANCED FIRST HALF ALERT TRIGGERED!")
+                        self.logger.info(f"   Type: {fh_alert['psychology_type']}")
+                        self.logger.info(f"   Target team: {fh_alert['target_team']}")
+                        self.logger.info(f"   Pressure: {fh_alert['pressure_level']}")
+                        self.logger.info(f"   Reasoning: {fh_alert['reasoning']}")
+                        self.logger.info(f"   Predicted FH corners: {fh_alert['predicted_fh_corners']:.1f}")
+                        self.logger.info(f"   Available odds: {len(fh_alert['available_asian_odds'])} lines")
+                        
+                        # 💾 SAVE FIRST-HALF ALERT TO DATABASE
+                        self.logger.info(f"💾 SAVING FIRST-HALF ALERT TO DATABASE for {fh_alert['psychology_type']} match {fixture_id}...")
+                        
+                        try:
+                            # Build alert data for database (similar format to late-game)
+                            fh_alert_info = {
+                                'fixture_id': fixture_id,
+                                'home_team': match_stats.home_team,
+                                'away_team': match_stats.away_team,
+                                'minute': match_stats.minute,
+                                'home_score': match_stats.home_score,
+                                'away_score': match_stats.away_score,
+                                'total_corners': match_stats.total_corners,
+                                'alert_type': fh_alert['psychology_type'],
+                                'total_probability': fh_alert['psychology_score'],
+                                'has_live_asian_corners': True,  # Already validated
+                                'active_odds': [f"{odd['selection']}: {odd['odds']:.2f}" for odd in fh_alert['available_asian_odds'][:5]]
+                            }
+                            
+                            # Build momentum indicators for first-half
+                            fh_momentum_indicators = {
+                                'combined_momentum_fh': home_ms_fh['total'] + away_ms_fh['total'],
+                                'home_momentum_fh': home_ms_fh['total'],
+                                'away_momentum_fh': away_ms_fh['total'],
+                                'psychology_score': fh_alert['psychology_score'],
+                                'target_team': fh_alert['target_team'],
+                                'pressure_level': fh_alert['pressure_level'],
+                                'predicted_fh_corners': fh_alert['predicted_fh_corners'],
+                                'confidence_level': fh_alert['confidence_level']
+                            }
+                            
+                            # Add odds data if available
+                            if fh_alert.get('home_odds') and fh_alert.get('away_odds'):
+                                fh_momentum_indicators.update({
+                                    'home_odds': fh_alert['home_odds'],
+                                    'away_odds': fh_alert['away_odds']
+                                })
+                            
+                            # Build conditions for first-half
+                            fh_conditions = [
+                                f"Psychology: {fh_alert['psychology_type']}",
+                                f"Target: {fh_alert['target_team']}",
+                                f"Pressure: {fh_alert['pressure_level']}",
+                                f"FH Momentum: {home_ms_fh['total'] + away_ms_fh['total']:.1f}",
+                                f"Predicted corners: {fh_alert['predicted_fh_corners']:.1f}",
+                                f"Asian odds available: {len(fh_alert['available_asian_odds'])} lines"
+                            ]
+                            
+                            fh_track_success = track_elite_alert(
+                                match_data=fh_alert_info,
+                                tier=fh_alert['psychology_type'],
+                                score=fh_alert['psychology_score'],
+                                conditions=fh_conditions,
+                                momentum_indicators=fh_momentum_indicators,
+                                detected_patterns=[]
+                            )
+                            
+                            if fh_track_success:
+                                self.logger.info(f"✅ FIRST-HALF ALERT SAVED TO DATABASE")
+                                self.logger.info("   First-half system metrics saved:")
+                                self.logger.info(f"   • Psychology Score: {fh_alert['psychology_score']:.1f} pts")
+                                self.logger.info(f"   • Combined FH Momentum: {home_ms_fh['total'] + away_ms_fh['total']:.1f} pts")
+                                self.logger.info(f"   • Home FH Momentum: {home_ms_fh['total']:.1f} pts")
+                                self.logger.info(f"   • Away FH Momentum: {away_ms_fh['total']:.1f} pts")
+                                self.logger.info(f"   • Predicted FH Corners: {fh_alert['predicted_fh_corners']:.1f}")
+                                self.logger.info(f"   • Psychology Type: {fh_alert['psychology_type']}")
+                            else:
+                                self.logger.error(f"❌ FIRST-HALF DATABASE SAVE FAILED: Alert not saved to database")
+                        except Exception as e:
+                            self.logger.error(f"❌ FIRST-HALF DATABASE SAVE ERROR: {e}")
+                            import traceback
+                            self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                        
+                        # 📱 SEND ENHANCED FIRST-HALF TELEGRAM ALERT
+                        self.logger.info(f"📱 SENDING FIRST-HALF TELEGRAM ALERT for {fh_alert['psychology_type']} match {fixture_id}...")
+                        
+                        try:
+                            fh_telegram_success = send_corner_alert_new(
+                                match_data=fh_alert_info,
+                                tier=fh_alert['psychology_type'],
+                                score=fh_alert['psychology_score'],
+                                conditions=fh_conditions
+                            )
+                            
+                            if fh_telegram_success:
+                                self.alerted_matches.add(fixture_id)
+                                self.logger.info(f"🎉 FIRST-HALF TELEGRAM ALERT SENT SUCCESSFULLY")
+                                self.logger.info(f"   ✅ Match added to alerted list (prevents late-game duplicate)")
+                                
+                                # Update previous stats for successful alert
+                                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
+                                return fh_alert_info  # Return alert data to skip late-game analysis
+                            else:
+                                self.logger.error(f"❌ FIRST-HALF TELEGRAM ALERT FAILED")
+                                self.logger.error(f"   ❌ Check Telegram configuration and network")
+                                self.logger.error(f"   ❌ Alert will be retried next cycle")
+                        except Exception as e:
+                            self.logger.error(f"❌ FIRST-HALF TELEGRAM SEND ERROR: {e}")
+                            import traceback
+                            self.logger.error(traceback.format_exc())
+                        
+                        self.logger.info("📱 Enhanced first-half system (4 psychology types) complete!")
+                    else:
+                        self.logger.info("😌 No first-half psychology detected (strict standards + Asian odds required)")
+                        
+                except Exception as e:
+                    self.logger.error(f"❌ Enhanced first-half analysis error: {e}")
 
-            # 🚨 MANDATORY TIMING CHECK: Only proceed with alert analysis if in 85-89 minute window
+            # 🚨 MANDATORY TIMING CHECK: Only proceed with LATE-GAME alert analysis if in 85-89 minute window
             if not (85 <= match_stats.minute <= 89):
-                self.logger.info(f"⏰ TIMING CHECK FAILED: Match at {match_stats.minute}' (need 85-89 minutes) - SKIPPING ALERT ANALYSIS")
+                self.logger.info(f"⏰ LATE-GAME TIMING CHECK FAILED: Match at {match_stats.minute}' (need 85-89 minutes) - SKIPPING LATE-GAME ALERT ANALYSIS")
                 # Update previous stats for momentum tracking on next cycle
                 self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
@@ -532,153 +748,6 @@ class LateCornerMonitor:
                     'away_team': match_stats.away_team,
                     'odds': []
                 }
-            
-            # 🕐 ENHANCED FIRST HALF ANALYSIS: Check for 30-35 minute psychology (all 4 types)
-            if 30 <= match_stats.minute <= 35:
-                self.logger.info(f"🕐 ENHANCED FH WINDOW: Analyzing {match_stats.minute}min psychology...")
-                
-                try:
-                    # Get 10-minute momentum for first-half analysis (20-30min window)
-                    momentum_scores_fh = self.momentum_tracker.compute_scores_fh(fixture_id)
-                    home_ms_fh = momentum_scores_fh['home'] 
-                    away_ms_fh = momentum_scores_fh['away']
-                    
-                    # Build momentum data for enhanced first-half system
-                    fh_momentum_data = {
-                        'home_momentum_fh': home_ms_fh['total'],
-                        'away_momentum_fh': away_ms_fh['total'],
-                    }
-                    
-                    # Evaluate enhanced first-half psychology (all 4 types) - REQUIRES Asian odds
-                    fh_alert = self.first_half_system.evaluate_first_half_alert(
-                        fixture_data=fixture_data_with_odds,  # Pass actual fixture data with odds
-                        match_data={
-                            'minute': match_stats.minute,
-                            'home_score': match_stats.home_score,
-                            'away_score': match_stats.away_score,
-                            'total_corners': match_stats.total_corners,
-                            'shots_on_target': current_stats['shots_on_target'],
-                            'shots_off_target': current_stats['shots_off_target']
-                        },
-                        momentum_data=fh_momentum_data
-                    )
-                    
-                    if fh_alert:
-                        self.logger.info(f"🚨 ENHANCED FIRST HALF ALERT TRIGGERED!")
-                        self.logger.info(f"   Type: {fh_alert['psychology_type']}")
-                        self.logger.info(f"   Target team: {fh_alert['target_team']}")
-                        self.logger.info(f"   Pressure: {fh_alert['pressure_level']}")
-                        self.logger.info(f"   Reasoning: {fh_alert['reasoning']}")
-                        self.logger.info(f"   Predicted FH corners: {fh_alert['predicted_fh_corners']:.1f}")
-                        self.logger.info(f"   Available odds: {len(fh_alert['available_asian_odds'])} lines")
-                        
-                        # 💾 SAVE FIRST-HALF ALERT TO DATABASE
-                        self.logger.info(f"💾 SAVING FIRST-HALF ALERT TO DATABASE for {fh_alert['psychology_type']} match {fixture_id}...")
-                        
-                        try:
-                            # Build alert data for database (similar format to late-game)
-                            fh_alert_info = {
-                                'fixture_id': fixture_id,
-                                'home_team': match_stats.home_team,
-                                'away_team': match_stats.away_team,
-                                'minute': match_stats.minute,
-                                'home_score': match_stats.home_score,
-                                'away_score': match_stats.away_score,
-                                'total_corners': match_stats.total_corners,
-                                'alert_type': fh_alert['psychology_type'],
-                                'total_probability': fh_alert['psychology_score'],
-                                'has_live_asian_corners': True,  # Already validated
-                                'active_odds': [f"{odd['selection']}: {odd['odds']:.2f}" for odd in fh_alert['available_asian_odds'][:5]]
-                            }
-                            
-                            # Build momentum indicators for first-half
-                            fh_momentum_indicators = {
-                                'combined_momentum_fh': home_ms_fh['total'] + away_ms_fh['total'],
-                                'home_momentum_fh': home_ms_fh['total'],
-                                'away_momentum_fh': away_ms_fh['total'],
-                                'psychology_score': fh_alert['psychology_score'],
-                                'target_team': fh_alert['target_team'],
-                                'pressure_level': fh_alert['pressure_level'],
-                                'predicted_fh_corners': fh_alert['predicted_fh_corners'],
-                                'confidence_level': fh_alert['confidence_level']
-                            }
-                            
-                            # Add odds data if available
-                            if fh_alert.get('home_odds') and fh_alert.get('away_odds'):
-                                fh_momentum_indicators.update({
-                                    'home_odds': fh_alert['home_odds'],
-                                    'away_odds': fh_alert['away_odds']
-                                })
-                            
-                            # Build conditions for first-half
-                            fh_conditions = [
-                                f"Psychology: {fh_alert['psychology_type']}",
-                                f"Target: {fh_alert['target_team']}",
-                                f"Pressure: {fh_alert['pressure_level']}",
-                                f"FH Momentum: {home_ms_fh['total'] + away_ms_fh['total']:.1f}",
-                                f"Predicted corners: {fh_alert['predicted_fh_corners']:.1f}",
-                                f"Asian odds available: {len(fh_alert['available_asian_odds'])} lines"
-                            ]
-                            
-                            fh_track_success = track_elite_alert(
-                                match_data=fh_alert_info,
-                                tier=fh_alert['psychology_type'],
-                                score=fh_alert['psychology_score'],
-                                conditions=fh_conditions,
-                                momentum_indicators=fh_momentum_indicators,
-                                detected_patterns=[]
-                            )
-                            
-                            if fh_track_success:
-                                self.logger.info(f"✅ FIRST-HALF ALERT SAVED TO DATABASE")
-                                self.logger.info("   First-half system metrics saved:")
-                                self.logger.info(f"   • Psychology Score: {fh_alert['psychology_score']:.1f} pts")
-                                self.logger.info(f"   • Combined FH Momentum: {home_ms_fh['total'] + away_ms_fh['total']:.1f} pts")
-                                self.logger.info(f"   • Home FH Momentum: {home_ms_fh['total']:.1f} pts")
-                                self.logger.info(f"   • Away FH Momentum: {away_ms_fh['total']:.1f} pts")
-                                self.logger.info(f"   • Predicted FH Corners: {fh_alert['predicted_fh_corners']:.1f}")
-                                self.logger.info(f"   • Psychology Type: {fh_alert['psychology_type']}")
-                            else:
-                                self.logger.error(f"❌ FIRST-HALF DATABASE SAVE FAILED: Alert not saved to database")
-                        except Exception as e:
-                            self.logger.error(f"❌ FIRST-HALF DATABASE SAVE ERROR: {e}")
-                            import traceback
-                            self.logger.error(f"❌ Traceback: {traceback.format_exc()}")
-                        
-                        # 📱 SEND ENHANCED FIRST-HALF TELEGRAM ALERT
-                        self.logger.info(f"📱 SENDING FIRST-HALF TELEGRAM ALERT for {fh_alert['psychology_type']} match {fixture_id}...")
-                        
-                        try:
-                            fh_telegram_success = send_corner_alert_new(
-                                match_data=fh_alert_info,
-                                tier=fh_alert['psychology_type'],
-                                score=fh_alert['psychology_score'],
-                                conditions=fh_conditions
-                            )
-                            
-                            if fh_telegram_success:
-                                self.alerted_matches.add(fixture_id)
-                                self.logger.info(f"🎉 FIRST-HALF TELEGRAM ALERT SENT SUCCESSFULLY")
-                                self.logger.info(f"   ✅ Match added to alerted list (prevents late-game duplicate)")
-                                
-                                # Update previous stats for successful alert
-                                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
-                                return fh_alert_info  # Return alert data to skip late-game analysis
-                            else:
-                                self.logger.error(f"❌ FIRST-HALF TELEGRAM ALERT FAILED")
-                                self.logger.error(f"   ❌ Check Telegram configuration and network")
-                                self.logger.error(f"   ❌ Alert will be retried next cycle")
-                        except Exception as e:
-                            self.logger.error(f"❌ FIRST-HALF TELEGRAM SEND ERROR: {e}")
-                            import traceback
-                            self.logger.error(traceback.format_exc())
-                        
-                        self.logger.info("📱 Enhanced first-half system (4 psychology types) complete!")
-                    else:
-                        self.logger.info("😌 No first-half psychology detected (strict standards + Asian odds required)")
-                        
-                except Exception as e:
-                    self.logger.error(f"❌ Enhanced first-half analysis error: {e}")
             
             triggered_tier = None
             alert_source = None
