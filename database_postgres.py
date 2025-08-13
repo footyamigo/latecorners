@@ -97,6 +97,9 @@ class PostgreSQLDatabase:
     
     def _run_migrations(self, cursor):
         """Run database migrations for schema updates"""
+        
+        # All migrations moved below
+        
         # Migration: Add high_priority_count column if it doesn't exist
         try:
             cursor.execute("""

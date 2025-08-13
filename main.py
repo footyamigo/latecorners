@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Dict, Set, Optional
 import sys
 import os
+import json
 
 # Ensure DATABASE_URL is set for production deployment
 if 'DATABASE_URL' not in os.environ:
@@ -21,7 +22,9 @@ from new_telegram_system import send_corner_alert_new, send_system_message_new
 from alert_tracker_new import track_elite_alert
 from result_checker import check_pending_results
 from startup_flag import is_first_startup, mark_startup
-# ReliableCornerSystem removed in favor of Late Momentum alerts
+# Corner prediction systems
+from first_half_system import FirstHalfCornerSystem
+from reliable_corner_system import ReliableCornerSystem
 from momentum_tracker import MomentumTracker
 from panicking_favorite_system import PanickingFavoriteSystem
 from fighting_underdog_system import FightingUnderdogSystem
@@ -46,10 +49,14 @@ class LateCornerMonitor:
         # Momentum tracker (10-minute window)
         self.momentum_tracker = MomentumTracker(window_minutes=10)
         
-        # Psychology-driven corner systems
+        # Corner prediction systems
+        self.first_half_system = FirstHalfCornerSystem()  # For 30-35 minute alerts
+        self.reliable_system = ReliableCornerSystem()     # For 85-89 minute alerts
+        
+        # Psychology-driven systems
         self.panicking_favorite_system = PanickingFavoriteSystem()
         self.fighting_underdog_system = FightingUnderdogSystem()
-        self.first_half_system = EnhancedFirstHalfSystem()
+        self.enhanced_first_half = EnhancedFirstHalfSystem()
         
         self.logger = self._setup_logging()
         
@@ -351,8 +358,10 @@ class LateCornerMonitor:
             
             # PRE-CHECKS: Log basic match info
             self.logger.info(f"🔍 PRE-CHECKS: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
-            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85-89)")
+            self.logger.info(f"   📊 Minute: {match_stats.minute}")
             self.logger.info(f"   ⚽ Corners: {match_stats.total_corners}")
+            self.logger.info(f"   🎮 Match State: {match_stats.state}")
+            self.logger.info(f"   ⚡ Alert Windows: First Half (30-35') or Late Game (85-89')")
             # Update momentum tracker and log 10-minute momentum
             try:
                 self.momentum_tracker.add_snapshot(
@@ -389,9 +398,95 @@ class LateCornerMonitor:
                 self.logger.error(f"❌ Momentum tracker error: {e}")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
-            # 🕐 ENHANCED FIRST HALF ANALYSIS: Check for 30-35 minute psychology (all 4 types)
-            if 30 <= match_stats.minute <= 35:
-                self.logger.info(f"🕐 ENHANCED FH WINDOW: Analyzing {match_stats.minute}min psychology...")
+            # Choose appropriate system based on match half
+            # Check both possible first half state formats
+            is_first_half = match_stats.state in ['INPLAY_1ST_HALF', 'FIRST_HALF'] or match_stats.minute <= 45
+            
+            # First Half System (30-35 minute window)
+            if is_first_half and 30 <= match_stats.minute <= 35:
+                self.logger.info(f"🕐 FIRST HALF WINDOW: Analyzing {match_stats.minute}min stats...")
+                
+                # Get first half corner odds
+                corner_odds = await self._get_corner_odds(fixture_id)
+                
+                # Enhanced odds logging
+                self.logger.info("🔍 FIRST HALF ODDS CHECK:")
+                if not corner_odds:
+                    self.logger.info("❌ No odds data returned")
+                    return None
+                    
+                self.logger.info(f"   • Total markets: {corner_odds.get('total_corner_markets', 0)}")
+                self.logger.info(f"   • Active markets: {corner_odds.get('active_count', 0)}")
+                self.logger.info(f"   • Available: {corner_odds.get('available', False)}")
+                if corner_odds.get('odds_details'):
+                    self.logger.info("   • Odds found:")
+                    for odds in corner_odds.get('odds_details', []):
+                        self.logger.info(f"     - {odds}")
+                
+                if not corner_odds.get('available'):
+                    self.logger.info("❌ No first half Asian corner odds available")
+                    return None
+                    
+                # Ensure we have previous stats for momentum calculation
+                if fixture_id not in self.previous_stats:
+                    self.logger.info("⏳ First snapshot for this match - storing stats")
+                    self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
+                    return None
+                
+                # Check if enough time has passed for momentum calculation
+                prev_minute = self.previous_stats[fixture_id].get('minute', 0)
+                minutes_passed = current_stats['minute'] - prev_minute
+                if minutes_passed < 5:  # Need at least 5 minutes for meaningful momentum
+                    self.logger.info(f"⏳ Only {minutes_passed} minutes since last snapshot (need 5+)")
+                    return None
+                
+                # Use first half prediction system
+                result = self.first_half_system.should_alert(current_stats, self.previous_stats.get(fixture_id, {}), 10)
+                if result.get('alert'):
+                    self.logger.info("✅ FIRST HALF ALERT TRIGGERED!")
+                    
+                    # Prepare alert data using standard fields
+                    alert_data = {
+                        'fixture_id': fixture_id,
+                        'alert_type': 'FIRST_HALF_CORNER',
+                        'teams': f"{match_stats.home_team} vs {match_stats.away_team}",
+                        'score_at_alert': f"{match_stats.home_score}-{match_stats.away_score}",
+                        'minute_sent': match_stats.minute,
+                        'corners_at_alert': match_stats.total_corners,
+                        'combined_momentum10': result['momentum_indicators']['pressure_score'],
+                        'momentum_home_total': result['momentum_indicators']['attack_intensity'],
+                        'momentum_away_total': result['momentum_indicators']['shot_efficiency']
+                    }
+                    
+                    # Save to database first
+                    try:
+                        track_elite_alert(alert_data)
+                        self.logger.info("✅ First half alert saved to database")
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to save first half alert: {e}")
+                        return None
+                        
+                    # Send Telegram alert
+                    try:
+                        send_corner_alert_new(
+                            match_info=alert_data,
+                            corner_odds=corner_odds,
+                            tier='FIRST_HALF_CORNER'
+                        )
+                        self.logger.info("✅ First half alert sent to Telegram")
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to send Telegram alert: {e}")
+                    
+                    # Add to alerted matches
+                    self.alerted_matches.add(fixture_id)
+                else:
+                    reasons = result.get('reasons', [])
+                    self.logger.info("❌ NO FIRST HALF ALERT - Reasons:")
+                    for reason in reasons:
+                        self.logger.info(f"   • {reason}")
+                    
+            # Late Game System (85-89 minute window)
+            elif not is_first_half and 85 <= match_stats.minute <= 89:
                 
                 try:
                     # Get 10-minute momentum for first-half analysis (20-30min window)
@@ -420,7 +515,7 @@ class LateCornerMonitor:
                                 'odds': odds_data['data']
                             }
                             self.logger.info(f"   📊 Fetched FH odds data (nested): {len(fixture_data_with_odds['odds'])} bookmakers")
-                        else:
+            else:
                             # Try approach B (flat format)
                             odds_data_flat = _client._make_request(f"/odds/inplay/fixtures/{fixture_id}")
                             if odds_data_flat and isinstance(odds_data_flat.get('data'), list):
@@ -623,7 +718,7 @@ class LateCornerMonitor:
                 return None
 
             # Get corner odds first - no point calculating if we can't bet
-            corner_odds = await self._get_corner_odds(fixture_id)
+                        corner_odds = await self._get_corner_odds(fixture_id)
             if not corner_odds:
                 self.logger.warning(f"🚫 Match {fixture_id} - No corner odds available")
                 # Update previous stats for momentum tracking on next cycle
@@ -648,7 +743,7 @@ class LateCornerMonitor:
             if previous_stats and isinstance(previous_stats, dict) and 'minute' in previous_stats:
                 raw_minutes_passed = max(0, match_stats.minute - int(previous_stats.get('minute', match_stats.minute)))
                 minutes_passed = min(5, max(1, raw_minutes_passed))
-            else:
+                        else:
                 minutes_passed = 5
 
             # ELITE 100% POSITIVE RATE FILTERING SYSTEM
@@ -693,7 +788,7 @@ class LateCornerMonitor:
                         'odds': odds_data['data']
                     }
                     self.logger.info(f"   📊 Fetched odds data (nested): {len(fixture_data_with_odds['odds'])} bookmakers")
-                else:
+                    else:
                     # Try approach B (flat format) - same as draw odds fallback
                     self.logger.info(f"   🔄 Trying fallback odds endpoint...")
                     odds_data_flat = _client._make_request(f"/odds/inplay/fixtures/{fixture_id}")
@@ -731,7 +826,7 @@ class LateCornerMonitor:
                             'odds': list(bookmaker_odds.values())
                         }
                         self.logger.info(f"   📊 Fetched odds data (flat): {len(fixture_data_with_odds['odds'])} bookmakers")
-                    else:
+                else:
                         # No odds available
                         fixture_data_with_odds = {
                             'fixture_id': fixture_id,
@@ -817,7 +912,7 @@ class LateCornerMonitor:
                 self.logger.info(f"\n❌ NO ALERT - Neither panicking favorite nor fighting underdog conditions met")
                 # Update previous stats for momentum tracking on next cycle
                 self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
-                return None
+            return None
             # Set up momentum indicators based on psychology system type
             momentum_indicators = {
                 'combined_momentum10': combined_momentum,
@@ -1172,4 +1267,4 @@ async def main():
         raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()) 

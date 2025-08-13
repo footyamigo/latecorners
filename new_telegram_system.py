@@ -67,7 +67,7 @@ class NewTelegramSystem:
         all_odds_available = active_odds if active_odds else []
         
         # For premium tiers, also include suspended odds from odds_details if active_odds is empty
-        if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG'] and not all_odds_available:
+        if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'FIRST_HALF_CORNER'] and not all_odds_available:
             odds_details = match_data.get('odds_details', [])
             logger.info(f"🔍 Premium tier detected with no active odds - checking suspended odds: {len(odds_details)} total")
             all_odds_available = odds_details
@@ -92,7 +92,7 @@ class NewTelegramSystem:
                         
                         if is_whole_number or is_current_half:
                             # For premium tiers, include even suspended odds
-                            if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
+                            if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'FIRST_HALF_CORNER']:
                                 # Remove suspended status for clean display
                                 clean_odds = odds_str.replace(" (suspended)", "")
                                 filtered_active_odds.append(clean_odds)
@@ -392,6 +392,9 @@ class NewTelegramSystem:
         elif tier == 'BREAKTHROUGH_SEEKER':
             logger.info("🔍 DEBUG: Using dynamic BREAKTHROUGH_SEEKER message")
             why_text = self._create_breakthrough_seeker_message(match_data)
+        elif tier == 'FIRST_HALF_CORNER':
+            logger.info("🔍 DEBUG: Using first half corner message")
+            why_text = self._create_first_half_message(match_data)
         else:
             logger.info(f"🔍 DEBUG: Using legacy conditions for tier: {tier}")
             # Legacy conditions for other alert types
@@ -595,6 +598,27 @@ class NewTelegramSystem:
         message_parts.append(f"This match passed our strictest filtering - historically 100% positive outcomes (Wins + Refunds).")
         
         # Score-specific context
+        
+    def _create_first_half_message(self, match_data: Dict) -> str:
+        """Create message for first half corner alerts"""
+        attack_intensity = match_data.get('momentum_home_total', 0)
+        shot_efficiency = match_data.get('momentum_away_total', 0)
+        pressure_score = match_data.get('combined_momentum10', 0)
+        
+        message_lines = [
+            "🕐 FIRST HALF CORNER OPPORTUNITY",
+            "",
+            f"• Team Momentum: {attack_intensity:.1f}%",
+            f"• Shot Efficiency: {shot_efficiency:.1f}%",
+            f"• Combined Pressure: {pressure_score:.1f}%",
+            "",
+            "⚡ WHY THIS ALERT:",
+            "• Strong first half momentum detected",
+            "• Multiple corner-generating patterns active",
+            "• High attacking pressure in key window"
+        ]
+        
+        return "\n".join(message_lines)
         if home_score == away_score:
             # Draw situation
             if home_score == 0:

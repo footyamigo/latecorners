@@ -565,12 +565,21 @@ def check_corner_odds_available(match_id):
             bet365_corner_odds = []
             total_corner_markets = 0
             
+            # Debug logging for odds markets
+            print(f"\n🔍 ODDS DEBUG for match {match_id}:")
+            print(f"   Found {len(all_odds)} total odds markets")
+            
             for odds in all_odds:
                 market_id = odds.get('market_id')
                 bookmaker_id = odds.get('bookmaker_id')
                 
-                # Only check Market 61 (Asian Total Corners) from bet365
-                if market_id == 61:  # Only Asian Total Corners, not Asian Handicap (62)
+                # Check appropriate market based on match half
+                # Market 63 = First Half Asian Corners
+                # Market 61 = Full Time Asian Corners
+                is_first_half = odds.get('period') == 'FIRST_HALF' or odds.get('minute', 0) <= 45
+                valid_market = (is_first_half and market_id == 63) or (not is_first_half and market_id == 61)
+                
+                if valid_market:  # Use correct market for each half
                     total_corner_markets += 1
                     if bookmaker_id == 2:  # bet365 specifically
                         # Extract detailed odds info
@@ -587,6 +596,9 @@ def check_corner_odds_available(match_id):
             # Create readable odds details for logging/display
             odds_details = []
             active_odds = []
+            
+            print(f"   Found {len(bet365_corner_odds)} bet365 corner odds markets")
+            print(f"   Market type: {'First Half (ID 63)' if is_first_half else 'Full Time (ID 61)'}")
             
             for odds in bet365_corner_odds:
                 total = odds['total']
