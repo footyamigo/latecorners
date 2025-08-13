@@ -270,12 +270,16 @@ class LateCornerMonitor:
                     
                     self.logger.debug(f"🧪 DEBUG: Match {match_id} - minute: {minute}, state: {state}")
                     
-                    # Only monitor matches in active play states
-                    if state in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF', 'HT']:
-                        # Only start monitoring from configured minute
-                        if minute >= self.config.MIN_MINUTE_TO_START_MONITORING:
+                    # Add matches to monitoring for stats tracking (broader window)
+                    if state in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF']:
+                        if minute >= 20:  # Start tracking from 20 minutes for momentum history
                             eligible_matches.append(match)
-                            self.logger.debug(f"✅ Eligible: Match {match_id} at {minute}' ({state})")
+                            if state == 'INPLAY_1ST_HALF' and 30 <= minute <= 35:
+                                self.logger.info(f"🎯 Alert Ready First Half: Match {match_id} at {minute}' ({state})")
+                            elif state == 'INPLAY_2ND_HALF' and 85 <= minute <= 89:
+                                self.logger.info(f"🎯 Alert Ready Second Half: Match {match_id} at {minute}' ({state})")
+                            else:
+                                self.logger.debug(f"📊 Tracking for momentum: Match {match_id} at {minute}' ({state})")
                     
                 except Exception as e:
                     self.logger.error(f"❌ Error processing match during discovery: {e}")
@@ -288,7 +292,19 @@ class LateCornerMonitor:
                     self.monitored_matches.add(match_id)
                     self.logger.info(f"➕ ADDED match {match_id} to monitoring")
             
-            self.logger.info(f"📊 MONITORING {len(self.monitored_matches)} matches total")
+            # Count alert-ready vs tracking matches
+            alert_ready_fh = sum(1 for m in eligible_matches 
+                               if m.get('state', {}).get('developer_name') == 'INPLAY_1ST_HALF' 
+                               and 30 <= m.get('periods', [{}])[0].get('minutes', 0) <= 35)
+            alert_ready_sh = sum(1 for m in eligible_matches 
+                               if m.get('state', {}).get('developer_name') == 'INPLAY_2ND_HALF' 
+                               and m.get('periods', [{}])[0].get('minutes', 0) >= 85)
+            tracking_matches = len(eligible_matches) - alert_ready_fh - alert_ready_sh
+            
+            self.logger.info(f"📊 MONITORING {len(self.monitored_matches)} matches total:")
+            self.logger.info(f"   🎯 Alert Ready First Half (30-35'): {alert_ready_fh} matches")
+            self.logger.info(f"   🎯 Alert Ready Second Half (85-89'): {alert_ready_sh} matches")
+            self.logger.info(f"   📊 Tracking for momentum (20+ min): {tracking_matches} matches")
             
         except Exception as e:
             self.logger.error(f"❌ Error in match discovery: {e}")
@@ -728,13 +744,13 @@ class LateCornerMonitor:
             current_stats['has_live_asian_corners'] = True
 
             # Fetch live draw odds (Fulltime Result market)
+            draw_odds = None
             try:
                 from sportmonks_client import SportmonksClient
                 _client = SportmonksClient()
                 draw_odds = _client.get_live_draw_odds(fixture_id)
                 self.logger.info(f"   🧮 Draw odds: {draw_odds}")
             except Exception as e:
-                draw_odds = None
                 self.logger.error(f"   ❌ Draw odds fetch error: {e}")
 
             # Get previous stats or empty dict if first time
@@ -1208,8 +1224,8 @@ class LateCornerMonitor:
                         for match in shared_live_matches:
                             try:
                                 match_id = match.get('id')
-                                if match_id and match_id in self.monitored_matches:
-                                    # Monitor this match for alert conditions
+                                if match_id:
+                                    # Monitor ALL live matches for stats/momentum, but only alert on eligible ones
                                     await self._monitor_single_match(match)
                             except Exception as e:
                                 self.logger.error(f"❌ Error processing match {match.get('id', 'unknown')}: {e}")
