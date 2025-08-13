@@ -166,7 +166,7 @@ class LateCornerMonitor:
                 ],
                 'state': {
                     'short_name': dashboard_match.get('state', 'unknown'),
-                    'developer_name': 'INPLAY_2ND_HALF' if dashboard_match.get('minute', 0) > 45 else 'INPLAY_1ST_HALF'
+                    'developer_name': dashboard_match.get('state', 'UNKNOWN')
                 },
                 'league': {
                     'name': dashboard_match.get('league', 'Unknown League')

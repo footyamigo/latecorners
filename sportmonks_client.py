@@ -227,12 +227,12 @@ class SportmonksClient:
             # 🔧 FIXED: Extract state from proper location  
             state = self._extract_state(match)
             
-            # 🎯 OPTIMIZED: Only monitor 2nd half matches (where late corners happen)
-            if (state == 'INPLAY_2ND_HALF' and 
-                minute >= self.config.MIN_MINUTE_TO_START_MONITORING):
+            # Monitor both first half (30-35') and second half (85-89') matches
+            if ((state == 'INPLAY_1ST_HALF' and 30 <= minute <= 35) or
+                (state == 'INPLAY_2ND_HALF' and minute >= self.config.MIN_MINUTE_TO_START_MONITORING)):
                 relevant_matches.append(match)
         
-        self.logger.info(f"Found {len(relevant_matches)} relevant live matches (past {self.config.MIN_MINUTE_TO_START_MONITORING} minutes)")
+        self.logger.info(f"Found {len(relevant_matches)} relevant live matches (First Half: 30-35', Second Half: 85-89')")
         return relevant_matches
     
     def _extract_minute(self, match: Dict) -> int:
