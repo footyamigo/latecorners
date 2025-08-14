@@ -349,6 +349,24 @@ class LateCornerMonitor:
     async def start_monitoring(self):
         """Start the main monitoring loop using shared dashboard data"""
         self.logger.info("🚀 STARTING Late Corner Monitor...")
+        
+        # Send startup message if it's the first deployment
+        if is_first_startup():
+            startup_message = (
+                "🚀 <b>Late Corner Monitor Started!</b>\n\n"
+                "📊 <b>System Status:</b>\n"
+                "✅ Logic refactored for stability\n"
+                "✅ First-Half & Late-Game systems active\n"
+                "✅ Odds markets correctly identified\n\n"
+                "🎯 Now monitoring for all corner opportunities."
+            )
+            try:
+                send_system_message_new(startup_message)
+                mark_startup()
+                self.logger.info("📱 SUCCESS: Startup message sent")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send startup message: {e}")
+
         await asyncio.sleep(5)
             
         # Main monitoring loop
