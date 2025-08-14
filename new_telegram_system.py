@@ -67,7 +67,7 @@ class NewTelegramSystem:
         all_odds_available = active_odds if active_odds else []
         
         # For premium tiers, also include suspended odds from odds_details if active_odds is empty
-        if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'FIRST_HALF_CORNER'] and not all_odds_available:
+        if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG'] and not all_odds_available:
             odds_details = match_data.get('odds_details', [])
             logger.info(f"🔍 Premium tier detected with no active odds - checking suspended odds: {len(odds_details)} total")
             all_odds_available = odds_details
@@ -92,7 +92,7 @@ class NewTelegramSystem:
                         
                         if is_whole_number or is_current_half:
                             # For premium tiers, include even suspended odds
-                            if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'FIRST_HALF_CORNER']:
+                            if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
                                 # Remove suspended status for clean display
                                 clean_odds = odds_str.replace(" (suspended)", "")
                                 filtered_active_odds.append(clean_odds)
@@ -289,22 +289,6 @@ class NewTelegramSystem:
             header = "🥊 FIGHTING UNDERDOG ALERT - GIANT-KILLING MODE 🥊"
             score_threshold = "Giant-Killing System"
             priority_required = 0
-        elif tier == "PANICKING_FH_FAVORITE":
-            header = "🔥 FIRST-HALF PANICKING FAVORITE - HALFTIME DESPERATION 🔥"
-            score_threshold = "FH Psychology System"
-            priority_required = 0
-        elif tier == "FIGHTING_FH_UNDERDOG":
-            header = "⚡ FIRST-HALF FIGHTING UNDERDOG - EARLY SHOCK ALERT ⚡"
-            score_threshold = "FH Giant-Killing System"
-            priority_required = 0
-        elif tier == "DESPERATE_SCORER":
-            header = "🚨 DESPERATE SCORER ALERT - TRAILING TEAM FURY 🚨"
-            score_threshold = "FH Desperation System"
-            priority_required = 0
-        elif tier == "BREAKTHROUGH_SEEKER":
-            header = "🎯 BREAKTHROUGH SEEKER ALERT - DEADLOCK BREAKER 🎯"
-            score_threshold = "FH Breakthrough System"
-            priority_required = 0
         elif tier == "ELITE":
             header = "🏆 ELITE CORNER ALERT 🏆"
             score_threshold = "8.0"
@@ -345,7 +329,7 @@ class NewTelegramSystem:
 
         # Build metrics safely (avoid f-string expressions that embed backslashes)
         metrics_lines = []
-        if tier in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'PANICKING_FH_FAVORITE', 'FIGHTING_FH_UNDERDOG', 'DESPERATE_SCORER', 'BREAKTHROUGH_SEEKER']:
+        if tier in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
             # Use momentum format for all modern alert types
             momentum_level = self._get_momentum_level(score)
             metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
@@ -380,21 +364,6 @@ class NewTelegramSystem:
         elif tier == 'FIGHTING_UNDERDOG':
             logger.info("🔍 DEBUG: Using dynamic FIGHTING_UNDERDOG message")
             why_text = self._create_fighting_underdog_message(match_data)
-        elif tier == 'PANICKING_FH_FAVORITE':
-            logger.info("🔍 DEBUG: Using dynamic PANICKING_FH_FAVORITE message")
-            why_text = self._create_panicking_fh_favorite_message(match_data)
-        elif tier == 'FIGHTING_FH_UNDERDOG':
-            logger.info("🔍 DEBUG: Using dynamic FIGHTING_FH_UNDERDOG message")
-            why_text = self._create_fighting_fh_underdog_message(match_data)
-        elif tier == 'DESPERATE_SCORER':
-            logger.info("🔍 DEBUG: Using dynamic DESPERATE_SCORER message")
-            why_text = self._create_desperate_scorer_message(match_data)
-        elif tier == 'BREAKTHROUGH_SEEKER':
-            logger.info("🔍 DEBUG: Using dynamic BREAKTHROUGH_SEEKER message")
-            why_text = self._create_breakthrough_seeker_message(match_data)
-        elif tier == 'FIRST_HALF_CORNER':
-            logger.info("🔍 DEBUG: Using first half corner message")
-            why_text = self._create_first_half_message(match_data)
         else:
             logger.info(f"🔍 DEBUG: Using legacy conditions for tier: {tier}")
             # Legacy conditions for other alert types
@@ -404,7 +373,7 @@ class NewTelegramSystem:
         logger.info(f"🔍 DEBUG: Generated WHY text: {why_text[:100]}...")
         
         patterns_block = ''
-        if tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'PANICKING_FH_FAVORITE', 'FIGHTING_FH_UNDERDOG', 'DESPERATE_SCORER', 'BREAKTHROUGH_SEEKER']:
+        if tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
             patterns_block = "\n💡 <b>DETECTED PATTERNS:</b>\n" + pattern_text
 
         message = (
@@ -598,27 +567,6 @@ class NewTelegramSystem:
         message_parts.append(f"This match passed our strictest filtering - historically 100% positive outcomes (Wins + Refunds).")
         
         # Score-specific context
-        
-    def _create_first_half_message(self, match_data: Dict) -> str:
-        """Create message for first half corner alerts"""
-        attack_intensity = match_data.get('momentum_home_total', 0)
-        shot_efficiency = match_data.get('momentum_away_total', 0)
-        pressure_score = match_data.get('combined_momentum10', 0)
-        
-        message_lines = [
-            "🕐 FIRST HALF CORNER OPPORTUNITY",
-            "",
-            f"• Team Momentum: {attack_intensity:.1f}%",
-            f"• Shot Efficiency: {shot_efficiency:.1f}%",
-            f"• Combined Pressure: {pressure_score:.1f}%",
-            "",
-            "⚡ WHY THIS ALERT:",
-            "• Strong first half momentum detected",
-            "• Multiple corner-generating patterns active",
-            "• High attacking pressure in key window"
-        ]
-        
-        return "\n".join(message_lines)
         if home_score == away_score:
             # Draw situation
             if home_score == 0:
@@ -788,101 +736,6 @@ class NewTelegramSystem:
         
         # Final inspiration
         message_parts.append("⚡ DAVID vs GOLIATH = CORNER CHAOS!")
-        
-        return " ".join(message_parts)
-    
-    def _create_panicking_fh_favorite_message(self, match_data: Dict) -> str:
-        """Create dynamic message for PANICKING_FH_FAVORITE alerts - first-half psychology"""
-        
-        minute = match_data.get('minute', 30)
-        home_team = match_data.get('home_team', 'Home')
-        away_team = match_data.get('away_team', 'Away')
-        home_score = match_data.get('home_score', 0)
-        away_score = match_data.get('away_score', 0)
-        corners = match_data.get('total_corners', 0)
-        
-        message_parts = []
-        message_parts.append("🔥 FIRST-HALF FAVORITE PANIC: Heavy favorite struggling at halftime approach!")
-        message_parts.append(f"At {minute}', they realize time is running out before the break!")
-        
-        if home_score <= away_score:
-            message_parts.append(f"Expected to dominate but only {home_score}-{away_score} - panic mode engaged!")
-        else:
-            message_parts.append(f"Leading {home_score}-{away_score} but not comfortable - need cushion before HT!")
-        
-        message_parts.append(f"With {corners} FH corners already, favorite desperate for goals = corner explosion incoming!")
-        message_parts.append("🎯 FH PSYCHOLOGY: Favorites panic when they don't control first-half narrative!")
-        
-        return " ".join(message_parts)
-    
-    def _create_fighting_fh_underdog_message(self, match_data: Dict) -> str:
-        """Create dynamic message for FIGHTING_FH_UNDERDOG alerts - first-half giant-killing"""
-        
-        minute = match_data.get('minute', 30)
-        home_team = match_data.get('home_team', 'Home')
-        away_team = match_data.get('away_team', 'Away')
-        home_score = match_data.get('home_score', 0)
-        away_score = match_data.get('away_score', 0)
-        corners = match_data.get('total_corners', 0)
-        
-        message_parts = []
-        message_parts.append("⚡ FIRST-HALF UNDERDOG SHOCK: Massive underdog exceeding all expectations!")
-        message_parts.append(f"At {minute}', they're proving the bookies wrong!")
-        
-        if home_score >= away_score:
-            message_parts.append(f"Level or ahead at {home_score}-{away_score} - giant-killing story unfolding!")
-        else:
-            message_parts.append(f"Only behind {away_score}-{home_score} - they sense upset opportunity!")
-        
-        message_parts.append(f"With {corners} FH corners, underdog showing they belong - more chaos coming!")
-        message_parts.append("🥊 FH GIANT-KILLING: When underdogs smell blood, they attack fearlessly!")
-        
-        return " ".join(message_parts)
-    
-    def _create_desperate_scorer_message(self, match_data: Dict) -> str:
-        """Create dynamic message for DESPERATE_SCORER alerts - trailing team fury"""
-        
-        minute = match_data.get('minute', 30)
-        home_team = match_data.get('home_team', 'Home')
-        away_team = match_data.get('away_team', 'Away')
-        home_score = match_data.get('home_score', 0)
-        away_score = match_data.get('away_score', 0)
-        corners = match_data.get('total_corners', 0)
-        
-        message_parts = []
-        message_parts.append("🚨 DESPERATE SCORER: Trailing team entering halftime panic!")
-        message_parts.append(f"At {minute}', they MUST score before the break!")
-        
-        if home_score < away_score:
-            trailing_team = home_team
-            goal_diff = away_score - home_score
-        else:
-            trailing_team = away_team
-            goal_diff = home_score - away_score
-        
-        message_parts.append(f"{trailing_team} behind by {goal_diff} - desperation level MAXIMUM!")
-        message_parts.append(f"With {corners} FH corners, {trailing_team} throwing everything forward!")
-        message_parts.append("🎯 DESPERATION PSYCHOLOGY: Trailing teams create corner chaos when time runs out!")
-        
-        return " ".join(message_parts)
-    
-    def _create_breakthrough_seeker_message(self, match_data: Dict) -> str:
-        """Create dynamic message for BREAKTHROUGH_SEEKER alerts - deadlock pressure"""
-        
-        minute = match_data.get('minute', 30)
-        home_team = match_data.get('home_team', 'Home')
-        away_team = match_data.get('away_team', 'Away')
-        home_score = match_data.get('home_score', 0)
-        away_score = match_data.get('away_score', 0)
-        corners = match_data.get('total_corners', 0)
-        
-        message_parts = []
-        message_parts.append("🎯 BREAKTHROUGH SEEKER: Deadlock pressure building to explosion!")
-        message_parts.append(f"At {minute}', both teams desperate for halftime advantage!")
-        
-        message_parts.append(f"Locked at {home_score}-{away_score} - someone must break the deadlock!")
-        message_parts.append(f"With {corners} FH corners already, pressure cooker ready to explode!")
-        message_parts.append("⚡ DEADLOCK PSYCHOLOGY: When nobody leads, everyone attacks - corner storm inevitable!")
         
         return " ".join(message_parts)
 

@@ -16,22 +16,26 @@ class TeamSnapshot:
     possession: int  # percentage 0-100
 
 
-class MomentumTracker:
+class FirstHalfMomentumTracker:
     """
-    Tracks rolling 10-minute attacking momentum per fixture using live, cumulative stats.
+    Tracks rolling 10-minute attacking momentum per fixture for FIRST HALF analysis (targeting 30th minute alerts).
 
-    OPTIMIZED Momentum formula (per team, last 10 minutes):
+    SAME HIGH STANDARDS as late corner system - momentum is momentum regardless of timing!
+    
+    OPTIMIZED Momentum formula (per team, last 10 minutes for first half):
       +10 points per shot on target (quality shots - 60% corner potential)
       + 4 points per shot off target (realistic value - 30% corner potential)  
       +12 points per dangerous attack (KING! - 75% corner potential)
       + 4 points per attack (pressure volume - 30% corner potential)
       + 1 point per 10% average possession above 45% (adjusted)
       
-      Focus: Dangerous attacks = primary corner predictor. Optimized weights based on actual corner creation probability.
+      Focus: Dangerous attacks = primary corner predictor. Same optimized weights as late system.
+      
+    Target: Alerts at 30th minute using 20-30 minute momentum window for "halftime urgency" psychology.
     """
 
     def __init__(self, window_minutes: int = 10):
-        self.window_minutes = window_minutes
+        self.window_minutes = window_minutes  # 10 minutes for first half (same as late system)
         # fixture_id -> { 'home': deque[TeamSnapshot], 'away': deque[TeamSnapshot] }
         self._history: Dict[int, Dict[str, Deque[TeamSnapshot]]] = {}
 
@@ -97,7 +101,7 @@ class MomentumTracker:
         last = queue[-1]
         window_covered = last.minute - first.minute
 
-        # Time-decayed diffs of cumulative stats across last 10 minutes
+        # Time-decayed diffs of cumulative stats across last 10 minutes (first half window)
         # Recent minutes count more: weights for last 4 minutes = 4,3,2,1; older minutes = 1
         weights = {0: 4, 1: 3, 2: 2, 3: 1}
 
@@ -160,7 +164,8 @@ class MomentumTracker:
         else:
             avg_pos = sum(s.possession for s in queue) // len(queue)
 
-        # OPTIMIZED Points: dangerous-attack-focused formula for corner prediction
+        # SAME HIGH STANDARDS: dangerous-attack-focused formula for corner prediction
+        # NO LOWERED THRESHOLDS - momentum is momentum whether 30th or 85th minute!
         on_target_points = 10 * sot      # Quality shots (60% corner potential)
         off_target_points = 4 * soff     # Realistic value (30% corner potential)
         dangerous_points = 12 * dang     # KING! Highest weight (75% corner potential)
@@ -187,3 +192,21 @@ class MomentumTracker:
             'away': self._compute_team(away_q),
         }
 
+    def get_first_half_momentum_summary(self, fixture_id: int) -> Dict[str, any]:
+        """
+        Get a summary of first half momentum for alerts.
+        Returns combined momentum and individual team breakdowns.
+        """
+        scores = self.compute_scores(fixture_id)
+        home_total = scores['home']['total']
+        away_total = scores['away']['total']
+        combined_total = home_total + away_total
+        
+        return {
+            'home_momentum': home_total,
+            'away_momentum': away_total,
+            'combined_momentum': combined_total,
+            'home_breakdown': scores['home'],
+            'away_breakdown': scores['away'],
+            'window_minutes': self.window_minutes,
+        }
