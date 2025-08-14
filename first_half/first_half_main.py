@@ -468,5 +468,11 @@ async def main():
     monitor = FirstHalfMonitor()
     await monitor.run()
 
+# Entry point for combined_runner.py
+async def first_half_main():
+    """Entry point for combined runner integration"""
+    monitor = FirstHalfMonitor()
+    await monitor.run()
+
 if __name__ == "__main__":
     asyncio.run(main())

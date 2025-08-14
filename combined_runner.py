@@ -22,9 +22,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger('combined_runner')
 
-def run_alert_system():
-    """Run the main alert system in background thread (reads from dashboard's shared data)"""
-    logger.info("🚨 STARTING: Alert system thread (SHARED DATA mode)...")
+def run_late_corner_system():
+    """Run the late corner alert system (85-89 minutes) in background thread"""
+    logger.info("🚨 STARTING: Late corner system thread (85-89 minutes)...")
     
     # Wait for dashboard to initialize its data
     logger.info("⏳ WAITING: 10 seconds for dashboard to populate shared data...")
@@ -32,17 +32,41 @@ def run_alert_system():
     
     try:
         from main import main as main_monitor
-        logger.info("🚨 RUNNING: Alert system main loop (using shared dashboard data)...")
+        logger.info("🚨 RUNNING: Late corner system (85-89 min) using shared dashboard data...")
         asyncio.run(main_monitor())
     except Exception as e:
-        logger.error(f"🚨 FATAL ERROR: Alert system crashed: {e}")
+        logger.error(f"🚨 FATAL ERROR: Late corner system crashed: {e}")
         import traceback
         logger.error(f"🚨 TRACEBACK: {traceback.format_exc()}")
         # Don't exit - keep trying to restart
         logger.info("🚨 WAITING: 30 seconds before restart attempt...")
         time.sleep(30)
-        logger.info("🚨 RESTARTING: Alert system...")
-        run_alert_system()  # Recursive restart
+        logger.info("🚨 RESTARTING: Late corner system...")
+        run_late_corner_system()  # Recursive restart
+
+def run_first_half_system():
+    """Run the first half corner alert system (30-35 minutes) in background thread"""
+    logger.info("🏁 STARTING: First half system thread (30-35 minutes)...")
+    
+    # Wait for dashboard to initialize its data
+    logger.info("⏳ WAITING: 15 seconds for dashboard and late system to start...")
+    time.sleep(15)
+    
+    try:
+        # Import and run first half system
+        sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'first_half'))
+        from first_half.first_half_main import first_half_main
+        logger.info("🏁 RUNNING: First half system (30-35 min) independently...")
+        asyncio.run(first_half_main())
+    except Exception as e:
+        logger.error(f"🏁 FATAL ERROR: First half system crashed: {e}")
+        import traceback
+        logger.error(f"🏁 TRACEBACK: {traceback.format_exc()}")
+        # Don't exit - keep trying to restart
+        logger.info("🏁 WAITING: 30 seconds before restart attempt...")
+        time.sleep(30)
+        logger.info("🏁 RESTARTING: First half system...")
+        run_first_half_system()  # Recursive restart
 
 def run_web_dashboard():
     """Run the web dashboard (PRIMARY DATA SOURCE for shared architecture)"""
@@ -69,13 +93,14 @@ def run_web_dashboard():
         raise
 
 if __name__ == "__main__":
-    logger.info("STARTING: Combined Late Corner System...")
-    logger.info("=" * 50)
+    logger.info("STARTING: Combined Corner Alert System...")
+    logger.info("=" * 60)
     logger.info("📊 ARCHITECTURE: Shared Data System")
     logger.info("🌐 DATA SOURCE: Dashboard (single SportMonks API connection)")
-    logger.info("🚨 DATA CONSUMER: Alert System (reads from dashboard)")
-    logger.info("💡 BENEFIT: 50% fewer API calls, no rate limit issues")
-    logger.info("=" * 50)
+    logger.info("🚨 LATE CORNER SYSTEM: 85-89 minutes (reads from dashboard)")
+    logger.info("🏁 FIRST HALF SYSTEM: 30-35 minutes (independent monitoring)")
+    logger.info("💡 BENEFIT: Complete coverage + 50% fewer API calls")
+    logger.info("=" * 60)
     
     # Start dashboard first (it becomes the data provider)
     logger.info("🌐 STARTING: Web dashboard first (data provider)...")
@@ -85,21 +110,30 @@ if __name__ == "__main__":
     # Wait a bit for dashboard to start
     time.sleep(5)
     
-    # Start alert system second (it becomes the data consumer)
-    logger.info("🚨 STARTING: Alert system second (data consumer)...")
-    alert_thread = threading.Thread(target=run_alert_system, daemon=False)
-    alert_thread.start()
+    # Start late corner system second (it reads from dashboard data)
+    logger.info("🚨 STARTING: Late corner system (85-89 min) - data consumer...")
+    late_corner_thread = threading.Thread(target=run_late_corner_system, daemon=False)
+    late_corner_thread.start()
     
-    logger.info("✅ Both systems started with shared data architecture!")
-    logger.info("📊 Dashboard provides data at: http://localhost:8080")
-    logger.info("🚨 Alert system reads from dashboard's shared data")
-    logger.info("💰 Ready to catch profitable corner opportunities with optimal efficiency!")
+    # Wait a bit more, then start first half system
+    time.sleep(3)
+    
+    # Start first half system third (independent monitoring)
+    logger.info("🏁 STARTING: First half system (30-35 min) - independent...")
+    first_half_thread = threading.Thread(target=run_first_half_system, daemon=False)
+    first_half_thread.start()
+    
+    logger.info("✅ ALL THREE SYSTEMS STARTED!")
+    logger.info("📊 Dashboard: http://localhost:8080")
+    logger.info("🚨 Late Corner: 85-89 minutes (Market: Asian Corners)")
+    logger.info("🏁 First Half: 30-35 minutes (Market: 1st Half Asian Corners)")
+    logger.info("💰 Ready to catch profitable corner opportunities across BOTH halves!")
     
     # Keep main thread alive
     try:
         while True:
             time.sleep(60)
-            logger.info("❤️ HEARTBEAT: Combined system running smoothly with shared data...")
+            logger.info("❤️ HEARTBEAT: Combined system (Dashboard + Late + First Half) running smoothly...")
     except KeyboardInterrupt:
         logger.info("👋 Shutting down combined system gracefully...")
     except Exception as e:
