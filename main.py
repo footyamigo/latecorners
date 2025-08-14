@@ -97,15 +97,15 @@ class LateCornerMonitor:
                 return []
 
         # Convert dashboard format to SportMonks-compatible format
-            matches = []
+        matches = []
         for dashboard_match in source_matches:
-                converted_match = self._convert_dashboard_to_sportmonks_format(dashboard_match)
-                if converted_match:
-                    matches.append(converted_match)
-            
+            converted_match = self._convert_dashboard_to_sportmonks_format(dashboard_match)
+            if converted_match:
+                matches.append(converted_match)
+        
         self.logger.info(f"Dashboard buffer returned {len(matches)} live matches")
-            return matches
-    
+        return matches
+
     def _convert_dashboard_to_sportmonks_format(self, dashboard_match):
         """Convert dashboard match format to SportMonks format for compatibility"""
         try:
@@ -129,7 +129,7 @@ class LateCornerMonitor:
     
     def _convert_dashboard_stats_to_sportmonks(self, dashboard_stats):
         """Convert dashboard statistics format to SportMonks format"""
-            statistics = []
+        statistics = []
         stat_mapping = {
             'corners': 33, 'possession': 45, 'shots_off_target': 41, 'shots_total': 42,
             'dangerous_attacks': 44, 'attacks': 43, 'shots_on_target': 86
@@ -154,31 +154,31 @@ class LateCornerMonitor:
             self.logger.info(f"📊 Found {len(live_matches)} live matches from shared data")
             
             for match in live_matches:
-                    match_id = match.get('id')
+                match_id = match.get('id')
                 state = match.get('state', {}).get('developer_name', 'unknown')
                 minute = next((p.get('minutes', 0) for p in match.get('periods', []) if p.get('ticking')), 0)
 
                 if match_id and state in ['INPLAY_1ST_HALF', 'INPLAY_2ND_HALF'] and minute >= 20:
-                if match_id not in self.monitored_matches:
-                    self.monitored_matches.add(match_id)
+                    if match_id not in self.monitored_matches:
+                        self.monitored_matches.add(match_id)
                         self.logger.info(f"➕ ADDED match {match_id} to monitoring (Minute: {minute}, State: {state})")
-            
+        
         except Exception as e:
             self.logger.error(f"❌ Error in match discovery: {e}")
 
     async def _monitor_single_match(self, match_data: Dict) -> Optional[Dict]:
         """Central hub to monitor a single match and delegate to the correct system."""
-            fixture_id = match_data.get('id')
-            if not fixture_id:
-                return None
-            
+        fixture_id = match_data.get('id')
+        if not fixture_id:
+            return None
+        
         from sportmonks_client import SportmonksClient
         client = SportmonksClient()
         match_stats = client._parse_live_match_data(match_data)
         
-            if not match_stats:
-                return None
-            
+        if not match_stats:
+            return None
+        
         self.logger.info(f"--- Processing Match: {fixture_id} ({match_stats.home_team} vs {match_stats.away_team}) at {match_stats.minute}' ---")
 
         current_stats = self._extract_current_stats(match_stats)
@@ -307,7 +307,7 @@ class LateCornerMonitor:
                 self.alerted_matches.add(fixture_id)
                 return alert_data
             else:
-             self.logger.info(f"❌ No LG alert for {fixture_id}. System criteria not met.")
+                self.logger.info(f"❌ No LG alert for {fixture_id}. System criteria not met.")
                 
             return None
 
@@ -351,28 +351,28 @@ class LateCornerMonitor:
         self.logger.info("🚀 STARTING Late Corner Monitor...")
         await asyncio.sleep(5)
             
-            # Main monitoring loop
-            while True:
-                try:
-                # Discover new matches periodically
-                    if self.match_discovery_counter % (self.config.MATCH_DISCOVERY_INTERVAL // self.config.LIVE_POLL_INTERVAL) == 0:
-                        await self._discover_new_matches()
-                    
-                    # Monitor all current matches using shared data
-                    shared_live_matches = self._get_shared_live_matches()
-                    
-                    if shared_live_matches:
-                    self.logger.info(f"🔍 Processing {len(shared_live_matches)} live matches...")
-                        for match in shared_live_matches:
-                        await self._monitor_single_match(match)
-                                                else:
-                    self.logger.info("...No live matches found...")
-                    
-                    self.match_discovery_counter += 1
+        # Main monitoring loop
+        while True:
+            try:
+            # Discover new matches periodically
+                if self.match_discovery_counter % (self.config.MATCH_DISCOVERY_INTERVAL // self.config.LIVE_POLL_INTERVAL) == 0:
+                    await self._discover_new_matches()
                 
-                    await asyncio.sleep(self.config.LIVE_POLL_INTERVAL)
-                    
-                except Exception as e:
+                # Monitor all current matches using shared data
+                shared_live_matches = self._get_shared_live_matches()
+                
+                if shared_live_matches:
+                    self.logger.info(f"🔍 Processing {len(shared_live_matches)} live matches...")
+                    for match in shared_live_matches:
+                        await self._monitor_single_match(match)
+                else:
+                    self.logger.info("...No live matches found...")
+                
+                self.match_discovery_counter += 1
+            
+                await asyncio.sleep(self.config.LIVE_POLL_INTERVAL)
+                
+            except Exception as e:
                 self.logger.error(f"❌ Error in main loop: {e}", exc_info=True)
                 await asyncio.sleep(30)
 
