@@ -524,8 +524,8 @@ def extract_live_statistics(match):
             'has_premium_stats': False
         }
 
-def check_corner_odds_available(match_id):
-    """Quick check if Asian corner odds are available for a match"""
+def check_corner_odds_available(match_id, is_first_half=False):
+    """Quick check if Asian corner odds are available for a match, for a specific half."""
     try:
         # Update last check time for rate limiting
         last_odds_check_time[match_id] = time.time()
@@ -565,21 +565,21 @@ def check_corner_odds_available(match_id):
             bet365_corner_odds = []
             total_corner_markets = 0
             
+            # Define which market ID to look for based on the half
+            target_market_id = 63 if is_first_half else 61
+            market_name = "First Half Asian Corners" if is_first_half else "Asian Total Corners"
+            
             # Debug logging for odds markets
             print(f"\n🔍 ODDS DEBUG for match {match_id}:")
-            print(f"   Found {len(all_odds)} total odds markets")
+            print(f"   Looking for {market_name} (Market ID: {target_market_id})")
+            print(f"   Found {len(all_odds)} total odds markets from API")
             
             for odds in all_odds:
                 market_id = odds.get('market_id')
                 bookmaker_id = odds.get('bookmaker_id')
                 
-                # Check appropriate market based on match half
-                # Market 63 = First Half Asian Corners
-                # Market 61 = Full Time Asian Corners
-                is_first_half = odds.get('period') == 'FIRST_HALF' or odds.get('minute', 0) <= 45
-                valid_market = (is_first_half and market_id == 63) or (not is_first_half and market_id == 61)
-                
-                if valid_market:  # Use correct market for each half
+                # Check for the specific market we need
+                if market_id == target_market_id:
                     total_corner_markets += 1
                     if bookmaker_id == 2:  # bet365 specifically
                         # Extract detailed odds info
@@ -597,8 +597,7 @@ def check_corner_odds_available(match_id):
             odds_details = []
             active_odds = []
             
-            print(f"   Found {len(bet365_corner_odds)} bet365 corner odds markets")
-            print(f"   Market type: {'First Half (ID 63)' if is_first_half else 'Full Time (ID 61)'}")
+            print(f"   Found {len(bet365_corner_odds)} bet365 odds for Market ID {target_market_id}")
             
             for odds in bet365_corner_odds:
                 total = odds['total']
