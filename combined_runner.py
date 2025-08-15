@@ -46,26 +46,26 @@ def run_late_corner_system():
         run_late_corner_system()  # Recursive restart
 
 def run_first_half_system():
-    """Run the DEDICATED first half corner alert system (30-35 minutes) in background thread"""
-    logger.info("🏁 STARTING: DEDICATED First half system thread (30-35 minutes)...")
+    """Run the CONVERTED first half corner alert system (30-35 minutes) using late corner architecture"""
+    logger.info("🏁 STARTING: CONVERTED First half system thread (30-35 minutes)...")
     
     # Wait for other systems to start
     logger.info("⏳ WAITING: 10 seconds for other systems...")
     time.sleep(10)
     
     try:
-        # Import and run DEDICATED first half system
-        from first_half_dedicated import main as first_half_dedicated_main
-        logger.info("🏁 RUNNING: DEDICATED First half system (independent API calls)...")
-        asyncio.run(first_half_dedicated_main())
+        # Import and run CONVERTED first half system (cloned from working late system)
+        from first_half_main import first_half_main
+        logger.info("🏁 RUNNING: CONVERTED First half system (using proven late corner architecture)...")
+        asyncio.run(first_half_main())
     except Exception as e:
-        logger.error(f"🏁 FATAL ERROR: DEDICATED First half system crashed: {e}")
+        logger.error(f"🏁 FATAL ERROR: CONVERTED First half system crashed: {e}")
         import traceback
         logger.error(f"🏁 TRACEBACK: {traceback.format_exc()}")
         # Don't exit - keep trying to restart
         logger.info("🏁 WAITING: 30 seconds before restart attempt...")
         time.sleep(30)
-        logger.info("🏁 RESTARTING: DEDICATED First half system...")
+        logger.info("🏁 RESTARTING: CONVERTED First half system...")
         run_first_half_system()  # Recursive restart
 
 def run_web_dashboard():

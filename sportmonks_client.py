@@ -936,6 +936,75 @@ class SportmonksClient:
             
         except Exception as e:
             self.logger.error(f"Error parsing live corner odds for fixture {fixture_id}: {e}")
+            return None
+    
+    def get_live_first_half_corner_odds(self, fixture_id: int) -> Optional[Dict]:
+        """Get live FIRST HALF corner betting odds (Market ID 63)"""
+        self.logger.info(f"Getting live 1st half corner odds for fixture {fixture_id}")
+        
+        data = self._make_request(f"/odds/in-play/by-fixture/{fixture_id}")
+        if not data:
+            return None
+        
+        try:
+            odds_data = data.get('data', [])
+            first_half_corner_odds = {}
+            active_odds = []
+            odds_details = []
+            total_count = 0
+            active_count = 0
+            
+            # Look for FIRST HALF corner-related markets (Market ID 63)
+            for bookmaker_data in odds_data:
+                markets = bookmaker_data.get('markets', [])
+                bookmaker_name = bookmaker_data.get('bookmaker', {}).get('name', 'Unknown')
+                
+                for market in markets:
+                    market_name = market.get('market_name', '').lower()
+                    market_id = market.get('market_id', 0)
+                    
+                    # Look for 1st Half Asian corner markets (Market ID 63 or name contains "1st half" + "corner")
+                    if (market_id == 63 or 
+                        ('1st half' in market_name and 'corner' in market_name) or
+                        ('first half' in market_name and 'corner' in market_name)):
+                        
+                        selections = market.get('selections', [])
+                        
+                        for selection in selections:
+                            label = selection.get('label', '')
+                            odds = selection.get('odds')
+                            is_active = selection.get('is_active', True)
+                            
+                            if odds and 'over' in label.lower():
+                                total_count += 1
+                                odds_details.append(f"{bookmaker_name}: {label} @ {odds}")
+                                
+                                if is_active:
+                                    active_count += 1
+                                    active_odds.append(f"{label} @ {odds}")
+                                    
+                                first_half_corner_odds[f"{bookmaker_name}_{label}"] = {
+                                    'odds': odds,
+                                    'market': market_name,
+                                    'market_id': market_id,
+                                    'selection': label,
+                                    'is_active': is_active
+                                }
+            
+            if first_half_corner_odds:
+                return {
+                    'available': True,
+                    'count': total_count,
+                    'active_count': active_count,
+                    'odds_details': odds_details,
+                    'active_odds': active_odds,
+                    'raw_odds': first_half_corner_odds
+                }
+            else:
+                return {'available': False, 'count': 0, 'active_count': 0}
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing live 1st half corner odds for fixture {fixture_id}: {e}")
             return None 
 
     def get_live_draw_odds(self, fixture_id: int) -> Optional[float]:
