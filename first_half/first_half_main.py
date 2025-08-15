@@ -180,7 +180,7 @@ class FirstHalfMonitor:
                 ],
                 'state': {
                     'short_name': dashboard_match.get('state', 'unknown'),
-                    'developer_name': 'INPLAY_2ND_HALF' if dashboard_match.get('minute', 0) > 45 else 'INPLAY_1ST_HALF'
+                    'developer_name': 'INPLAY_1ST_HALF' if dashboard_match.get('minute', 0) <= 45 else 'INPLAY_2ND_HALF'
                 },
                 'league': {
                     'name': dashboard_match.get('league', 'Unknown League')
@@ -538,13 +538,13 @@ class FirstHalfMonitor:
                     state_obj = match.get('state', {})
                     state = state_obj.get('developer_name', 'unknown')
                     
-                    self.logger.debug(f"🏁 FIRST HALF: 🧪 DEBUG: Match {match_id} - minute: {minute}, state: {state}")
+                    self.logger.info(f"🏁 FIRST HALF: 🧪 DEBUG: Match {match_id} - minute: {minute}, state: {state}")
                     
                     # Only monitor matches in FIRST HALF states and 30-35 minute window
                     if state in ['INPLAY_1ST_HALF', 'HT']:  # First half or halftime
                         if 30 <= minute <= 35:  # First half alert window
                             eligible_matches.append(match)
-                            self.logger.debug(f"🏁 FIRST HALF: ✅ Eligible: Match {match_id} at {minute}' ({state})")
+                            self.logger.info(f"🏁 FIRST HALF: ✅ Eligible: Match {match_id} at {minute}' ({state})")
                     
                 except Exception as e:
                     self.logger.error(f"🏁 FIRST HALF: ❌ Error processing match during discovery: {e}")
