@@ -2,6 +2,7 @@
 """
 Combined runner for both alert system and web dashboard
 SHARED DATA ARCHITECTURE: Dashboard provides data, Alert system consumes it
+UPDATED: Fixed first half cache conflicts - using FirstHalfAnalyzer
 """
 
 import asyncio
@@ -54,7 +55,6 @@ def run_first_half_system():
     
     try:
         # Import and run first half system
-        sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'first_half'))
         from first_half.first_half_main import first_half_main
         logger.info("🏁 RUNNING: First half system (30-35 min) independently...")
         asyncio.run(first_half_main())
