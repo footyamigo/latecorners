@@ -96,15 +96,147 @@ class FirstHalfMonitor:
         
         return logger
     
-    def _get_live_matches(self):
-        """Get live matches from SportMonks API"""
+    def _get_shared_live_matches(self):
+        """Get live matches from shared dashboard data (SAME AS LATE CORNER SYSTEM)"""
         try:
-            matches = self.api_client.get_live_matches(filter_by_minute=False)
-            return matches or []
+            # Try dashboard buffer if available; otherwise fallback to direct API client (no console prints)
+            try:
+                from web_dashboard import live_matches_data  # type: ignore
+                source_matches = list(live_matches_data) if live_matches_data else []
+            except Exception:
+                source_matches = []
+
+            if not source_matches:
+                # API fallback to avoid Unicode printing issues in web_dashboard
+                self.logger.info("🏁 FIRST HALF: Using API fallback for live matches (dashboard buffer empty)")
+                try:
+                    from sportmonks_client import SportmonksClient
+                    api_client = SportmonksClient()
+                    api_matches = api_client.get_live_matches(filter_by_minute=False) or []
+                    # Already SportMonks format → no conversion needed
+                    self.logger.info(f"🏁 FIRST HALF: API fallback returned {len(api_matches)} live matches")
+                    return api_matches
+                except Exception as e:
+                    self.logger.error(f"🏁 FIRST HALF: API fallback failed: {e}")
+                    return []
+
+            # Convert dashboard format to SportMonks-compatible format
+            matches = []
+            for dashboard_match in source_matches:
+                converted_match = self._convert_dashboard_to_sportmonks_format(dashboard_match)
+                if converted_match:
+                    matches.append(converted_match)
+            
+            self.logger.info(f"🏁 FIRST HALF: Dashboard buffer returned {len(matches)} live matches")
+            return matches
+            
+        except ImportError:
+            # Avoid non-ASCII in error logs on some Windows terminals
+            self.logger.error("🏁 FIRST HALF: Error: Cannot import dashboard data - dashboard not running?")
+            return []
         except Exception as e:
-            self.logger.error(f"Error fetching live matches: {e}")
+            # Avoid non-ASCII in error logs on some Windows terminals
+            self.logger.error(f"🏁 FIRST HALF: Error reading shared dashboard data: {e}")
             return []
     
+    def _convert_dashboard_to_sportmonks_format(self, dashboard_match):
+        """Convert dashboard match format to SportMonks format (COPIED FROM LATE CORNER SYSTEM)"""
+        try:
+            sportmonks_format = {
+                'id': dashboard_match.get('match_id'),
+                'localteam': {
+                    'name': dashboard_match.get('home_team', 'Unknown Home'),
+                    'data': {
+                        'name': dashboard_match.get('home_team', 'Unknown Home')
+                    }
+                },
+                'visitorteam': {
+                    'name': dashboard_match.get('away_team', 'Unknown Away'),
+                    'data': {
+                        'name': dashboard_match.get('away_team', 'Unknown Away')
+                    }
+                },
+                'scores': [
+                    {
+                        'description': 'CURRENT',
+                        'score': {
+                            'goals': dashboard_match.get('home_score', 0),
+                            'participant': 'home'
+                        }
+                    },
+                    {
+                        'description': 'CURRENT',
+                        'score': {
+                            'goals': dashboard_match.get('away_score', 0),
+                            'participant': 'away'
+                        }
+                    }
+                ],
+                'periods': [
+                    {
+                        'ticking': True,
+                        'minutes': dashboard_match.get('minute', 0)
+                    }
+                ],
+                'state': {
+                    'short_name': dashboard_match.get('state', 'unknown'),
+                    'developer_name': 'INPLAY_2ND_HALF' if dashboard_match.get('minute', 0) > 45 else 'INPLAY_1ST_HALF'
+                },
+                'league': {
+                    'name': dashboard_match.get('league', 'Unknown League')
+                },
+                'statistics': self._convert_dashboard_stats_to_sportmonks(dashboard_match.get('statistics', {}))
+            }
+            
+            return sportmonks_format
+            
+        except Exception as e:
+            self.logger.error(f"🏁 FIRST HALF: Error converting dashboard match {dashboard_match.get('match_id', 'unknown')}: {e}")
+            return None
+    
+    def _convert_dashboard_stats_to_sportmonks(self, dashboard_stats):
+        """Convert dashboard statistics format to SportMonks format (COPIED FROM LATE CORNER SYSTEM)"""
+        try:
+            home_stats = dashboard_stats.get('home', {})
+            away_stats = dashboard_stats.get('away', {})
+            
+            # Convert dashboard stats to SportMonks statistics format
+            statistics = []
+            
+            # Map dashboard stat names to SportMonks type IDs
+            stat_mapping = {
+                'shots_on_target': 86,
+                'shots_off_target': 87,
+                'shots_total': 42,
+                'dangerous_attacks': 44,
+                'attacks': 43,
+                'possession': 45,
+                'corners': 33
+            }
+            
+            for stat_name, type_id in stat_mapping.items():
+                # Add home stat
+                if stat_name in home_stats:
+                    statistics.append({
+                        'type_id': type_id,
+                        'data': {'value': home_stats[stat_name]},
+                        'location': 'home'
+                    })
+                
+                # Add away stat
+                if stat_name in away_stats:
+                    statistics.append({
+                        'type_id': type_id,
+                        'data': {'value': away_stats[stat_name]},
+                        'location': 'away'
+                    })
+            
+            return statistics
+            
+        except Exception as e:
+            self.logger.error(f"🏁 FIRST HALF: Error converting dashboard stats: {e}")
+            return []
+
     def _is_first_half_target_match(self, match) -> bool:
         """Check if match is in first half target window (30-35 minutes)"""
         try:
@@ -371,27 +503,61 @@ class FirstHalfMonitor:
             return ["1st Half Asian Corners (check live markets)"]
     
     async def run_monitoring_cycle(self):
-        """Run a single monitoring cycle for first half opportunities"""
+        """Run a single monitoring cycle for first half opportunities (COPIED FROM LATE CORNER SYSTEM)"""
         
         try:
-            # Get live matches
-            live_matches = self._get_live_matches()
+            self.logger.info("🏁 FIRST HALF: DISCOVERING new live matches from shared data...")
+            
+            # Use shared data instead of direct API call (SAME AS LATE CORNER SYSTEM)
+            live_matches = self._get_shared_live_matches()
             
             if not live_matches:
-                self.logger.debug("🏁 FIRST HALF: No live matches found")
+                self.logger.warning("🏁 FIRST HALF: ⚠️ No live matches from shared data source")
                 return
             
-            # Filter for first half target matches (30-35 minutes)
-            first_half_matches = [match for match in live_matches if self._is_first_half_target_match(match)]
+            self.logger.info(f"🏁 FIRST HALF: 📊 Found {len(live_matches)} live matches from shared data")
             
-            if not first_half_matches:
-                self.logger.debug(f"🏁 FIRST HALF: No matches in 30-35 minute window (total live: {len(live_matches)})")
+            # Filter matches that are actually in play and worth monitoring (FOR FIRST HALF)
+            eligible_matches = []
+            for match in live_matches:
+                try:
+                    # Extract basic match info
+                    match_id = match.get('id')
+                    if not match_id:
+                        continue
+                    
+                    # Get minute from periods
+                    minute = 0
+                    periods = match.get('periods', [])
+                    for period in periods:
+                        if period.get('ticking', False):
+                            minute = period.get('minutes', 0)
+                            break
+                    
+                    # Get state from state object
+                    state_obj = match.get('state', {})
+                    state = state_obj.get('developer_name', 'unknown')
+                    
+                    self.logger.debug(f"🏁 FIRST HALF: 🧪 DEBUG: Match {match_id} - minute: {minute}, state: {state}")
+                    
+                    # Only monitor matches in FIRST HALF states and 30-35 minute window
+                    if state in ['INPLAY_1ST_HALF', 'HT']:  # First half or halftime
+                        if 30 <= minute <= 35:  # First half alert window
+                            eligible_matches.append(match)
+                            self.logger.debug(f"🏁 FIRST HALF: ✅ Eligible: Match {match_id} at {minute}' ({state})")
+                    
+                except Exception as e:
+                    self.logger.error(f"🏁 FIRST HALF: ❌ Error processing match during discovery: {e}")
+                    continue
+            
+            if not eligible_matches:
+                self.logger.info(f"🏁 FIRST HALF: No matches in 30-35 minute first half window (total live: {len(live_matches)})")
                 return
             
-            self.logger.info(f"🏁 FIRST HALF: Found {len(first_half_matches)} matches in 30-35 minute window")
+            self.logger.info(f"🏁 FIRST HALF: 📊 MONITORING {len(eligible_matches)} first half matches")
             
-            # Analyze each match
-            for match in first_half_matches:
+            # Process each eligible match
+            for match in eligible_matches:
                 try:
                     match_stats = self._extract_match_stats(match)
                     if not match_stats:
@@ -400,20 +566,20 @@ class FirstHalfMonitor:
                     fixture_id = match_stats['fixture_id']
                     minute = match_stats['minute']
                     
-                    self.logger.info(f"🔍 FIRST HALF: Analyzing {match_stats['home_team']} vs {match_stats['away_team']} ({minute}')")
+                    self.logger.info(f"🏁 FIRST HALF: 🔍 Analyzing {match_stats['home_team']} vs {match_stats['away_team']} ({minute}')")
                     
                     # Analyze first half opportunity
                     alert_result = await self._analyze_first_half_opportunity(match, match_stats)
                     
                     if alert_result:
-                        self.logger.info(f"✅ FIRST HALF: Alert generated for match {fixture_id}")
+                        self.logger.info(f"🏁 FIRST HALF: ✅ Alert generated for match {fixture_id}")
                     
                 except Exception as e:
-                    self.logger.error(f"❌ FIRST HALF: Error processing match: {e}")
+                    self.logger.error(f"🏁 FIRST HALF: ❌ Error processing match: {e}")
                     continue
             
         except Exception as e:
-            self.logger.error(f"❌ FIRST HALF: Error in monitoring cycle: {e}")
+            self.logger.error(f"🏁 FIRST HALF: ❌ Error in monitoring cycle: {e}")
             import traceback
             traceback.print_exc()
     
