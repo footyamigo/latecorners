@@ -36,8 +36,8 @@ from database_postgres import get_database
 from sportmonks_client import SportmonksClient
 
 # Import first half system modules
-from first_half_analyzer import FirstHalfAnalyzer
-from first_half_telegram_system import FirstHalfTelegramSystem
+from .first_half_analyzer import FirstHalfAnalyzer
+from .first_half_telegram_system import FirstHalfTelegramSystem
 
 class FirstHalfMonitor:
     """Monitor live matches for first half corner betting opportunities (30-35 minutes)"""

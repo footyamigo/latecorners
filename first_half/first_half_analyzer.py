@@ -16,9 +16,9 @@ Standards: SAME HIGH MOMENTUM REQUIREMENTS as late corner system!
 
 import logging
 from typing import Dict, Optional, Any
-from first_half_momentum_tracker import FirstHalfMomentumTracker
-from halftime_panic_favorite import HalftimePanicFavoriteSystem
-from halftime_giant_killer import HalftimeGiantKillerSystem
+from .first_half_momentum_tracker import FirstHalfMomentumTracker
+from .halftime_panic_favorite import HalftimePanicFavoriteSystem
+from .halftime_giant_killer import HalftimeGiantKillerSystem
 
 logger = logging.getLogger(__name__)
 
