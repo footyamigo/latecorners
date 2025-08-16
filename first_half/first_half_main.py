@@ -78,13 +78,13 @@ class FirstHalfMonitor:
     def _setup_logging(self):
         """Setup logging configuration for first half system"""
         
-        # Create logger
-        logger = logging.getLogger('first_half_monitor')
+        # Create logger with consistent name
+        logger = logging.getLogger('FIRST_HALF')
         logger.setLevel(getattr(logging, self.config.LOG_LEVEL))
         
         # Create formatter
         formatter = logging.Formatter(
-            '%(asctime)s - FIRST_HALF - %(levelname)s - %(message)s'
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         
         # Create console handler
@@ -544,13 +544,20 @@ class FirstHalfMonitor:
                     self.logger.info(f"🏁 FIRST HALF: 🧪 DEBUG: Match {match_id} - minute: {minute}, state: {state}")
                     
                     # Monitor matches in FIRST HALF states from minute 20+ (to build momentum for 30-35 alerts)
-                    if state in ['INPLAY_1ST_HALF', 'HT']:  # First half or halftime
+                    # Skip matches at 0 minutes - they haven't started yet
+                    if minute > 0 and state in ['INPLAY_1ST_HALF', 'HT']:  # First half or halftime, but actually started
                         if minute >= 20:  # Start monitoring from minute 20 to build momentum
                             eligible_matches.append(match)
                             if 30 <= minute <= 35:
                                 self.logger.info(f"🏁 FIRST HALF: ✅ Alert Window: Match {match_id} at {minute}' ({state})")
                             else:
                                 self.logger.info(f"🏁 FIRST HALF: 📊 Momentum Building: Match {match_id} at {minute}' ({state})")
+                        else:
+                            self.logger.debug(f"🏁 FIRST HALF: ⏰ Too early: Match {match_id} at {minute}' (need 20+ min)")
+                    elif minute == 0:
+                        self.logger.debug(f"🏁 FIRST HALF: ⏸️ Skipping: Match {match_id} at {minute}' (not started yet)")
+                    else:
+                        self.logger.debug(f"🏁 FIRST HALF: ⏭️ Skipping: Match {match_id} at {minute}' ({state}) - wrong phase")
                     
                 except Exception as e:
                     self.logger.error(f"🏁 FIRST HALF: ❌ Error processing match during discovery: {e}")
