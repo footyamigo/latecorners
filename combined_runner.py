@@ -97,9 +97,9 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     logger.info("📊 ARCHITECTURE: Shared Data System")
     logger.info("🌐 DATA SOURCE: Dashboard (single SportMonks API connection)")
-    logger.info("🚨 LATE CORNER SYSTEM: 85-89 minutes (reads from dashboard)")
+    logger.info("⚠️ LATE CORNER SYSTEM: DISABLED (testing first half only)")
     logger.info("🏁 FIRST HALF SYSTEM: 30-35 minutes (independent monitoring)")
-    logger.info("💡 BENEFIT: Complete coverage + 50% fewer API calls")
+    logger.info("💡 TESTING: First half alerts only for debugging")
     logger.info("=" * 60)
     
     # Start dashboard first (it becomes the data provider)
@@ -110,10 +110,10 @@ if __name__ == "__main__":
     # Wait a bit for dashboard to start
     time.sleep(5)
     
-    # Start late corner system second (it reads from dashboard data)
-    logger.info("🚨 STARTING: Late corner system (85-89 min) - data consumer...")
-    late_corner_thread = threading.Thread(target=run_late_corner_system, daemon=False)
-    late_corner_thread.start()
+    # DISABLED: Late corner system (only testing first half)
+    logger.info("⚠️ DISABLED: Late corner system (85-89 min) - TESTING FIRST HALF ONLY")
+    # late_corner_thread = threading.Thread(target=run_late_corner_system, daemon=False)
+    # late_corner_thread.start()
     
     # Wait a bit more, then start first half system
     time.sleep(3)
@@ -123,17 +123,17 @@ if __name__ == "__main__":
     first_half_thread = threading.Thread(target=run_first_half_system, daemon=False)
     first_half_thread.start()
     
-    logger.info("✅ ALL THREE SYSTEMS STARTED!")
+    logger.info("✅ FIRST HALF TESTING MODE STARTED!")
     logger.info("📊 Dashboard: http://localhost:8080")
-    logger.info("🚨 Late Corner: 85-89 minutes (Market: Asian Corners)")
+    logger.info("⚠️ Late Corner: DISABLED (testing mode)")
     logger.info("🏁 First Half: 30-35 minutes (Market: 1st Half Asian Corners)")
-    logger.info("💰 Ready to catch profitable corner opportunities across BOTH halves!")
+    logger.info("🧪 TESTING: First half corner alerts only!")
     
     # Keep main thread alive
     try:
         while True:
             time.sleep(60)
-            logger.info("❤️ HEARTBEAT: Combined system (Dashboard + Late + First Half) running smoothly...")
+            logger.info("❤️ HEARTBEAT: Testing system (Dashboard + First Half ONLY) running smoothly...")
     except KeyboardInterrupt:
         logger.info("👋 Shutting down combined system gracefully...")
     except Exception as e:
