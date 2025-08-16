@@ -34,6 +34,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import get_config
 from database_postgres import get_database
 from sportmonks_client import SportmonksClient
+from new_telegram_system import send_system_message_new
+from startup_flag import is_first_startup, mark_startup
 
 # Import first half system modules
 from .first_half_analyzer import FirstHalfAnalyzer
@@ -594,6 +596,31 @@ class FirstHalfMonitor:
         self.logger.info("   Monitoring for 30-35 minute opportunities")
         self.logger.info("   Target: Market ID 63 '1st Half Asian Corners'")
         self.logger.info("   Psychology: Halftime Panic + Giant Killer systems")
+        
+        # Send startup message if it's the first deployment
+        if is_first_startup():
+            startup_message = (
+                "🏁 <b>First Half Corner Monitor Started!</b>\n\n"
+                "📊 <b>System Status:</b>\n"
+                "✅ First half monitoring active (30-35 minutes)\n"
+                "✅ Market ID 63 '1st Half Asian Corners' targeted\n"
+                "✅ Psychology systems loaded (Panic + Giant Killer)\n"
+                "✅ Momentum tracking from 20+ minutes\n\n"
+                "🎯 <b>Alert Criteria:</b>\n"
+                "• Halftime panic/giant killer patterns\n"
+                "• Strong momentum build-up (20-35 min)\n"
+                "• 1st half corner odds available\n"
+                "• Exact 30-35 minute timing\n"
+                "• Psychology-driven opportunities\n\n"
+                "🏁 Ready to catch first half corner opportunities!"
+            )
+            
+            try:
+                send_system_message_new(startup_message)
+                mark_startup()
+                self.logger.info("📱 SUCCESS: First half startup message sent")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send first half startup message: {e}")
         
         cycle_count = 0
         
