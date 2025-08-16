@@ -388,16 +388,17 @@ class FirstHalfMonitor:
             return False
     
     async def _analyze_first_half_opportunity(self, match, match_stats):
-        """Analyze first half corner opportunity for 30-35 minute alerts"""
+        """Analyze first half corner opportunity - build momentum from 20+ min, alert at 30-35 min"""
         
         fixture_id = match_stats['fixture_id']
         minute = match_stats['minute']
         
-        # 🚨 MANDATORY TIMING CHECK: Only proceed with alert analysis if in 30-35 minute window
+        # Always add snapshot to build momentum history (like late corner system)
+        self.first_half_analyzer.add_match_snapshot(fixture_id, minute, match_stats)
+        
+        # Only proceed with ALERT analysis if in 30-35 minute window
         if not (30 <= minute <= 35):
-            self.logger.info(f"⏰ FIRST HALF TIMING CHECK FAILED: Match at {minute}' (need 30-35 minutes) - SKIPPING ANALYSIS")
-            # Still update momentum tracking for next cycle
-            self.first_half_analyzer.add_match_snapshot(fixture_id, minute, match_stats)
+            self.logger.info(f"📊 FIRST HALF MOMENTUM: Match at {minute}' - building history for future alerts")
             return None
 
         self.logger.info(f"✅ FIRST HALF TIMING CHECK PASSED: Match at {minute}' (within 30-35 minute window)")
@@ -408,9 +409,6 @@ class FirstHalfMonitor:
             return None
         
         try:
-            # Add current snapshot to momentum tracker
-            self.first_half_analyzer.add_match_snapshot(fixture_id, minute, match_stats)
-            
             # Analyze first half opportunity using psychology systems
             alert_data = self.first_half_analyzer.analyze_first_half_opportunity(
                 fixture_id, match, match_stats
@@ -540,11 +538,14 @@ class FirstHalfMonitor:
                     
                     self.logger.info(f"🏁 FIRST HALF: 🧪 DEBUG: Match {match_id} - minute: {minute}, state: {state}")
                     
-                    # Only monitor matches in FIRST HALF states and 30-35 minute window
+                    # Monitor matches in FIRST HALF states from minute 20+ (to build momentum for 30-35 alerts)
                     if state in ['INPLAY_1ST_HALF', 'HT']:  # First half or halftime
-                        if 30 <= minute <= 35:  # First half alert window
+                        if minute >= 20:  # Start monitoring from minute 20 to build momentum
                             eligible_matches.append(match)
-                            self.logger.info(f"🏁 FIRST HALF: ✅ Eligible: Match {match_id} at {minute}' ({state})")
+                            if 30 <= minute <= 35:
+                                self.logger.info(f"🏁 FIRST HALF: ✅ Alert Window: Match {match_id} at {minute}' ({state})")
+                            else:
+                                self.logger.info(f"🏁 FIRST HALF: 📊 Momentum Building: Match {match_id} at {minute}' ({state})")
                     
                 except Exception as e:
                     self.logger.error(f"🏁 FIRST HALF: ❌ Error processing match during discovery: {e}")
