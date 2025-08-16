@@ -513,6 +513,47 @@ def extract_live_statistics(match):
             'has_premium_stats': False
         }
 
+def check_first_half_corner_odds_available(match_id):
+    """Quick check if Asian FIRST HALF corner odds are available for a match (Market ID 63)"""
+    try:
+        # Import SportMonks client
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from sportmonks_client import SportmonksClient
+        
+        client = SportmonksClient()
+        odds_data = client.get_live_first_half_corner_odds(match_id)
+        
+        if not odds_data:
+            return {
+                'available': False,
+                'count': 0,
+                'active_count': 0,
+                'odds_details': [],
+                'active_odds': []
+            }
+        
+        # Extract first half corner odds data
+        active_odds = odds_data.get('active_odds', [])
+        odds_details = odds_data.get('odds_details', [])
+        
+        return {
+            'available': odds_data.get('available', False),
+            'count': odds_data.get('count', 0),
+            'active_count': odds_data.get('active_count', 0),
+            'odds_details': odds_details,
+            'active_odds': active_odds
+        }
+        
+    except Exception as e:
+        print(f"Error checking first half corner odds for match {match_id}: {e}")
+        return {
+            'available': False,
+            'count': 0,
+            'active_count': 0,
+            'odds_details': [],
+            'active_odds': []
+        }
+
 def check_corner_odds_available(match_id):
     """Quick check if Asian corner odds are available for a match"""
     try:
@@ -739,6 +780,50 @@ def update_live_data():
                                 match['corner_odds'] = cache_data
             
             print(f"📊 Pre-alert preparation: checked {checked_count} matches, {matches_with_odds} with corner odds ready")
+            
+            # STEP 3: Check FIRST HALF corner odds for matches in 30-35 minute window  
+            first_half_matches_with_odds = 0
+            first_half_checked_count = 0
+            
+            for match in matches_with_stats:
+                if 30 <= match['minute'] <= 35 and match.get('state') in ['INPLAY_1ST_HALF', 'HT']:
+                    first_half_checked_count += 1
+                    print(f"🏁 MINUTE {match['minute']}: Checking FIRST HALF odds for match {match['match_id']} ({match['home_team']} vs {match['away_team']})")
+                    
+                    # Get first half corner odds (Market ID 63)
+                    first_half_odds_check = check_first_half_corner_odds_available(match['match_id'])
+                    if first_half_odds_check['available']:
+                        first_half_matches_with_odds += 1
+                        match['first_half_corner_odds'] = first_half_odds_check
+                        
+                        total_count = first_half_odds_check.get('count', 0)
+                        active_count = first_half_odds_check.get('active_count', 0)
+                        suspended_count = total_count - active_count
+                        
+                        print(f"✅ MINUTE {match['minute']}: 1st Half corner odds available! {total_count} bet365 Asian 1st half corner markets")
+                        print(f"   🟢 ACTIVE (bettable): {active_count} markets | 🔶 SUSPENDED: {suspended_count} markets")
+                        
+                        # Show active first half odds
+                        if 'active_odds' in first_half_odds_check and first_half_odds_check['active_odds']:
+                            print(f"   💎 ACTIVE 1ST HALF ODDS (bettable now):")
+                            for odds_str in first_half_odds_check['active_odds']:
+                                print(f"      • {odds_str}")
+                        
+                        print(f"   ⚡ First Half system will use these LIVE odds if match qualifies")
+                    else:
+                        print(f"❌ MINUTE {match['minute']}: No 1st half corner odds available for match {match['match_id']}")
+                        
+                        # Attach "no odds" data for first half
+                        match['first_half_corner_odds'] = {
+                            'available': False,
+                            'count': 0,
+                            'active_count': 0,
+                            'odds_details': [],
+                            'active_odds': []
+                        }
+            
+            if first_half_checked_count > 0:
+                print(f"🏁 First half preparation: checked {first_half_checked_count} matches, {first_half_matches_with_odds} with 1st half corner odds ready")
             
             # Ensure all matches in 70-90 minute window have corner_odds data for dashboard display
             for match in matches:

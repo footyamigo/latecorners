@@ -642,6 +642,85 @@
             return oddsHtml;
         }
 
+        function renderFirstHalfCornerOdds(match) {
+            const firstHalfOdds = match.first_half_corner_odds;
+            
+            // Only show first half odds section for matches in the 30-35 minute window
+            if (match.minute < 30 || match.minute > 35 || match.state !== 'INPLAY_1ST_HALF') {
+                return '';
+            }
+            
+            if (!firstHalfOdds || !firstHalfOdds.available) {
+                return `
+                    <div class="odds-section">
+                        <div class="odds-title">
+                            🏁 1st Half Corner Odds
+                            <span class="odds-status odds-none">NO ODDS</span>
+                        </div>
+                        <div class="odds-summary">No bet365 Asian 1st half corner markets available</div>
+                    </div>
+                `;
+            }
+            
+            const totalCount = firstHalfOdds.count || 0;
+            const activeCount = firstHalfOdds.active_count || 0;
+            const suspendedCount = totalCount - activeCount;
+            
+            let oddsHtml = `
+                <div class="odds-section">
+                    <div class="odds-title">
+                        🏁 1st Half Corner Odds
+                        <span class="odds-status odds-available">LIVE</span>
+                    </div>
+                    <div class="odds-summary">${totalCount} markets • ${activeCount} active • ${suspendedCount} suspended</div>
+                    <div class="odds-grid">
+            `;
+            
+            // Show active first half odds first (prioritize bettable odds)
+            if (firstHalfOdds.active_odds && firstHalfOdds.active_odds.length > 0) {
+                firstHalfOdds.active_odds.forEach(oddsStr => {
+                    // Parse "Over 5.5 = 1.75" format
+                    const [label, value] = oddsStr.split(' = ');
+                    oddsHtml += `
+                        <div class="odds-item active">
+                            <span class="odds-label">🟢 ${label}</span>
+                            <span class="odds-value">${value}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Show suspended first half odds (if any)
+            if (firstHalfOdds.odds_details && suspendedCount > 0) {
+                const suspendedOdds = firstHalfOdds.odds_details.filter(oddsStr => oddsStr.includes('(suspended)'));
+                const maxSuspended = Math.min(3, suspendedOdds.length); // Limit to 3 suspended odds
+                
+                for (let i = 0; i < maxSuspended; i++) {
+                    const oddsStr = suspendedOdds[i];
+                    const [label, value] = oddsStr.replace(' (suspended)', '').split(' = ');
+                    oddsHtml += `
+                        <div class="odds-item suspended">
+                            <span class="odds-label">🔶 ${label}</span>
+                            <span class="odds-value">${value}</span>
+                        </div>
+                    `;
+                }
+                
+                if (suspendedCount > 3) {
+                    oddsHtml += `
+                        <div class="odds-summary">+${suspendedCount - 3} more suspended odds</div>
+                    `;
+                }
+            }
+            
+            oddsHtml += `
+                    </div>
+                </div>
+            `;
+            
+            return oddsHtml;
+        }
+
         function isMatchValid(match) {
             // Filter out matches without live stats
             if (!match.statistics || match.statistics.total_stats_available === 0) {
@@ -673,13 +752,21 @@
             // Determine special CSS classes for critical matches
             let matchClasses = match.priority || 'normal';
             
-            // CRITICAL ALERT WINDOW: 84-86 minutes with odds
+            // CRITICAL ALERT WINDOW: 84-86 minutes with odds (Late Game)
             if (match.minute >= 84 && match.minute <= 86 && match.corner_odds?.available) {
                 matchClasses += ' critical-alert';
             }
-            // ALERT READY: 82-87 minutes with odds
+            // ALERT READY: 82-87 minutes with odds (Late Game)
             else if (match.minute >= 82 && match.minute <= 87 && match.corner_odds?.available) {
                 matchClasses += ' alert-ready';
+            }
+            // FIRST HALF CRITICAL: 32-35 minutes with first half odds
+            else if (match.minute >= 32 && match.minute <= 35 && match.first_half_corner_odds?.available && match.state === 'INPLAY_1ST_HALF') {
+                matchClasses += ' critical-alert first-half';
+            }
+            // FIRST HALF ALERT READY: 30-35 minutes with first half odds
+            else if (match.minute >= 30 && match.minute <= 35 && match.first_half_corner_odds?.available && match.state === 'INPLAY_1ST_HALF') {
+                matchClasses += ' alert-ready first-half';
             }
             
             return `
@@ -693,6 +780,10 @@
                                 '<span style="background: #ff4444; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.7em; margin-left: 8px; animation: criticalPulse 2s infinite;">🚨 CRITICAL WINDOW</span>' : 
                                 match.minute >= 82 && match.minute <= 87 && match.corner_odds?.available ? 
                                 '<span style="background: #ffaa00; color: black; padding: 4px 8px; border-radius: 12px; font-size: 0.7em; margin-left: 8px;">⚡ ALERT READY</span>' : 
+                                match.minute >= 32 && match.minute <= 35 && match.first_half_corner_odds?.available && match.state === 'INPLAY_1ST_HALF' ?
+                                '<span style="background: #00ff88; color: black; padding: 4px 8px; border-radius: 12px; font-size: 0.7em; margin-left: 8px; animation: criticalPulse 2s infinite;">🏁 1ST HALF CRITICAL</span>' :
+                                match.minute >= 30 && match.minute <= 35 && match.first_half_corner_odds?.available && match.state === 'INPLAY_1ST_HALF' ?
+                                '<span style="background: #88ff88; color: black; padding: 4px 8px; border-radius: 12px; font-size: 0.7em; margin-left: 8px;">🏁 1ST HALF READY</span>' :
                                 ''}
                         </div>
                         <div class="match-time">
@@ -715,6 +806,7 @@
                         ${renderMatchTotals(homeStats, awayStats)}
                         ${renderMomentumSection(match)}
                         ${renderCornerOdds(match)}
+                ${renderFirstHalfCornerOdds(match)}
                         </div>
                     </div>
                 `;
@@ -741,23 +833,27 @@
                 
                 // PRIORITY SORTING: Critical alert window matches first
                 const sortedMatches = validMatches.sort((a, b) => {
-                    // Priority 1: Critical alert window (84-86 minutes) with odds
-                    const aCritical = (a.minute >= 84 && a.minute <= 86) && a.corner_odds?.available;
-                    const bCritical = (b.minute >= 84 && b.minute <= 86) && b.corner_odds?.available;
+                    // Priority 1: Critical alert window (84-86 minutes) with odds OR First Half Critical (32-35 min)
+                    const aCritical = ((a.minute >= 84 && a.minute <= 86) && a.corner_odds?.available) || 
+                                    ((a.minute >= 32 && a.minute <= 35) && a.first_half_corner_odds?.available && a.state === 'INPLAY_1ST_HALF');
+                    const bCritical = ((b.minute >= 84 && b.minute <= 86) && b.corner_odds?.available) ||
+                                    ((b.minute >= 32 && b.minute <= 35) && b.first_half_corner_odds?.available && b.state === 'INPLAY_1ST_HALF');
                     
                     if (aCritical && !bCritical) return -1;
                     if (!aCritical && bCritical) return 1;
                     
-                    // Priority 2: Alert ready window (82-87 minutes) with odds
-                    const aAlertReady = (a.minute >= 82 && a.minute <= 87) && a.corner_odds?.available;
-                    const bAlertReady = (b.minute >= 82 && b.minute <= 87) && b.corner_odds?.available;
+                    // Priority 2: Alert ready window (82-87 minutes) with odds OR First Half Ready (30-35 min)
+                    const aAlertReady = ((a.minute >= 82 && a.minute <= 87) && a.corner_odds?.available) ||
+                                      ((a.minute >= 30 && a.minute <= 35) && a.first_half_corner_odds?.available && a.state === 'INPLAY_1ST_HALF');
+                    const bAlertReady = ((b.minute >= 82 && b.minute <= 87) && b.corner_odds?.available) ||
+                                      ((b.minute >= 30 && b.minute <= 35) && b.first_half_corner_odds?.available && b.state === 'INPLAY_1ST_HALF');
                     
                     if (aAlertReady && !bAlertReady) return -1;
                     if (!aAlertReady && bAlertReady) return 1;
                     
-                    // Priority 3: Any match with odds (70-90 minute window)
-                    const aHasOdds = a.corner_odds?.available;
-                    const bHasOdds = b.corner_odds?.available;
+                    // Priority 3: Any match with odds (70-90 minute window OR 30-35 first half)
+                    const aHasOdds = a.corner_odds?.available || a.first_half_corner_odds?.available;
+                    const bHasOdds = b.corner_odds?.available || b.first_half_corner_odds?.available;
                     
                     if (aHasOdds && !bHasOdds) return -1;
                     if (!aHasOdds && bHasOdds) return 1;
