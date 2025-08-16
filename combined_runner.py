@@ -46,18 +46,19 @@ def run_late_corner_system():
         run_late_corner_system()  # Recursive restart
 
 def run_first_half_system():
-    """Run the CONVERTED first half corner alert system (30-35 minutes) using late corner architecture"""
-    logger.info("🏁 STARTING: CONVERTED First half system thread (30-35 minutes)...")
+    """Run the NEW first half corner alert system (30-35 minutes) with dedicated architecture"""
+    logger.info("🏁 STARTING: NEW First half system thread (30-35 minutes)...")
     
     # Wait for other systems to start
     logger.info("⏳ WAITING: 10 seconds for other systems...")
     time.sleep(10)
     
     try:
-        # Import and run CONVERTED first half system (cloned from working late system)
-        from first_half_main import first_half_main
-        logger.info("🏁 RUNNING: CONVERTED First half system (using proven late corner architecture)...")
-        asyncio.run(first_half_main())
+        # Import and run NEW first half system (dedicated first half architecture)
+        from first_half.first_half_main import FirstHalfMonitor
+        logger.info("🏁 RUNNING: NEW First half system (dedicated first half architecture)...")
+        monitor = FirstHalfMonitor()
+        asyncio.run(monitor.run_monitoring_loop())
     except Exception as e:
         logger.error(f"🏁 FATAL ERROR: CONVERTED First half system crashed: {e}")
         import traceback

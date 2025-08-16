@@ -418,8 +418,11 @@ class FirstHalfMonitor:
                 self.logger.info(f"⏭️ FIRST HALF: No alert conditions met for match {fixture_id}")
                 return None
             
-            # Get first half corner odds (Market ID 63)
+            # Get first half corner odds (Market ID 63) - Continue even if no odds
             first_half_odds = await self._get_first_half_odds(fixture_id)
+            if not first_half_odds:
+                self.logger.info(f"🎯 FIRST HALF: No odds available but continuing with psychology alert for {fixture_id}")
+                first_half_odds = ["1st Half Asian Corners (check live markets)"]
             
             # Prepare alert info for database (same format as late system)
             alert_info = {
