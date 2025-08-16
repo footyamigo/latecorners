@@ -58,7 +58,7 @@ def run_first_half_system():
         from first_half.first_half_main import FirstHalfMonitor
         logger.info("🏁 RUNNING: NEW First half system (dedicated first half architecture)...")
         monitor = FirstHalfMonitor()
-        asyncio.run(monitor.run_monitoring_loop())
+        asyncio.run(monitor.run())
     except Exception as e:
         logger.error(f"🏁 FATAL ERROR: CONVERTED First half system crashed: {e}")
         import traceback
