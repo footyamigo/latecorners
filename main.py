@@ -538,6 +538,7 @@ class LateCornerMonitor:
             triggered_tier = None
             alert_source = None
             optimized_alert = None
+            psychology_alert = None
             
             # 🚀 NEW: Try optimized profitable system first
             self.logger.info(f"\n🚀 CHECKING OPTIMIZED PROFITABLE SYSTEM...")
@@ -558,7 +559,7 @@ class LateCornerMonitor:
                 self.logger.info(f"      Market: {optimized_alert['market_recommendation']}")
                 for reason in optimized_alert['reasons']:
                     self.logger.info(f"      {reason}")
-            else:
+                        else:
                 self.logger.info(f"\n❌ OPTIMIZED SYSTEM: No profitable pattern detected")
                 if optimized_alert:
                     for reason in optimized_alert['reasons']:

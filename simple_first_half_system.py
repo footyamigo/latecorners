@@ -159,6 +159,7 @@ Over {next_corner} Asian Corners (1st Half)
                 'fixture_id': fixture_id,
                 'home_team': home_team,
                 'away_team': away_team,
+                'teams': f"{home_team} vs {away_team}",  # ✅ Added missing 'teams' field
                 'minute_sent': minute,
                 'alert_type': 'FIRST_HALF_SIMPLE',
                 'tier': 'SIMPLE_FH',
@@ -199,7 +200,26 @@ Over {next_corner} Asian Corners (1st Half)
                 
                 # Send Telegram alert
                 try:
-                    send_corner_alert_new(alert_message)
+                    # Prepare match data for Telegram
+                    match_data = {
+                        'fixture_id': match.get('id'),
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'home_score': 0,  # Default for first half
+                        'away_score': 0,  # Default for first half  
+                        'minute': minute,
+                        'total_corners': 0,  # Simple system doesn't track this
+                        'alert_type': 'FIRST_HALF_SIMPLE'
+                    }
+                    
+                    conditions = [
+                        f"🏁 FIRST HALF ALERT: {minute}th minute",
+                        "⚽ Simple timing-based trigger (30-35 min)",
+                        "🎯 Market: 1st Half Asian Corners",
+                        "📊 No complex analysis needed"
+                    ]
+                    
+                    send_corner_alert_new(match_data, 'SIMPLE_FH', 100.0, conditions)
                     self.logger.info(f"📱 TELEGRAM ALERT SENT: {home_team} vs {away_team}")
                 except Exception as e:
                     self.logger.error(f"❌ Failed to send Telegram alert: {e}")
