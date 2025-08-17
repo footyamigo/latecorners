@@ -44,8 +44,8 @@ class AlertTracker:
                 'home_shots_on_target': match_data.get('home_shots_on_target', 0),
                 'away_shots_on_target': match_data.get('away_shots_on_target', 0),
                 'total_shots_on_target': match_data.get('total_shots_on_target', 0),
-                # Add over line for result tracking
-                'over_line': str(match_data.get('total_corners', 0) + 1),
+                # Add bet line for result tracking - NEW: Use 2 more corners for Under bets
+                'over_line': str(match_data.get('total_corners', 0) + 2) if tier == 'OPTIMIZED_PROFITABLE' else str(match_data.get('total_corners', 0) + 1),
             }
             
             success = self.db.save_alert(alert_data)
