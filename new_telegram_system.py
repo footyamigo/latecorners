@@ -101,7 +101,7 @@ class NewTelegramSystem:
                             else:
                                 # For regular tiers, only include non-suspended
                                 if "(suspended)" not in odds_str:
-                                    filtered_active_odds.append(odds_str)
+                            filtered_active_odds.append(odds_str)
                                     if is_current_half:
                                         logger.info(f"🎯 Including .5 odds: {odds_str} (current corners: {current_corners})")
                 except (ValueError, TypeError):
@@ -110,7 +110,7 @@ class NewTelegramSystem:
                         clean_odds = odds_str.replace(" (suspended)", "")
                         filtered_active_odds.append(clean_odds)
                     elif "(suspended)" not in odds_str:
-                        filtered_active_odds.append(odds_str)
+                    filtered_active_odds.append(odds_str)
             else:
                 # Non-corner odds, include as-is
                 filtered_active_odds.append(odds_str)
@@ -226,21 +226,21 @@ class NewTelegramSystem:
                             'priority': 2  # Lower priority than achievable overs
                         }
         
-        # Choose the best suggestion - prioritize achievable Over bets
+        # 🚀 NEW STRATEGY: Prioritize UNDER bets (profitable strategy)
         best_suggestion = None
         
-        if best_over:
-            # Prioritize Over bets that need 1-3 more corners
-            best_suggestion = best_over
-        elif best_under and best_under['remaining'] <= 2:
-            # Only suggest Under if it's close (0-2 more corners allowed)
+        if best_under and best_under['remaining'] <= 2:
+            # PRIORITIZE Under bets that allow 0-2 more corners (profitable strategy!)
             best_suggestion = best_under
-        elif best_over:
-            # Fall back to any Over bet if no good Under available
-            best_suggestion = best_over
         elif best_under:
-            # Last resort - any Under bet
+            # Any Under bet is better than Over for our new strategy
             best_suggestion = best_under
+        elif best_over and best_over['needed'] <= 1:
+            # Only suggest Over if we need exactly 1 more corner
+            best_suggestion = best_over
+        elif best_over:
+            # Last resort - Over bets (but note this contradicts our profitable strategy)
+            best_suggestion = best_over
         
         if best_suggestion:
             return f"{best_suggestion['action']} ({best_suggestion['reason']})"
@@ -307,9 +307,14 @@ class NewTelegramSystem:
         
         odds_text = "\n".join(f"• {odd}" for odd in active_odds[:3])  # No fallback needed - odds guaranteed
         
-        # Generate simple betting recommendation based on current corners
-        next_corner = corners + 1
-        dynamic_action = f"Over {next_corner} Asian Corners"
+        # 🚀 NEW STRATEGY: Recommend UNDER bets (profitable strategy)
+        # For new optimized system, recommend Under 2 more corners
+        if tier == 'OPTIMIZED_PROFITABLE':
+            dynamic_action = f"Under 2 More Corners (Better than Over)"
+        else:
+            # Legacy fallback for old psychology systems
+            next_corner = corners + 1
+            dynamic_action = f"Over {next_corner} Asian Corners"
         
         # Get momentum indicators if available
         momentum = match_data.get('momentum_indicators', {})
@@ -333,12 +338,16 @@ class NewTelegramSystem:
             # Use momentum format for all modern alert types
             momentum_level = self._get_momentum_level(score)
             metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
-            # Add betting recommendation - always recommend OVER the next corner
+            # Add betting recommendation - NEW: prioritize UNDER bets
             if active_odds:
-                # Simple logic: recommend Over (current corners + 1)
-                current_corners = match_data.get('total_corners', 0)
-                next_corner = current_corners + 1
-                metrics_lines.append(f"• Asian Corners: Over {next_corner}")
+                if tier == 'OPTIMIZED_PROFITABLE':
+                    # NEW: Recommend Under 2 more corners for optimized system
+                    metrics_lines.append(f"• Recommended: Under 2 More Corners")
+                else:
+                    # Legacy: recommend Over (current corners + 1) for old systems
+                    current_corners = match_data.get('total_corners', 0)
+                    next_corner = current_corners + 1
+                    metrics_lines.append(f"• Asian Corners: Over {next_corner}")
         else:
             # Legacy format for old tiers
             metrics_lines.append(f"• Combined Probability: {score:.1f}%")

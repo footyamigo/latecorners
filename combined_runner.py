@@ -98,9 +98,9 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     logger.info("📊 ARCHITECTURE: Shared Data System")
     logger.info("🌐 DATA SOURCE: Dashboard (single SportMonks API connection)")
-    logger.info("⚠️ LATE CORNER SYSTEM: DISABLED (testing first half only)")
+    logger.info("🚀 LATE CORNER SYSTEM: ENABLED with NEW PROFITABLE RULES!")
     logger.info("🏁 FIRST HALF SYSTEM: 30-35 minutes (independent monitoring)")
-    logger.info("💡 TESTING: First half alerts only for debugging")
+    logger.info("💡 NEW STRATEGY: Under 2 more corners with score line filtering")
     logger.info("=" * 60)
     
     # Start dashboard first (it becomes the data provider)
@@ -111,10 +111,10 @@ if __name__ == "__main__":
     # Wait a bit for dashboard to start
     time.sleep(5)
     
-    # DISABLED: Late corner system (only testing first half)
-    logger.info("⚠️ DISABLED: Late corner system (85-89 min) - TESTING FIRST HALF ONLY")
-    # late_corner_thread = threading.Thread(target=run_late_corner_system, daemon=False)
-    # late_corner_thread.start()
+    # ENABLED: Late corner system with new profitable rules
+    logger.info("🚀 STARTING: Late corner system (85-87 min) with NEW RULES!")
+    late_corner_thread = threading.Thread(target=run_late_corner_system, daemon=False)
+    late_corner_thread.start()
     
     # Wait a bit more, then start first half system
     time.sleep(3)
@@ -124,9 +124,9 @@ if __name__ == "__main__":
     first_half_thread = threading.Thread(target=run_first_half_system, daemon=False)
     first_half_thread.start()
     
-    logger.info("✅ FIRST HALF TESTING MODE STARTED!")
+    logger.info("✅ BOTH SYSTEMS STARTED WITH NEW PROFITABLE RULES!")
     logger.info("📊 Dashboard: http://localhost:8080")
-    logger.info("⚠️ Late Corner: DISABLED (testing mode)")
+    logger.info("🚀 Late Corner: 85-87 min (Market: Under 2 More Corners)")
     logger.info("🏁 First Half: 30-35 minutes (Market: 1st Half Asian Corners)")
     logger.info("🧪 TESTING: First half corner alerts only!")
     
