@@ -101,8 +101,11 @@ class ResultChecker:
                 logger.info(f"🔧 NULL over_line detected, calculated as: {over_line}")
             
             if is_under_bet:
-                result = self._calculate_under_result(over_line, final_corners)
-                logger.info(f"🔄 UNDER BET LOGIC: Final corners {final_corners} vs Under {over_line} = {result}")
+                # For Under bets, calculate based on additional corners, not total corners
+                corners_at_alert = alert['corners_at_alert']
+                additional_corners = final_corners - corners_at_alert
+                result = self._calculate_under_result_by_additional(additional_corners)
+                logger.info(f"🔄 UNDER BET LOGIC: {corners_at_alert} corners at alert → {final_corners} final corners = {additional_corners} additional corners = {result}")
             else:
                 result = self._calculate_over_result(over_line, final_corners)
                 logger.info(f"📈 OVER BET LOGIC: Final corners {final_corners} vs Over {over_line} = {result}")
@@ -260,7 +263,7 @@ class ResultChecker:
             return "UNKNOWN"
     
     def _calculate_under_result(self, under_line: str, final_corners: int) -> str:
-        """Calculate if UNDER bet won, lost, or refunded (NEW OPTIMIZED SYSTEM)"""
+        """Calculate if UNDER bet won, lost, or refunded (LEGACY - kept for compatibility)"""
         
         try:
             line = float(under_line)
@@ -277,6 +280,21 @@ class ResultChecker:
         except ValueError:
             logger.error(f"❌ Invalid under line: {under_line}")
             return "UNKNOWN"
+    
+    def _calculate_under_result_by_additional(self, additional_corners: int) -> str:
+        """Calculate if UNDER 2 MORE CORNERS bet won, lost, or refunded (CORRECT LOGIC)"""
+        
+        # For "Under 2 More Corners":
+        # WIN: 0 or 1 additional corners
+        # REFUND: Exactly 2 additional corners  
+        # LOSS: 3+ additional corners
+        
+        if additional_corners < 2:
+            return "WIN"
+        elif additional_corners == 2:
+            return "REFUND"
+        else:
+            return "LOSS"
     
     def _log_performance_summary(self):
         """Log current performance statistics"""
