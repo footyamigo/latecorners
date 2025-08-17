@@ -101,7 +101,7 @@ class NewTelegramSystem:
                             else:
                                 # For regular tiers, only include non-suspended
                                 if "(suspended)" not in odds_str:
-                            filtered_active_odds.append(odds_str)
+                                    filtered_active_odds.append(odds_str)
                                     if is_current_half:
                                         logger.info(f"🎯 Including .5 odds: {odds_str} (current corners: {current_corners})")
                 except (ValueError, TypeError):
