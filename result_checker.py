@@ -85,14 +85,27 @@ class ResultChecker:
                 logger.warning(f"⚠️ Could not extract final corners for fixture {fixture_id}")
                 return
             
-            # Calculate result - handle NULL over_line for older alerts
+            # Calculate result - NEW: Handle both Over and Under bets based on alert tier
+            alert_tier = alert.get('tier', '')
+            alert_type = alert.get('alert_type', '')
+            
+            # Check if this is a new optimized "Under" bet
+            is_under_bet = (alert_tier == 'OPTIMIZED_PROFITABLE' or 
+                           'UNDER' in str(alert.get('message', '')).upper() or
+                           'OPTIMIZED' in alert_tier)
+            
             over_line = alert['over_line']
             if over_line is None:
                 # For older alerts without over_line, calculate as corners_at_alert + 1
                 over_line = str(alert['corners_at_alert'] + 1)
                 logger.info(f"🔧 NULL over_line detected, calculated as: {over_line}")
             
-            result = self._calculate_over_result(over_line, final_corners)
+            if is_under_bet:
+                result = self._calculate_under_result(over_line, final_corners)
+                logger.info(f"🔄 UNDER BET LOGIC: Final corners {final_corners} vs Under {over_line} = {result}")
+            else:
+                result = self._calculate_over_result(over_line, final_corners)
+                logger.info(f"📈 OVER BET LOGIC: Final corners {final_corners} vs Over {over_line} = {result}")
             
             # Update database
             success = self.db.update_alert_result(alert['id'], final_corners, result)
@@ -229,7 +242,7 @@ class ResultChecker:
             return None
     
     def _calculate_over_result(self, over_line: str, final_corners: int) -> str:
-        """Calculate if over bet won, lost, or refunded"""
+        """Calculate if over bet won, lost, or refunded (LEGACY)"""
         
         try:
             line = float(over_line)
@@ -244,6 +257,25 @@ class ResultChecker:
                 
         except ValueError:
             logger.error(f"❌ Invalid over line: {over_line}")
+            return "UNKNOWN"
+    
+    def _calculate_under_result(self, under_line: str, final_corners: int) -> str:
+        """Calculate if UNDER bet won, lost, or refunded (NEW OPTIMIZED SYSTEM)"""
+        
+        try:
+            line = float(under_line)
+            
+            # For Under bets, we WIN if final_corners is LESS than the line
+            if final_corners < line:
+                return "WIN"
+            elif final_corners == line:
+                # This rarely happens with .5 lines, but possible with whole numbers
+                return "REFUND"
+            else:
+                return "LOSS"
+                
+        except ValueError:
+            logger.error(f"❌ Invalid under line: {under_line}")
             return "UNKNOWN"
     
     def _log_performance_summary(self):

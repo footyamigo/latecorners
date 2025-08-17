@@ -277,7 +277,11 @@ class NewTelegramSystem:
         high_priority_count = match_data.get('high_priority_count', 0)
         
         # Tier-specific header and requirements
-        if tier == "ELITE_CORNER":
+        if tier == "OPTIMIZED_PROFITABLE":
+            header = "🚀 OPTIMIZED PROFITABLE ALERT - DATA-DRIVEN 🚀"
+            score_threshold = "Profitable Pattern"
+            priority_required = 0
+        elif tier == "ELITE_CORNER":
             header = "🎯 ELITE CORNER ALERT - 100% POSITIVE RATE 🎯"
             score_threshold = "Elite Filter"
             priority_required = 0
@@ -334,25 +338,37 @@ class NewTelegramSystem:
 
         # Build metrics safely (avoid f-string expressions that embed backslashes)
         metrics_lines = []
-        if tier in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
-            # Use momentum format for all modern alert types
+        
+        # Get shots on target data
+        home_shots_on_target = match_data.get('home_shots_on_target', 0)
+        away_shots_on_target = match_data.get('away_shots_on_target', 0)
+        total_shots_on_target = match_data.get('total_shots_on_target', 0)
+        
+        if tier == 'OPTIMIZED_PROFITABLE':
+            # NEW: Clean optimized system metrics
+            win_rate = momentum.get('win_rate_estimate', score)
+            metrics_lines.append(f"• Historical Win Rate: {win_rate:.0f}%")
+            metrics_lines.append(f"• Shots on Target: {home_shots_on_target} vs {away_shots_on_target} (Total: {total_shots_on_target})")
+            metrics_lines.append(f"• Market: Under 2 More Corners")
+        elif tier in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
+            # Use momentum format for psychology alert types
             momentum_level = self._get_momentum_level(score)
             metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
-            # Add betting recommendation - NEW: prioritize UNDER bets
+            metrics_lines.append(f"• Shots on Target: {home_shots_on_target} vs {away_shots_on_target} (Total: {total_shots_on_target})")
+            # Add betting recommendation
             if active_odds:
-                if tier == 'OPTIMIZED_PROFITABLE':
-                    # NEW: Recommend Under 2 more corners for optimized system
-                    metrics_lines.append(f"• Recommended: Under 2 More Corners")
-                else:
-                    # Legacy: recommend Over (current corners + 1) for old systems
-                    current_corners = match_data.get('total_corners', 0)
-                    next_corner = current_corners + 1
-                    metrics_lines.append(f"• Asian Corners: Over {next_corner}")
+                # Legacy: recommend Over (current corners + 1) for old systems
+                current_corners = match_data.get('total_corners', 0)
+                next_corner = current_corners + 1
+                metrics_lines.append(f"• Asian Corners: Over {next_corner}")
         else:
             # Legacy format for old tiers
             metrics_lines.append(f"• Combined Probability: {score:.1f}%")
+            metrics_lines.append(f"• Shots on Target: {home_shots_on_target} vs {away_shots_on_target} (Total: {total_shots_on_target})")
             if team_prob is not None:
                 metrics_lines.append(f"• Team Probability: {team_prob:.1f}%")
+        
+        # Add additional momentum metrics if available
         if attack_intensity:
             metrics_lines.append(f"• Attack Quality: {attack_intensity:.1f}%")
         if shot_efficiency:
@@ -362,36 +378,12 @@ class NewTelegramSystem:
         if score_context:
             metrics_lines.append(f"• Score Context: {score_context:.1f}%")
 
-        # Create contextual WHY THIS ALERT section with dynamic content
-        logger.info(f"🔍 DEBUG: Creating WHY message for tier: {tier}")
-        if tier == 'ELITE_CORNER':
-            logger.info("🔍 DEBUG: Using dynamic ELITE_CORNER message")
-            why_text = self._create_elite_corner_message(match_data)
-        elif tier == 'PANICKING_FAVORITE':
-            logger.info("🔍 DEBUG: Using dynamic PANICKING_FAVORITE message")
-            why_text = self._create_panicking_favorite_message(match_data)
-        elif tier == 'FIGHTING_UNDERDOG':
-            logger.info("🔍 DEBUG: Using dynamic FIGHTING_UNDERDOG message")
-            why_text = self._create_fighting_underdog_message(match_data)
-        else:
-            logger.info(f"🔍 DEBUG: Using legacy conditions for tier: {tier}")
-            # Legacy conditions for other alert types
-            conditions_lines = "\n".join([f"• {c}" for c in conditions[:3]])
-            why_text = conditions_lines
-        
-        logger.info(f"🔍 DEBUG: Generated WHY text: {why_text[:100]}...")
-        
-        patterns_block = ''
-        if tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
-            patterns_block = "\n💡 <b>DETECTED PATTERNS:</b>\n" + pattern_text
-
+        # Clean message without lengthy explanations
         message = (
             f"{header}\n\n"
             f"<b>{home_team} vs {away_team}</b>\n"
             f"⚽ Score: {home_score}-{away_score} | ⏱️ {minute}' | 🚩 Corners: {corners}\n\n"
             f"<b>📊 ALERT METRICS:</b>\n" + "\n".join(metrics_lines) + "\n\n"
-            + patterns_block + ("\n\n" if patterns_block else "") +
-            f"<b>🎯 WHY THIS ALERT:</b>\n{why_text}\n\n"
             f"<b>⚡ ACTION:</b> {dynamic_action}\n"
             f"<b>⏰ TIMING:</b> Live betting available now\n"
             f"<b>💪 CONFIDENCE:</b> {self._get_confidence_text(tier)}\n\n"
@@ -610,7 +602,9 @@ class NewTelegramSystem:
     
     def _get_confidence_text(self, tier: str) -> str:
         """Get confidence text based on alert tier"""
-        if tier == "ELITE_CORNER":
+        if tier == "OPTIMIZED_PROFITABLE":
+            return "Data-Driven Profitable System (70-88% Win Rate)"
+        elif tier == "ELITE_CORNER":
             return "Elite 100% Positive System"
         elif tier == "PANICKING_FAVORITE":
             return "Psychology-Driven Edge System"
