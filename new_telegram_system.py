@@ -110,7 +110,7 @@ class NewTelegramSystem:
                         clean_odds = odds_str.replace(" (suspended)", "")
                         filtered_active_odds.append(clean_odds)
                     elif "(suspended)" not in odds_str:
-                    filtered_active_odds.append(odds_str)
+                        filtered_active_odds.append(odds_str)
             else:
                 # Non-corner odds, include as-is
                 filtered_active_odds.append(odds_str)
