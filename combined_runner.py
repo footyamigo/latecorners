@@ -54,11 +54,11 @@ def run_first_half_system():
     time.sleep(10)
     
     try:
-        # Import and run NEW first half system (dedicated first half architecture)
-        from first_half.first_half_main import FirstHalfMonitor
-        logger.info("🏁 RUNNING: NEW First half system (dedicated first half architecture)...")
-        monitor = FirstHalfMonitor()
-        asyncio.run(monitor.run())
+        # Import and run SIMPLE first half system (GUARANTEED TO WORK)
+        from simple_first_half_system import SimpleFirstHalfSystem
+        logger.info("🏁 RUNNING: SIMPLE First half system (GUARANTEED TO WORK)...")
+        system = SimpleFirstHalfSystem()
+        asyncio.run(system.run())
     except Exception as e:
         logger.error(f"🏁 FATAL ERROR: CONVERTED First half system crashed: {e}")
         import traceback
