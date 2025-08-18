@@ -128,7 +128,8 @@ if __name__ == "__main__":
     logger.info("📊 Dashboard: http://localhost:8080")
     logger.info("🚀 Late Corner: 79-84 min (Market: Under 2 More Corners)")
     logger.info("🏁 First Half: 30-35 minutes (Market: 1st Half Asian Corners)")
-    logger.info("🧪 TESTING: First half corner alerts only!")
+    logger.info("🧪 SYSTEM RESTART: Ready for profitable corner opportunities!")
+    logger.info("🔄 Version: Aug 18 - Optimized timing and odds filtering")
     
     # Keep main thread alive
     try:
