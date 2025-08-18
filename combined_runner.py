@@ -112,7 +112,7 @@ if __name__ == "__main__":
     time.sleep(5)
     
     # ENABLED: Late corner system with new profitable rules
-            logger.info("🚀 STARTING: Late corner system (79-84 min) with NEW RULES!")
+    logger.info("🚀 STARTING: Late corner system (79-84 min) with NEW RULES!")
     late_corner_thread = threading.Thread(target=run_late_corner_system, daemon=False)
     late_corner_thread.start()
     
