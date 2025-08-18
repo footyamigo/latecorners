@@ -86,24 +86,16 @@ class NewTelegramSystem:
                         line = float(parts[0])
                         current_corners = match_data.get('total_corners', 0)
                         
-                        # ENHANCED LOGIC: Include if it's a whole number OR if it's X.5 where X = current corners
-                        is_whole_number = line == int(line)
-                        is_current_half = line == current_corners + 0.5
-                        
-                        if is_whole_number or is_current_half:
-                            # For premium tiers, include even suspended odds
-                            if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
-                                # Remove suspended status for clean display
-                                clean_odds = odds_str.replace(" (suspended)", "")
-                                filtered_active_odds.append(clean_odds)
-                                if is_current_half:
-                                    logger.info(f"🎯 Including .5 odds: {clean_odds} (current corners: {current_corners})")
-                            else:
-                                # For regular tiers, only include non-suspended
-                                if "(suspended)" not in odds_str:
-                                    filtered_active_odds.append(odds_str)
-                                    if is_current_half:
-                                        logger.info(f"🎯 Including .5 odds: {odds_str} (current corners: {current_corners})")
+                        # SIMPLIFIED LOGIC: Accept ALL corner odds (no restriction on whole numbers or 0.5)
+                        # For premium tiers, include even suspended odds
+                        if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'OPTIMIZED_PROFITABLE']:
+                            # Remove suspended status for clean display
+                            clean_odds = odds_str.replace(" (suspended)", "")
+                            filtered_active_odds.append(clean_odds)
+                        else:
+                            # For regular tiers, only include non-suspended
+                            if "(suspended)" not in odds_str:
+                                filtered_active_odds.append(odds_str)
                 except (ValueError, TypeError):
                     # If we can't parse it, include it anyway (might be a different format)
                     if tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
@@ -115,20 +107,22 @@ class NewTelegramSystem:
                 # Non-corner odds, include as-is
                 filtered_active_odds.append(odds_str)
         
-        # 🚨 CRITICAL: Only send alert if we have whole number odds available (EXCEPT for premium systems)
-        if not filtered_active_odds and tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
-            logger.info(f"📵 NEW TELEGRAM: No compatible odds available for {alert_id} - SKIPPING ALERT")
+        # 🚨 CRITICAL: Only send alert if we have corner odds available (EXCEPT for premium systems)
+        if not filtered_active_odds and tier not in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'OPTIMIZED_PROFITABLE']:
+            logger.info(f"📵 NEW TELEGRAM: No corner odds available for {alert_id} - SKIPPING ALERT")
             logger.info(f"   Raw odds available: {active_odds}")
-            logger.info(f"   Reason: Only sending alerts when whole number OR current+0.5 corner markets are available")
+            logger.info(f"   Reason: No corner odds available for this match")
             return False
-        elif tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG'] and not filtered_active_odds:
+        elif tier in ['ELITE_CORNER', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'OPTIMIZED_PROFITABLE'] and not filtered_active_odds:
             if tier == 'ELITE_CORNER':
                 logger.info(f"🎯 ELITE OVERRIDE: No odds available but ELITE_CORNER filter passed - SENDING ALERT")
             elif tier == 'PANICKING_FAVORITE':
                 logger.info(f"🧠 PSYCHOLOGY OVERRIDE: No odds available but PANICKING_FAVORITE detected - SENDING ALERT")
-            else:  # FIGHTING_UNDERDOG
+            elif tier == 'FIGHTING_UNDERDOG':
                 logger.info(f"🥊 UNDERDOG OVERRIDE: No odds available but FIGHTING_UNDERDOG detected - SENDING ALERT")
-            filtered_active_odds = ["Over X Asian Corners (check live markets)"]
+            else:  # OPTIMIZED_PROFITABLE
+                logger.info(f"🚀 OPTIMIZED OVERRIDE: No odds available but OPTIMIZED_PROFITABLE pattern detected - SENDING ALERT")
+            filtered_active_odds = ["Under 2 More Corners (check live markets)" if tier == 'OPTIMIZED_PROFITABLE' else "Over X Asian Corners (check live markets)"]
         
         logger.info(f"✅ NEW TELEGRAM: {len(filtered_active_odds)} compatible odds found - PROCEEDING WITH ALERT")
         logger.info(f"   Compatible odds: {filtered_active_odds}")

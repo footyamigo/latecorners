@@ -155,6 +155,10 @@ Over {next_corner} Asian Corners (1st Half)
             away_team = match.get('visitorteam', {}).get('data', {}).get('name', 'Away Team')
             minute, state = self.extract_minute_and_state(match)
             
+            # Extract home and away scores for score_at_alert
+            home_score = match.get('scores', {}).get('home', 0)
+            away_score = match.get('scores', {}).get('away', 0)
+            
             alert_data = {
                 'fixture_id': fixture_id,
                 'home_team': home_team,
@@ -167,7 +171,9 @@ Over {next_corner} Asian Corners (1st Half)
                 'message': alert_message,
                 'timestamp': datetime.now(),
                 'total_probability': 100.0,
-                'detected_patterns': ['FIRST_HALF_TIMING', 'SIMPLE_PSYCHOLOGY']
+                'detected_patterns': ['FIRST_HALF_TIMING', 'SIMPLE_PSYCHOLOGY'],
+                'score_at_alert': f"{home_score}-{away_score}",  # ✅ Added missing 'score_at_alert' field
+                'corners_at_alert': 0  # Simple system doesn't track corners, default to 0
             }
             
             success = self.db.save_alert(alert_data)
@@ -219,8 +225,11 @@ Over {next_corner} Asian Corners (1st Half)
                         "📊 No complex analysis needed"
                     ]
                     
-                    send_corner_alert_new(match_data, 'SIMPLE_FH', 100.0, conditions)
-                    self.logger.info(f"📱 TELEGRAM ALERT SENT: {home_team} vs {away_team}")
+                    success = send_corner_alert_new(match_data, 'SIMPLE_FH', 100.0, conditions)
+                    if success:
+                        self.logger.info(f"📱 TELEGRAM ALERT SENT: {home_team} vs {away_team}")
+                    else:
+                        self.logger.warning(f"📵 TELEGRAM ALERT SKIPPED: {home_team} vs {away_team} (no compatible odds)")
                 except Exception as e:
                     self.logger.error(f"❌ Failed to send Telegram alert: {e}")
                 
