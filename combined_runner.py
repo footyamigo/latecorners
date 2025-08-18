@@ -24,8 +24,8 @@ logging.basicConfig(
 logger = logging.getLogger('combined_runner')
 
 def run_late_corner_system():
-    """Run the late corner alert system (85-89 minutes) in background thread"""
-    logger.info("🚨 STARTING: Late corner system thread (85-89 minutes)...")
+    """Run the late corner alert system (79-84 minutes) in background thread"""
+    logger.info("🚨 STARTING: Late corner system thread (79-84 minutes)...")
     
     # Wait for dashboard to initialize its data
     logger.info("⏳ WAITING: 10 seconds for dashboard to populate shared data...")
@@ -33,7 +33,7 @@ def run_late_corner_system():
     
     try:
         from main import main as main_monitor
-        logger.info("🚨 RUNNING: Late corner system (85-89 min) using shared dashboard data...")
+        logger.info("🚨 RUNNING: Late corner system (79-84 min) using shared dashboard data...")
         asyncio.run(main_monitor())
     except Exception as e:
         logger.error(f"🚨 FATAL ERROR: Late corner system crashed: {e}")
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     time.sleep(5)
     
     # ENABLED: Late corner system with new profitable rules
-    logger.info("🚀 STARTING: Late corner system (85-87 min) with NEW RULES!")
+            logger.info("🚀 STARTING: Late corner system (79-84 min) with NEW RULES!")
     late_corner_thread = threading.Thread(target=run_late_corner_system, daemon=False)
     late_corner_thread.start()
     
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     
     logger.info("✅ BOTH SYSTEMS STARTED WITH NEW PROFITABLE RULES!")
     logger.info("📊 Dashboard: http://localhost:8080")
-    logger.info("🚀 Late Corner: 85-87 min (Market: Under 2 More Corners)")
+    logger.info("🚀 Late Corner: 79-84 min (Market: Under 2 More Corners)")
     logger.info("🏁 First Half: 30-35 minutes (Market: 1st Half Asian Corners)")
     logger.info("🧪 TESTING: First half corner alerts only!")
     

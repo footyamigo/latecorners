@@ -354,7 +354,7 @@ class LateCornerMonitor:
             
             # PRE-CHECKS: Log basic match info
             self.logger.info(f"🔍 PRE-CHECKS: Match {fixture_id} ({match_stats.home_team} vs {match_stats.away_team})")
-            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 85-89)")
+            self.logger.info(f"   📊 Minute: {match_stats.minute} (need 79-84)")
             self.logger.info(f"   ⚽ Corners: {match_stats.total_corners}")
             # Update momentum tracker and log 10-minute momentum
             try:
@@ -392,14 +392,14 @@ class LateCornerMonitor:
                 self.logger.error(f"❌ Momentum tracker error: {e}")
             self.logger.info(f"   🎮 Match State: {match_stats.state}")
             
-            # 🚨 MANDATORY TIMING CHECK: Only proceed with alert analysis if in 85-87 minute window (OPTIMIZED)
-            if not (85 <= match_stats.minute <= 87):
-                self.logger.info(f"⏰ TIMING CHECK FAILED: Match at {match_stats.minute}' (need 85-87 minutes) - SKIPPING ALERT ANALYSIS")
+            # 🚨 MANDATORY TIMING CHECK: Only proceed with alert analysis if in 79-84 minute window (OPTIMIZED)
+            if not (79 <= match_stats.minute <= 84):
+                self.logger.info(f"⏰ TIMING CHECK FAILED: Match at {match_stats.minute}' (need 79-84 minutes) - SKIPPING ALERT ANALYSIS")
                 # Update previous stats for momentum tracking on next cycle
                 self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
                 return None
             
-            self.logger.info(f"✅ TIMING CHECK PASSED: Match at {match_stats.minute}' (within 85-89 minute window)")
+            self.logger.info(f"✅ TIMING CHECK PASSED: Match at {match_stats.minute}' (within 79-84 minute window)")
 
             # Check if we've already alerted on this match
             if fixture_id in self.alerted_matches:
@@ -458,10 +458,10 @@ class LateCornerMonitor:
             self.logger.info(f"   Combined Momentum: {combined_momentum} pts")
             
             # Apply timing and odds requirements  
-            timing_ok = 85 <= match_stats.minute <= 89
+            timing_ok = 79 <= match_stats.minute <= 84
             odds_ok = current_stats.get('has_live_asian_corners', False)
             
-            self.logger.info(f"   ⏱️ Timing (85-89min): {'✅ OK' if timing_ok else '❌ FAIL'} (minute {match_stats.minute})")
+            self.logger.info(f"   ⏱️ Timing (79-84min): {'✅ OK' if timing_ok else '❌ FAIL'} (minute {match_stats.minute})")
             self.logger.info(f"   💰 Asian Odds: {'✅ OK' if odds_ok else '❌ MISSING'}")
 
             # DUAL PSYCHOLOGY SYSTEMS - Elite system disabled
@@ -902,7 +902,7 @@ class LateCornerMonitor:
                     "📊 Score filters: 0-0, 1-1, 2-1, 1-0 (selective)\n"
                     "⚽ Corner counts: 6-10 corners only\n"
                     "📈 Expected win rate: 70-88%\n"
-                    "⏰ Timing: 85-89 minutes\n"
+                    "⏰ Timing: 79-84 minutes\n"
                     "🎯 Live Asian corner odds required\n\n"
                     "🚀 Ready for PROFITABLE corner opportunities!\n"
                     "📉 Old system: 33% win rate → NEW: 75%+ win rate!"

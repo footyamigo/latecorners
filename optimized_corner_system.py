@@ -62,11 +62,11 @@ class OptimizedCornerSystem:
         
         logger.info(f"🔍 OPTIMIZED ALERT CHECK: {score_line} at {current_minute}' with {corner_count} corners")
         
-        # TIMING CHECK: 85-89 minutes (keep original window)
-        timing_ok = 85 <= current_minute <= 89
+        # TIMING CHECK: 79-84 minutes (updated window)
+        timing_ok = 79 <= current_minute <= 84
         if not timing_ok:
-            result['reasons'].append(f"❌ Timing: {current_minute}' outside 85-89 window")
-            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 85-89 minutes)")
+            result['reasons'].append(f"❌ Timing: {current_minute}' outside 79-84 window")
+            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 79-84 minutes)")
             return result
         else:
             result['reasons'].append(f"✅ Timing: {current_minute}' in alert window")
