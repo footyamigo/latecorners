@@ -21,7 +21,7 @@ from new_telegram_system import send_corner_alert_new, send_system_message_new
 from alert_tracker_new import track_elite_alert
 from result_checker import check_pending_results
 from startup_flag import is_first_startup, mark_startup
-# NEW: Optimized Corner System based on profitable data analysis
+# NEW: Momentum Inverted Corner System - detects low momentum (no more corners)
 from optimized_corner_system import OptimizedCornerSystem
 from momentum_tracker import MomentumTracker
 # Legacy psychology systems - keeping for backup
@@ -47,7 +47,7 @@ class LateCornerMonitor:
         # Momentum tracker (10-minute window)
         self.momentum_tracker = MomentumTracker(window_minutes=10)
         
-        # NEW: Optimized corner system (data-driven profitable rules)
+        # NEW: Momentum inverted corner system (detects stagnant games with low momentum)
         self.optimized_corner_system = OptimizedCornerSystem()
         
         # Legacy psychology-driven corner systems (backup)
@@ -540,27 +540,35 @@ class LateCornerMonitor:
             optimized_alert = None
             psychology_alert = None
             
-            # 🚀 NEW: Try optimized profitable system first
-            self.logger.info(f"\n🚀 CHECKING OPTIMIZED PROFITABLE SYSTEM...")
+            # 🔇 NEW: Try momentum inverted system (main system now)
+            self.logger.info(f"\n🔇 CHECKING MOMENTUM INVERTED SYSTEM...")
+            
+            # Get momentum scores for current match
+            momentum_scores = self.momentum_tracker.compute_scores(fixture_id)
+            
             optimized_alert = self.optimized_corner_system.should_alert(
                 current_stats=current_stats,
                 previous_stats=previous_stats,
-                minutes_passed=minutes_passed
+                minutes_passed=minutes_passed,
+                momentum_scores=momentum_scores
             )
             
-            # Check if optimized system triggered
+            # Check if momentum inverted system triggered
             if optimized_alert and optimized_alert['alert']:
-                triggered_tier = "OPTIMIZED_PROFITABLE"
-                alert_source = "optimized"
-                self.logger.info(f"\n🎯 OPTIMIZED PROFITABLE ALERT TRIGGERED!")
+                triggered_tier = "MOMENTUM_INVERTED"
+                alert_source = "momentum_inverted"
+                self.logger.info(f"\n🔇 MOMENTUM INVERTED ALERT TRIGGERED!")
                 self.logger.info(f"      Score: {optimized_alert['score_line']}")
                 self.logger.info(f"      Corners: {optimized_alert['corner_count']}")
+                self.logger.info(f"      Home Momentum: {optimized_alert['home_momentum']}")
+                self.logger.info(f"      Away Momentum: {optimized_alert['away_momentum']}")
+                self.logger.info(f"      Combined: {optimized_alert['combined_momentum']}")
                 self.logger.info(f"      Win Rate: {optimized_alert['win_rate_estimate']}%")
                 self.logger.info(f"      Market: {optimized_alert['market_recommendation']}")
                 for reason in optimized_alert['reasons']:
                     self.logger.info(f"      {reason}")
             else:
-                self.logger.info(f"\n❌ OPTIMIZED SYSTEM: No profitable pattern detected")
+                self.logger.info(f"\n❌ MOMENTUM INVERTED SYSTEM: No stagnant pattern detected")
                 if optimized_alert:
                     for reason in optimized_alert['reasons']:
                         self.logger.info(f"      {reason}")

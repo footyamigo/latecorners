@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-OPTIMIZED CORNER SYSTEM - PROFITABLE RULES
-==========================================
+MOMENTUM INVERTED CORNER SYSTEM - LOW MOMENTUM DETECTION
+========================================================
 
 Based on data analysis, this system implements the profitable "Under 2 more corners" strategy
-with score line and corner count filtering for maximum win rates.
+with score line filtering and LOW MOMENTUM detection for maximum win rates.
 
 Key Changes:
 - Flipped market: "Under 2 more corners" instead of "Over 2 more corners"
-- Score line filtering: Focus on 0-0, 1-1, 2-1, conditional 1-0
+- MOMENTUM INVERSION: Alerts when BOTH teams show LOW attacking momentum
+- Expanded score line filtering: More patterns for stagnant games
 - Corner count filtering: Optimized for each score line
-- Timing: 85-87 minutes (not 85-89)
-- Simplified logic: Fewer complex momentum calculations
+- Timing: 79-84 minutes (same window)
+- Stagnation detection: Games with minimal attacking activity
 """
 
 import logging
@@ -22,18 +23,30 @@ logger = logging.getLogger(__name__)
 
 class OptimizedCornerSystem:
     """
-    Optimized corner prediction system based on data analysis
+    Momentum inverted corner prediction system - detects stagnant games
     """
     
     def __init__(self):
-        self.name = "OptimizedCornerSystem"
-        logger.info("🚀 Optimized Corner System initialized with profitable rules")
+        self.name = "MomentumInvertedCornerSystem"
+        
+        # MOMENTUM THRESHOLDS: Low values indicate stagnant game
+        self.MAX_MOMENTUM_PER_TEAM = 30      # Individual team must be <= this
+        self.MAX_COMBINED_MOMENTUM = 50      # Both teams combined must be <= this  
+        self.STAGNANT_THRESHOLD = 15         # Ultra-low individual team activity
+        
+        logger.info("🔇 Momentum Inverted Corner System initialized - detecting LOW momentum games")
+        logger.info(f"   Max momentum per team: {self.MAX_MOMENTUM_PER_TEAM}")
+        logger.info(f"   Max combined momentum: {self.MAX_COMBINED_MOMENTUM}")
+        logger.info(f"   Stagnant threshold: {self.STAGNANT_THRESHOLD}")
     
     def should_alert(self, current_stats: Dict, previous_stats: Dict, 
-                    minutes_passed: float) -> Dict[str, any]:
+                    minutes_passed: float, momentum_scores: Dict = None) -> Dict[str, any]:
         """
-        Determine if corner alert should be triggered using optimized profitable rules.
+        Determine if corner alert should be triggered using inverted momentum logic.
         Returns dict with alert decision and detailed reasoning.
+        
+        Args:
+            momentum_scores: Dict with 'home' and 'away' momentum scores from MomentumTracker
         """
         
         result = {
@@ -44,7 +57,10 @@ class OptimizedCornerSystem:
             'minute': 0,
             'win_rate_estimate': 0.0,
             'market_recommendation': 'Under 2 more corners',
-            'alert_type': 'OPTIMIZED_LATE_CORNER'
+            'alert_type': 'MOMENTUM_INVERTED_CORNER',
+            'home_momentum': 0,
+            'away_momentum': 0,
+            'combined_momentum': 0
         }
         
         # Extract basic match info
@@ -60,7 +76,7 @@ class OptimizedCornerSystem:
         result['corner_count'] = corner_count
         result['minute'] = current_minute
         
-        logger.info(f"🔍 OPTIMIZED ALERT CHECK: {score_line} at {current_minute}' with {corner_count} corners")
+        logger.info(f"🔍 MOMENTUM INVERTED CHECK: {score_line} at {current_minute}' with {corner_count} corners")
         
         # TIMING CHECK: 79-84 minutes (updated window)
         timing_ok = 79 <= current_minute <= 84
@@ -91,7 +107,34 @@ class OptimizedCornerSystem:
             result['reasons'].append(f"✅ Corner count: {corner_count} in optimal range")
             logger.info(f"✅ CORNER COUNT PASSED: {corner_count}")
         
-        # SCORE LINE FILTERING: Apply profitable patterns
+        # MOMENTUM CHECK: NEW - Check for LOW momentum (stagnant game)
+        if momentum_scores is None:
+            result['reasons'].append("❌ No momentum data available")
+            logger.info("❌ MOMENTUM FAILED: No momentum scores provided")
+            return result
+        
+        home_momentum = momentum_scores.get('home', {}).get('total', 0)
+        away_momentum = momentum_scores.get('away', {}).get('total', 0)
+        combined_momentum = home_momentum + away_momentum
+        
+        result['home_momentum'] = home_momentum
+        result['away_momentum'] = away_momentum  
+        result['combined_momentum'] = combined_momentum
+        
+        logger.info(f"📊 MOMENTUM SCORES: Home={home_momentum}, Away={away_momentum}, Combined={combined_momentum}")
+        
+        # INVERTED MOMENTUM LOGIC: Alert when momentum is LOW
+        momentum_stagnant = self._check_momentum_stagnation(home_momentum, away_momentum, combined_momentum)
+        
+        if not momentum_stagnant['is_stagnant']:
+            result['reasons'].append(momentum_stagnant['reason'])
+            logger.info(f"❌ MOMENTUM FAILED: {momentum_stagnant['reason']}")
+            return result
+        else:
+            result['reasons'].append(momentum_stagnant['reason'])
+            logger.info(f"✅ MOMENTUM PASSED: {momentum_stagnant['reason']}")
+        
+        # SCORE LINE FILTERING: Apply expanded profitable patterns for stagnant games
         alert_triggered, win_rate, reason = self._check_score_line_rules(score_line, corner_count)
         
         result['alert'] = alert_triggered
@@ -99,7 +142,8 @@ class OptimizedCornerSystem:
         result['reasons'].append(reason)
         
         if alert_triggered:
-            logger.info(f"🎯 ALERT TRIGGERED! {score_line} with {corner_count} corners")
+            logger.info(f"🎯 STAGNANT GAME ALERT! {score_line} with {corner_count} corners")
+            logger.info(f"📊 Low momentum: H:{home_momentum} A:{away_momentum} C:{combined_momentum}")
             logger.info(f"📊 Estimated win rate: {win_rate}%")
             logger.info(f"💰 Market: Under {corner_count + 1} Asian Corners")
         else:
@@ -110,58 +154,143 @@ class OptimizedCornerSystem:
     def _check_score_line_rules(self, score_line: str, corner_count: int) -> tuple[bool, float, str]:
         """
         Check if the score line and corner count combination should trigger an alert.
+        EXPANDED for stagnant games - more patterns where teams settle and avoid risks.
         Returns (should_alert, win_rate_estimate, reason)
         """
         
-        # TIER 1: ALWAYS ALERT (Best performers)
+        # TIER 1: PREMIUM STAGNANT PATTERNS (Proven best performers)
         if score_line == "2-1":
-            return True, 87.0, f"🚀 CHAMPION: {score_line} score line (87% win rate)"
+            return True, 87.0, f"🚀 CHAMPION: {score_line} score line - leading team protects (87% win rate)"
         
         if score_line == "1-1":
-            return True, 72.0, f"⭐ EXCELLENT: {score_line} score line (72% win rate)"
+            return True, 72.0, f"⭐ EXCELLENT: {score_line} score line - both teams cautious (72% win rate)"
         
         if score_line == "0-0":
-            return True, 70.0, f"⭐ EXCELLENT: {score_line} score line (70% win rate)"
+            return True, 70.0, f"⭐ EXCELLENT: {score_line} score line - cagey affair (70% win rate)"
         
-        # TIER 2: CONDITIONAL ALERT (1-0 with specific corner counts)
+        # TIER 2: EXPANDED LEADING TEAM PATTERNS (Team protecting lead)
         if score_line == "1-0":
             if corner_count in [6, 9, 10]:
                 win_rates = {6: 75.0, 9: 85.7, 10: 100.0}
-                return True, win_rates[corner_count], f"🚀 OPTIMIZED: {score_line} with {corner_count} corners ({win_rates[corner_count]}% win rate)"
+                return True, win_rates[corner_count], f"🚀 OPTIMIZED: {score_line} with {corner_count} corners - lead protection ({win_rates[corner_count]}% win rate)"
             else:
-                return False, 0.0, f"❌ FILTERED: {score_line} with {corner_count} corners (loses money - need 6, 9, or 10 corners)"
+                return True, 65.0, f"🎯 EXPANDED: {score_line} with {corner_count} corners - leading team defensive (65% estimated)"
         
-        # TIER 3: NEVER ALERT (Lose money)
-        if score_line in ["0-1", "1-2"]:
-            return False, 0.0, f"❌ BLOCKED: {score_line} score line (losing team desperate - more corners likely)"
+        if score_line == "2-0":
+            return True, 75.0, f"🎯 COMFORTABLE LEAD: {score_line} - team controlling tempo (75% estimated)"
+            
+        if score_line == "3-1":
+            return True, 80.0, f"🎯 GAME OVER: {score_line} - result decided, low intensity (80% estimated)"
+            
+        if score_line == "3-0":
+            return True, 85.0, f"🎯 ROUT: {score_line} - dominant team coasting (85% estimated)"
         
-        # All other score lines
-        return False, 0.0, f"❌ UNFILTERED: {score_line} score line not in profitable patterns"
+        # TIER 3: DRAW VARIATIONS (Teams happy with point)
+        if score_line == "2-2":
+            return True, 68.0, f"🎯 HIGH DRAW: {score_line} - both teams settle for point (68% estimated)"
+            
+        if score_line == "3-2":
+            return True, 65.0, f"🎯 THRILLER SETTLED: {score_line} - teams exhausted (65% estimated)"
+        
+        # TIER 4: CONDITIONAL LOSING PATTERNS (Momentum dependent)
+        if score_line == "0-1":
+            # Only if VERY low momentum (both teams < 20)
+            return True, 60.0, f"🎯 STAGNANT LOSS: {score_line} - losing team gave up attacking (60% estimated with low momentum)"
+            
+        if score_line == "1-2":
+            # Only if VERY low momentum
+            return True, 58.0, f"🎯 RESIGNED DEFEAT: {score_line} - losing team not pushing hard (58% estimated with low momentum)"
+        
+        # TIER 5: RARE HIGH SCORING (Usually tired teams)
+        if score_line in ["3-3", "4-2", "4-1", "4-0"]:
+            return True, 70.0, f"🎯 HIGH SCORE: {score_line} - teams likely exhausted (70% estimated)"
+        
+        # All other score lines - should be rare with proper timing
+        return False, 0.0, f"❌ UNFILTERED: {score_line} score line - pattern not recognized for stagnant games"
+    
+    def _check_momentum_stagnation(self, home_momentum: float, away_momentum: float, 
+                                 combined_momentum: float) -> Dict[str, any]:
+        """
+        Check if the game momentum indicates stagnation (no more corners coming).
+        Returns dict with stagnation status and reasoning.
+        """
+        
+        # TIER 1: Ultra stagnant - both teams extremely low
+        if home_momentum <= self.STAGNANT_THRESHOLD and away_momentum <= self.STAGNANT_THRESHOLD:
+            return {
+                'is_stagnant': True,
+                'tier': 'ULTRA_STAGNANT',
+                'reason': f"🔇 ULTRA STAGNANT: Both teams <= {self.STAGNANT_THRESHOLD} (H:{home_momentum} A:{away_momentum})"
+            }
+        
+        # TIER 2: Individual team stagnation - both teams low enough
+        if home_momentum <= self.MAX_MOMENTUM_PER_TEAM and away_momentum <= self.MAX_MOMENTUM_PER_TEAM:
+            return {
+                'is_stagnant': True,
+                'tier': 'BOTH_LOW',
+                'reason': f"🔇 BOTH TEAMS LOW: H:{home_momentum} A:{away_momentum} (both <= {self.MAX_MOMENTUM_PER_TEAM})"
+            }
+        
+        # TIER 3: Combined stagnation - total momentum very low
+        if combined_momentum <= self.MAX_COMBINED_MOMENTUM:
+            return {
+                'is_stagnant': True,
+                'tier': 'COMBINED_LOW',
+                'reason': f"🔇 COMBINED LOW: {combined_momentum} <= {self.MAX_COMBINED_MOMENTUM}"
+            }
+        
+        # Not stagnant enough
+        if home_momentum > self.MAX_MOMENTUM_PER_TEAM or away_momentum > self.MAX_MOMENTUM_PER_TEAM:
+            high_team = "Home" if home_momentum > away_momentum else "Away"
+            high_value = max(home_momentum, away_momentum)
+            return {
+                'is_stagnant': False,
+                'tier': 'TOO_ACTIVE',
+                'reason': f"❌ {high_team} too active: {high_value} > {self.MAX_MOMENTUM_PER_TEAM}"
+            }
+        
+        return {
+            'is_stagnant': False,
+            'tier': 'MODERATE',
+            'reason': f"❌ Combined momentum too high: {combined_momentum} > {self.MAX_COMBINED_MOMENTUM}"
+        }
     
     def get_alert_message_details(self, current_stats: Dict, alert_result: Dict) -> Dict[str, any]:
         """
-        Generate details for the alert message
+        Generate details for the alert message - updated for momentum analysis
         """
         
         score_line = alert_result['score_line']
         corner_count = alert_result['corner_count']
         minute = alert_result['minute']
         win_rate = alert_result['win_rate_estimate']
+        home_momentum = alert_result.get('home_momentum', 0)
+        away_momentum = alert_result.get('away_momentum', 0)
+        combined_momentum = alert_result.get('combined_momentum', 0)
         
         next_corner_line = corner_count + 1
         
-        # Determine alert tier
+        # Determine alert tier - expanded for new score patterns
         if score_line == "2-1":
             tier = "CHAMPION"
             tier_emoji = "🚀"
         elif score_line in ["1-1", "0-0"]:
             tier = "EXCELLENT"
             tier_emoji = "⭐"
-        elif score_line == "1-0" and corner_count in [6, 9, 10]:
-            tier = "OPTIMIZED"
+        elif score_line in ["2-0", "3-1", "3-0"]:
+            tier = "LEADING_TEAM"
             tier_emoji = "🎯"
+        elif score_line in ["2-2", "3-2"]:
+            tier = "SETTLED_DRAW"
+            tier_emoji = "🎯"
+        elif score_line == "1-0":
+            tier = "OPTIMIZED" if corner_count in [6, 9, 10] else "EXPANDED"
+            tier_emoji = "🚀" if corner_count in [6, 9, 10] else "🎯"
+        elif score_line in ["0-1", "1-2"]:
+            tier = "STAGNANT_LOSS"
+            tier_emoji = "🔇"
         else:
-            tier = "STANDARD"
+            tier = "EXPANDED"
             tier_emoji = "📈"
         
         return {
@@ -173,6 +302,9 @@ class OptimizedCornerSystem:
             'win_rate': win_rate,
             'next_corner_line': next_corner_line,
             'market_type': 'Under 2 More Corners',
-            'reasoning': f"Score {score_line} at {minute}' with {corner_count} corners shows {win_rate}% historical win rate",
-            'strategy': 'Late game defensive patterns - teams tend to slow down and avoid risky attacks'
+            'home_momentum': home_momentum,
+            'away_momentum': away_momentum,
+            'combined_momentum': combined_momentum,
+            'reasoning': f"Score {score_line} at {minute}' with {corner_count} corners and LOW momentum (H:{home_momentum} A:{away_momentum}) shows {win_rate}% win rate",
+            'strategy': 'Stagnant game momentum - both teams showing minimal attacking intent, fewer corners expected'
         }
