@@ -122,7 +122,11 @@ class NewTelegramSystem:
                 logger.info(f"🥊 UNDERDOG OVERRIDE: No odds available but FIGHTING_UNDERDOG detected - SENDING ALERT")
             else:  # OPTIMIZED_PROFITABLE
                 logger.info(f"🚀 OPTIMIZED OVERRIDE: No odds available but OPTIMIZED_PROFITABLE pattern detected - SENDING ALERT")
-            filtered_active_odds = ["Under 2 More Corners (check live markets)" if tier == 'OPTIMIZED_PROFITABLE' else "Over X Asian Corners (check live markets)"]
+            # Fallback odds text for when no real odds available
+            if tier in ['OPTIMIZED_PROFITABLE', 'MOMENTUM_INVERTED']:
+                filtered_active_odds = ["Under X More Corners (check live markets)"]
+            else:
+                filtered_active_odds = ["Over X Asian Corners (check live markets)"]
         
         logger.info(f"✅ NEW TELEGRAM: {len(filtered_active_odds)} compatible odds found - PROCEEDING WITH ALERT")
         logger.info(f"   Compatible odds: {filtered_active_odds}")
@@ -246,16 +250,29 @@ class NewTelegramSystem:
         
         return "Check available corner markets"
     
-    def _get_momentum_level(self, momentum: float) -> str:
-        """Get momentum intensity level and emojis based on optimized values"""
-        if momentum >= 180:
-            return "Corner storm explosive! 🔥🔥🔥"
-        elif momentum >= 150:
-            return "Extreme corner pressure 🔥🔥"
-        elif momentum >= 120:
-            return "High corner-creating momentum 🔥"
+    def _get_momentum_level(self, momentum: float, tier: str = None) -> str:
+        """Get momentum intensity level - updated for momentum inverted system"""
+        
+        # For momentum inverted system: LOW momentum is good (UNDER corners)
+        if tier == 'MOMENTUM_INVERTED':
+            if momentum <= 50:
+                return "Ultra low momentum - stagnant game 🔇"
+            elif momentum <= 100:
+                return "Low momentum - limited attacking 📉"
+            elif momentum <= 140:
+                return "Moderate momentum - still viable for UNDER ⚖️"
+            else:
+                return "High momentum - more corners likely 📈"
         else:
-            return "Building pressure ⚡"
+            # Legacy system: HIGH momentum is good (OVER corners)
+            if momentum >= 180:
+                return "Corner storm explosive! 🔥🔥🔥"
+            elif momentum >= 150:
+                return "Extreme corner pressure 🔥🔥"
+            elif momentum >= 120:
+                return "High corner-creating momentum 🔥"
+            else:
+                return "Building pressure ⚡"
     
     def _create_message(self, match_data: Dict, tier: str, score: float, conditions: list, active_odds: list) -> str:
         """Create a simple, effective alert message"""
@@ -306,9 +323,10 @@ class NewTelegramSystem:
         odds_text = "\n".join(f"• {odd}" for odd in active_odds[:3])  # No fallback needed - odds guaranteed
         
         # 🚀 NEW STRATEGY: Recommend UNDER bets (profitable strategy)
-        # For new optimized system, recommend Under 2 more corners
-        if tier == 'OPTIMIZED_PROFITABLE':
-            dynamic_action = f"Under 2 More Corners (Better than Over)"
+        # For momentum inverted system, recommend Under corners
+        if tier in ['OPTIMIZED_PROFITABLE', 'MOMENTUM_INVERTED']:
+            next_corner = corners + 1
+            dynamic_action = f"Under {next_corner} Asian Corners"
         else:
             # Legacy fallback for old psychology systems
             next_corner = corners + 1
@@ -344,17 +362,23 @@ class NewTelegramSystem:
             metrics_lines.append(f"• Historical Win Rate: {win_rate:.0f}%")
             metrics_lines.append(f"• Shots on Target: {home_shots_on_target} vs {away_shots_on_target} (Total: {total_shots_on_target})")
             metrics_lines.append(f"• Market: Under 2 More Corners")
-        elif tier in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG']:
-            # Use momentum format for psychology alert types
-            momentum_level = self._get_momentum_level(score)
+        elif tier in ['LATE_MOMENTUM', 'LATE_MOMENTUM_DRAW', 'PANICKING_FAVORITE', 'FIGHTING_UNDERDOG', 'MOMENTUM_INVERTED']:
+            # Use momentum format for psychology alert types and momentum inverted
+            momentum_level = self._get_momentum_level(score, tier)
             metrics_lines.append(f"• Combined Momentum (Last 10min): {score:.0f} pts - {momentum_level}")
             metrics_lines.append(f"• Shots on Target: {home_shots_on_target} vs {away_shots_on_target} (Total: {total_shots_on_target})")
             # Add betting recommendation
             if active_odds:
-                # Legacy: recommend Over (current corners + 1) for old systems
+                # NEW: recommend UNDER for momentum inverted system
                 current_corners = match_data.get('total_corners', 0)
                 next_corner = current_corners + 1
-                metrics_lines.append(f"• Asian Corners: Over {next_corner}")
+                
+                # Check if this is momentum inverted system
+                if tier in ['MOMENTUM_INVERTED'] or 'momentum' in str(match_data.get('detected_patterns', [])).lower():
+                    metrics_lines.append(f"• Asian Corners: Under {next_corner}")
+                else:
+                    # Legacy: recommend Over for old systems (if any remain)
+                    metrics_lines.append(f"• Asian Corners: Over {next_corner}")
         else:
             # Legacy format for old tiers
             metrics_lines.append(f"• Combined Probability: {score:.1f}%")

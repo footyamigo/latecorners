@@ -29,10 +29,12 @@ class OptimizedCornerSystem:
     def __init__(self):
         self.name = "MomentumInvertedCornerSystem"
         
-        # MOMENTUM THRESHOLDS: Low values indicate stagnant game
-        self.MAX_MOMENTUM_PER_TEAM = 30      # Individual team must be <= this
-        self.MAX_COMBINED_MOMENTUM = 50      # Both teams combined must be <= this  
-        self.STAGNANT_THRESHOLD = 15         # Ultra-low individual team activity
+        # MOMENTUM THRESHOLDS: Expanded for more realistic detection
+        self.MAX_MOMENTUM_PER_TEAM = 60      # Individual team must be <= this (was 30)
+        self.MAX_COMBINED_MOMENTUM = 100     # Both teams combined must be <= this (was 50)
+        self.MODERATE_MOMENTUM_PER_TEAM = 80 # Moderate momentum threshold
+        self.MODERATE_COMBINED_MOMENTUM = 140 # Moderate combined threshold
+        self.STAGNANT_THRESHOLD = 25         # Ultra-low individual team activity (was 15)
         
         logger.info("🔇 Momentum Inverted Corner System initialized - detecting LOW momentum games")
         logger.info(f"   Max momentum per team: {self.MAX_MOMENTUM_PER_TEAM}")
@@ -231,7 +233,7 @@ class OptimizedCornerSystem:
                 'reason': f"🔇 BOTH TEAMS LOW: H:{home_momentum} A:{away_momentum} (both <= {self.MAX_MOMENTUM_PER_TEAM})"
             }
         
-        # TIER 3: Combined stagnation - total momentum very low
+        # TIER 3: Combined stagnation - total momentum low
         if combined_momentum <= self.MAX_COMBINED_MOMENTUM:
             return {
                 'is_stagnant': True,
@@ -239,20 +241,29 @@ class OptimizedCornerSystem:
                 'reason': f"🔇 COMBINED LOW: {combined_momentum} <= {self.MAX_COMBINED_MOMENTUM}"
             }
         
-        # Not stagnant enough
-        if home_momentum > self.MAX_MOMENTUM_PER_TEAM or away_momentum > self.MAX_MOMENTUM_PER_TEAM:
+        # TIER 4: Moderate momentum - still viable for UNDER corners
+        if (home_momentum <= self.MODERATE_MOMENTUM_PER_TEAM and away_momentum <= self.MODERATE_MOMENTUM_PER_TEAM) or \
+           combined_momentum <= self.MODERATE_COMBINED_MOMENTUM:
+            return {
+                'is_stagnant': True,
+                'tier': 'MODERATE_MOMENTUM',
+                'reason': f"⚖️ MODERATE MOMENTUM: H:{home_momentum} A:{away_momentum} C:{combined_momentum} (still favorable for UNDER corners)"
+            }
+        
+        # Too high momentum for UNDER corners
+        if home_momentum > self.MODERATE_MOMENTUM_PER_TEAM or away_momentum > self.MODERATE_MOMENTUM_PER_TEAM:
             high_team = "Home" if home_momentum > away_momentum else "Away"
             high_value = max(home_momentum, away_momentum)
             return {
                 'is_stagnant': False,
                 'tier': 'TOO_ACTIVE',
-                'reason': f"❌ {high_team} too active: {high_value} > {self.MAX_MOMENTUM_PER_TEAM}"
+                'reason': f"❌ {high_team} too active: {high_value} > {self.MODERATE_MOMENTUM_PER_TEAM} (likely more corners coming)"
             }
         
         return {
             'is_stagnant': False,
-            'tier': 'MODERATE',
-            'reason': f"❌ Combined momentum too high: {combined_momentum} > {self.MAX_COMBINED_MOMENTUM}"
+            'tier': 'HIGH_MOMENTUM',
+            'reason': f"❌ Combined momentum too high: {combined_momentum} > {self.MODERATE_COMBINED_MOMENTUM} (expect more corners)"
         }
     
     def get_alert_message_details(self, current_stats: Dict, alert_result: Dict) -> Dict[str, any]:
@@ -293,6 +304,20 @@ class OptimizedCornerSystem:
             tier = "EXPANDED"
             tier_emoji = "📈"
         
+        # Determine momentum tier for telegram message
+        if combined_momentum <= 50:
+            momentum_tier = "ULTRA LOW"
+            momentum_emoji = "🔇"
+        elif combined_momentum <= 100:
+            momentum_tier = "LOW"
+            momentum_emoji = "📉"
+        elif combined_momentum <= 140:
+            momentum_tier = "MODERATE"
+            momentum_emoji = "⚖️"
+        else:
+            momentum_tier = "HIGH"
+            momentum_emoji = "📈"
+        
         return {
             'tier': tier,
             'tier_emoji': tier_emoji,
@@ -301,10 +326,12 @@ class OptimizedCornerSystem:
             'minute': minute,
             'win_rate': win_rate,
             'next_corner_line': next_corner_line,
-            'market_type': 'Under 2 More Corners',
+            'market_type': f'UNDER {next_corner_line} More Corners',  # Clear UNDER betting
             'home_momentum': home_momentum,
             'away_momentum': away_momentum,
             'combined_momentum': combined_momentum,
-            'reasoning': f"Score {score_line} at {minute}' with {corner_count} corners and LOW momentum (H:{home_momentum} A:{away_momentum}) shows {win_rate}% win rate",
-            'strategy': 'Stagnant game momentum - both teams showing minimal attacking intent, fewer corners expected'
+            'momentum_tier': momentum_tier,
+            'momentum_emoji': momentum_emoji,
+            'reasoning': f"Score {score_line} at {minute}' with {corner_count} corners and {momentum_tier} momentum (H:{home_momentum} A:{away_momentum}) shows {win_rate}% win rate for UNDER corners",
+            'strategy': f'{momentum_emoji} {momentum_tier} MOMENTUM - Teams showing reduced attacking intent, bet UNDER {next_corner_line} more corners'
         }
