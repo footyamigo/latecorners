@@ -573,59 +573,65 @@ class LateCornerMonitor:
                     for reason in optimized_alert['reasons']:
                         self.logger.info(f"      {reason}")
                 
-                # 🧠 FALLBACK: Try legacy psychology systems if optimized fails
-                self.logger.info(f"\n🧠 FALLBACK: Trying legacy psychology systems...")
-                psychology_alert = self.panicking_favorite_system.evaluate_panicking_favorite_alert(
-                    fixture_data=fixture_data_with_odds,
-                    match_data={
-                        'minute': match_stats.minute,
-                        'home_score': match_stats.home_score,
-                        'away_score': match_stats.away_score,
-                        'total_corners': match_stats.total_corners,
-                        'total_shots': match_stats.shots_total.get('home', 0) + match_stats.shots_total.get('away', 0),
-                        'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
-                    },
-                    momentum_data={
-                        'home_momentum10': home_ms['total'],
-                        'away_momentum10': away_ms['total']
-                    }
-                )
+                # 🚫 DISABLED: Legacy psychology systems (contradict momentum inversion)
+                # These systems use HIGH momentum for OVER corners, opposite of our new approach
+                self.logger.info(f"\n🚫 LEGACY SYSTEMS DISABLED: Psychology systems use high momentum (contradicts new approach)")
+                psychology_alert = None
+                
+                # Keeping code for potential future use:
+                # psychology_alert = self.panicking_favorite_system.evaluate_panicking_favorite_alert(
+                #     fixture_data=fixture_data_with_odds,
+                #     match_data={
+                #         'minute': match_stats.minute,
+                #         'home_score': match_stats.home_score,
+                #         'away_score': match_stats.away_score,
+                #         'total_corners': match_stats.total_corners,
+                #         'total_shots': match_stats.shots_total.get('home', 0) + match_stats.shots_total.get('away', 0),
+                #         'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
+                #     },
+                #     momentum_data={
+                #         'home_momentum10': home_ms['total'],
+                #         'away_momentum10': away_ms['total']
+                #     }
+                # )
                 
                 # If panicking favorite didn't trigger, try fighting underdog system
-                if not psychology_alert:
-                    psychology_alert = self.fighting_underdog_system.evaluate_fighting_underdog_alert(
-                        fixture_data=fixture_data_with_odds,
-                        match_data={
-                            'minute': match_stats.minute,
-                            'home_score': match_stats.home_score,
-                            'away_score': match_stats.away_score,
-                            'total_corners': match_stats.total_corners,
-                            'total_shots': match_stats.shots_total.get('home', 0) + match_stats.shots_total.get('away', 0),
-                            'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
-                        },
-                        momentum_data={
-                            'home_momentum10': home_ms['total'],
-                            'away_momentum10': away_ms['total']
-                        }
-                    )
+                # DISABLED - contradicts momentum inversion approach
+                # if not psychology_alert:
+                #     psychology_alert = self.fighting_underdog_system.evaluate_fighting_underdog_alert(
+                #         fixture_data=fixture_data_with_odds,
+                #         match_data={
+                #             'minute': match_stats.minute,
+                #             'home_score': match_stats.home_score,
+                #             'away_score': match_stats.away_score,
+                #             'total_corners': match_stats.total_corners,
+                #             'total_shots': match_stats.shots_total.get('home', 0) + match_stats.shots_total.get('away', 0),
+                #             'total_shots_on_target': match_stats.shots_on_target.get('home', 0) + match_stats.shots_on_target.get('away', 0)
+                #         },
+                #         momentum_data={
+                #             'home_momentum10': home_ms['total'],
+                #             'away_momentum10': away_ms['total']
+                #         }
+                #     )
                 
                 # Check if any psychology system triggered
-                if psychology_alert and timing_ok and odds_ok:
-                    if psychology_alert['alert_type'] == 'PANICKING_FAVORITE':
-                        triggered_tier = "PANICKING_FAVORITE"
-                        alert_source = "psychology"
-                        self.logger.info(f"\n🧠 FALLBACK: PANICKING_FAVORITE triggered!")
-                    else:
-                        triggered_tier = "FIGHTING_UNDERDOG"
-                        alert_source = "psychology"
-                        self.logger.info(f"\n🥊 FALLBACK: FIGHTING_UNDERDOG triggered!")
-                else:
-                    self.logger.info(f"\n❌ NO ALERT - No profitable patterns or psychology conditions met")
-                    self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
-                    return None
+                # DISABLED - psychology systems now set to None (contradict momentum inversion)
+                # if psychology_alert and timing_ok and odds_ok:
+                #     if psychology_alert['alert_type'] == 'PANICKING_FAVORITE':
+                #         triggered_tier = "PANICKING_FAVORITE"
+                #         alert_source = "psychology"
+                #         self.logger.info(f"\n🧠 FALLBACK: PANICKING_FAVORITE triggered!")
+                #     else:
+                #         triggered_tier = "FIGHTING_UNDERDOG"
+                #         alert_source = "psychology"
+                #         self.logger.info(f"\n🥊 FALLBACK: FIGHTING_UNDERDOG triggered!")
+                # else:
+                self.logger.info(f"\n❌ NO ALERT - No stagnant momentum patterns detected")
+                self.previous_stats[fixture_id] = copy.deepcopy(current_stats)
+                return None
             # Set up momentum indicators and alert info based on alert source
-            if alert_source == "optimized":
-                # Optimized system alert
+            if alert_source == "momentum_inverted":
+                # Momentum inverted system alert
                 momentum_indicators = {
                     'combined_momentum10': combined_momentum,
                     'home_momentum10': home_ms['total'],
@@ -635,7 +641,7 @@ class LateCornerMonitor:
                     'corner_count': optimized_alert['corner_count']
                 }
                 
-                # Prepare optimized alert info
+                # Prepare momentum inverted alert info
                 alert_info = {
                     'fixture_id': fixture_id,
                     'home_team': match_stats.home_team,
@@ -647,12 +653,12 @@ class LateCornerMonitor:
                     'tier': triggered_tier,
                     'alert_type': triggered_tier,
                     'total_probability': float(optimized_alert['win_rate_estimate']),
-                    'best_team': 'home',  # Not relevant for optimized system
+                    'best_team': 'stagnant',  # Both teams low momentum
                     'team_probability': float(optimized_alert['win_rate_estimate']),
                     'momentum_indicators': momentum_indicators,
                     'momentum_home': home_ms,
                     'momentum_away': away_ms,
-                    'detected_patterns': ['OPTIMIZED_SCORE_LINE_PATTERN'],
+                    'detected_patterns': ['STAGNANT_MOMENTUM_PATTERN'],
                     'odds_count': corner_odds.get('count', 0),
                     'active_odds_count': corner_odds.get('active_count', 0),
                     'odds_details': corner_odds.get('odds_details', []),
