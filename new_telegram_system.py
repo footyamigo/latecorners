@@ -342,9 +342,17 @@ class NewTelegramSystem:
         corner_momentum = momentum.get('corner_momentum', 0)
         score_context = momentum.get('score_context', 0)
         
-        # Format patterns (take top 3 by weight)
-        sorted_patterns = sorted(patterns, key=lambda x: x.get('weight', 0), reverse=True)
-        pattern_text = "\n".join(f"• {p['name']} ({p['weight']})" for p in sorted_patterns[:3]) if patterns else "No patterns detected"
+        # Format patterns - handle both string and dict patterns
+        if patterns:
+            if isinstance(patterns[0], str):
+                # Simple string patterns (new format)
+                pattern_text = "\n".join(f"• {p}" for p in patterns[:3])
+            else:
+                # Dict patterns with weights (old format)
+                sorted_patterns = sorted(patterns, key=lambda x: x.get('weight', 0), reverse=True)
+                pattern_text = "\n".join(f"• {p['name']} ({p['weight']})" for p in sorted_patterns[:3])
+        else:
+            pattern_text = "No patterns detected"
         
         team_prob = match_data.get('team_probability', None)
 
