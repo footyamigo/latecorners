@@ -11,7 +11,7 @@ Key Changes:
 - MOMENTUM INVERSION: Alerts when BOTH teams show LOW attacking momentum
 - Expanded score line filtering: More patterns for stagnant games
 - Corner count filtering: Optimized for each score line
-- Timing: 79-84 minutes (same window)
+- Timing: 78-81 minutes (earlier window)
 - Stagnation detection: Games with minimal attacking activity
 """
 
@@ -80,11 +80,11 @@ class OptimizedCornerSystem:
         
         logger.info(f"🔍 MOMENTUM INVERTED CHECK: {score_line} at {current_minute}' with {corner_count} corners")
         
-        # TIMING CHECK: 79-84 minutes (updated window)
-        timing_ok = 79 <= current_minute <= 84
+        # TIMING CHECK: 78-81 minutes (earlier window to avoid very late alerts)
+        timing_ok = 78 <= current_minute <= 81
         if not timing_ok:
-            result['reasons'].append(f"❌ Timing: {current_minute}' outside 79-84 window")
-            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 79-84 minutes)")
+            result['reasons'].append(f"❌ Timing: {current_minute}' outside 78-81 window")
+            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 78-81 minutes)")
             return result
         else:
             result['reasons'].append(f"✅ Timing: {current_minute}' in alert window")
