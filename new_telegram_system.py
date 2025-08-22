@@ -60,7 +60,7 @@ class NewTelegramSystem:
         # 🚨 CRITICAL CHECK: Only send alerts when whole number odds are available
         active_odds = match_data.get('active_odds', [])
         
-        # Pre-filter to check if we have whole number corner odds available
+        # Pre-filter to check if we have any corner odds available
         filtered_active_odds = []
         
         # ENHANCED ODDS DETECTION: Also check suspended odds for premium tiers
@@ -154,35 +154,33 @@ class NewTelegramSystem:
         for odds_str in active_odds:
             if "Over" in odds_str or "Under" in odds_str:
                 try:
-                    # Parse "Over 9 = 1.70" or "Under 9 = 2.10" (whole numbers only)
+                    # Parse "Over 9 = 1.70" or "Under 8.5 = 2.10" (all corner lines)
                     if "Over" in odds_str:
                         parts = odds_str.replace("Over ", "").split(" = ")
                         if len(parts) == 2:
                             line = float(parts[0])
                             odds_value = float(parts[1])
                             
-                            # Only accept whole number lines for refund possibilities
-                            if line == int(line):
-                                available_lines.append({
-                                    'type': 'Over',
-                                    'line': line,
-                                    'odds': odds_value,
-                                    'text': odds_str
-                                })
+                            # Accept ALL corner lines (including 0.5 odds)
+                            available_lines.append({
+                                'type': 'Over',
+                                'line': line,
+                                'odds': odds_value,
+                                'text': odds_str
+                            })
                     elif "Under" in odds_str:
                         parts = odds_str.replace("Under ", "").split(" = ")
                         if len(parts) == 2:
                             line = float(parts[0])
                             odds_value = float(parts[1])
                             
-                            # Only accept whole number lines for refund possibilities
-                            if line == int(line):
-                                available_lines.append({
-                                    'type': 'Under',
-                                    'line': line,
-                                    'odds': odds_value,
-                                    'text': odds_str
-                                })
+                            # Accept ALL corner lines (including 0.5 odds)
+                            available_lines.append({
+                                'type': 'Under',
+                                'line': line,
+                                'odds': odds_value,
+                                'text': odds_str
+                            })
                 except Exception as e:
                     logger.debug(f"Error parsing odds '{odds_str}': {e}")
                     continue
@@ -317,7 +315,7 @@ class NewTelegramSystem:
             score_threshold = "6.0"
             priority_required = 1
         
-        # Active odds - filter to only show whole number corner totals
+        # Active odds - show all available corner lines (including 0.5)
         # This filtering is now done in send_alert, so we just pass the pre-filtered odds
         
         odds_text = "\n".join(f"• {odd}" for odd in active_odds[:3])  # No fallback needed - odds guaranteed
