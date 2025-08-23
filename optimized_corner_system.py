@@ -10,7 +10,8 @@ Key Changes:
 - Flipped market: "Under 2 more corners" instead of "Over 2 more corners"
 - MOMENTUM INVERSION: Alerts when BOTH teams show LOW attacking momentum
 - Expanded score line filtering: More patterns for stagnant games
-- Corner count filtering: Optimized for each score line
+- Corner count filtering: 6-9 corners (tightened for low momentum)
+- Shots on target filtering: <= 8 total (ensures low attacking activity)
 - Timing: 78-81 minutes (earlier window)
 - Stagnation detection: Games with minimal attacking activity
 """
@@ -100,14 +101,27 @@ class OptimizedCornerSystem:
             result['reasons'].append("✅ Live Asian corner odds available")
             logger.info("✅ ODDS PASSED: Live Asian corners available")
         
-        # CORNER COUNT CHECK: 6-10 corners only
-        if not (6 <= corner_count <= 10):
-            result['reasons'].append(f"❌ Corner count: {corner_count} outside 6-10 range")
-            logger.info(f"⚽ CORNER COUNT FAILED: {corner_count} (need 6-10)")
+        # CORNER COUNT CHECK: 6-9 corners only (reduced max for low momentum)
+        if not (6 <= corner_count <= 9):
+            result['reasons'].append(f"❌ Corner count: {corner_count} outside 6-9 range")
+            logger.info(f"⚽ CORNER COUNT FAILED: {corner_count} (need 6-9)")
             return result
         else:
             result['reasons'].append(f"✅ Corner count: {corner_count} in optimal range")
             logger.info(f"✅ CORNER COUNT PASSED: {corner_count}")
+        
+        # NEW: SHOTS ON TARGET CHECK - Total shots on target <= 8 for stagnant games
+        home_shots_on_target = current_stats.get('shots_on_target', {}).get('home', 0)
+        away_shots_on_target = current_stats.get('shots_on_target', {}).get('away', 0)
+        total_shots_on_target = home_shots_on_target + away_shots_on_target
+        
+        if total_shots_on_target > 8:
+            result['reasons'].append(f"❌ Too many shots on target: {total_shots_on_target} > 8 (game too active)")
+            logger.info(f"🎯 SHOTS ON TARGET FAILED: {total_shots_on_target} > 8 (too active for stagnant game)")
+            return result
+        else:
+            result['reasons'].append(f"✅ Shots on target: {total_shots_on_target} <= 8 (low attacking activity)")
+            logger.info(f"✅ SHOTS ON TARGET PASSED: {total_shots_on_target}")
         
         # MOMENTUM CHECK: NEW - Check for LOW momentum (stagnant game)
         if momentum_scores is None:
@@ -160,52 +174,42 @@ class OptimizedCornerSystem:
         Returns (should_alert, win_rate_estimate, reason)
         """
         
-        # TIER 1: PREMIUM STAGNANT PATTERNS (Proven best performers)
-        if score_line == "2-1":
-            return True, 87.0, f"🚀 CHAMPION: {score_line} score line - leading team protects (87% win rate)"
+        # TIER 1: OPTIMAL LOW MOMENTUM PATTERNS (Based on actual alert success)
+        if score_line == "0-0":
+            return True, 75.0, f"🔇 STALEMATE: {score_line} - both teams lacking creativity (75% win rate)"
         
         if score_line == "1-1":
-            return True, 72.0, f"⭐ EXCELLENT: {score_line} score line - both teams cautious (72% win rate)"
+            return True, 72.0, f"🔇 BALANCED DRAW: {score_line} - teams content with point (72% win rate)"
         
-        if score_line == "0-0":
-            return True, 70.0, f"⭐ EXCELLENT: {score_line} score line - cagey affair (70% win rate)"
-        
-        # TIER 2: EXPANDED LEADING TEAM PATTERNS (Team protecting lead)
+        # TIER 2: LEADING TEAM PROTECTION (Your successful alerts show these work)
         if score_line == "1-0":
-            if corner_count in [6, 9, 10]:
-                win_rates = {6: 75.0, 9: 85.7, 10: 100.0}
-                return True, win_rates[corner_count], f"🚀 OPTIMIZED: {score_line} with {corner_count} corners - lead protection ({win_rates[corner_count]}% win rate)"
-            else:
-                return True, 65.0, f"🎯 EXPANDED: {score_line} with {corner_count} corners - leading team defensive (65% estimated)"
+            return True, 70.0, f"🔇 NARROW LEAD: {score_line} - leading team playing safe (70% estimated)"
         
         if score_line == "2-0":
-            return True, 75.0, f"🎯 COMFORTABLE LEAD: {score_line} - team controlling tempo (75% estimated)"
-            
-        if score_line == "3-1":
-            return True, 80.0, f"🎯 GAME OVER: {score_line} - result decided, low intensity (80% estimated)"
-            
-        if score_line == "3-0":
-            return True, 85.0, f"🎯 ROUT: {score_line} - dominant team coasting (85% estimated)"
+            return True, 75.0, f"🔇 COMFORTABLE LEAD: {score_line} - leading team controlling tempo (75% estimated)"
         
-        # TIER 3: DRAW VARIATIONS (Teams happy with point)
-        if score_line == "2-2":
-            return True, 68.0, f"🎯 HIGH DRAW: {score_line} - both teams settle for point (68% estimated)"
+        if score_line == "2-1":
+            return True, 68.0, f"🔇 PROTECTING LEAD: {score_line} - leading team defensive mode (68% estimated)"
             
-        if score_line == "3-2":
-            return True, 65.0, f"🎯 THRILLER SETTLED: {score_line} - teams exhausted (65% estimated)"
-        
-        # TIER 4: CONDITIONAL LOSING PATTERNS (Momentum dependent)
+        # TIER 3: LOSING TEAM SCENARIOS (When momentum shows they've given up)
         if score_line == "0-1":
-            # Only if VERY low momentum (both teams < 20)
-            return True, 60.0, f"🎯 STAGNANT LOSS: {score_line} - losing team gave up attacking (60% estimated with low momentum)"
+            return True, 65.0, f"🔇 LOSING MOMENTUM: {score_line} - losing team lacking urgency (65% estimated)"
             
         if score_line == "1-2":
-            # Only if VERY low momentum
-            return True, 58.0, f"🎯 RESIGNED DEFEAT: {score_line} - losing team not pushing hard (58% estimated with low momentum)"
+            return True, 62.0, f"🔇 CHASING GAME: {score_line} - losing team low on ideas (62% estimated)"
         
-        # TIER 5: RARE HIGH SCORING (Usually tired teams)
-        if score_line in ["3-3", "4-2", "4-1", "4-0"]:
-            return True, 70.0, f"🎯 HIGH SCORE: {score_line} - teams likely exhausted (70% estimated)"
+        if score_line == "0-2":
+            return True, 70.0, f"🔇 UPHILL BATTLE: {score_line} - losing team deflated (70% estimated)"
+        
+        # TIER 4: HIGHER SCORING STAGNANT GAMES (Teams exhausted/satisfied)
+        if score_line == "2-2":
+            return True, 65.0, f"🔇 SETTLED DRAW: {score_line} - both teams happy with point (65% estimated)"
+            
+        if score_line == "3-1":
+            return True, 72.0, f"🔇 GAME DECIDED: {score_line} - result clear, intensity dropped (72% estimated)"
+            
+        if score_line == "3-0":
+            return True, 75.0, f"🔇 ROUT MODE: {score_line} - dominant team coasting (75% estimated)"
         
         # All other score lines - should be rare with proper timing
         return False, 0.0, f"❌ UNFILTERED: {score_line} score line - pattern not recognized for stagnant games"
