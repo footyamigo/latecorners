@@ -11,8 +11,8 @@ Key Changes:
 - MOMENTUM INVERSION: Alerts when BOTH teams show LOW attacking momentum
 - Expanded score line filtering: More patterns for stagnant games
 - Corner count filtering: 6-9 corners (tightened for low momentum)
-- Shots on target filtering: <= 8 total (ensures low attacking activity)
-- Timing: 78-81 minutes (earlier window)
+- Shots on target filtering: <= 9 total (moderate attacking activity threshold)
+- Timing: 76-80 minutes (expanded earlier window)
 - Stagnation detection: Games with minimal attacking activity
 """
 
@@ -81,11 +81,11 @@ class OptimizedCornerSystem:
         
         logger.info(f"🔍 MOMENTUM INVERTED CHECK: {score_line} at {current_minute}' with {corner_count} corners")
         
-        # TIMING CHECK: 78-81 minutes (earlier window to avoid very late alerts)
-        timing_ok = 78 <= current_minute <= 81
+        # TIMING CHECK: 76-80 minutes (expanded earlier window)
+        timing_ok = 76 <= current_minute <= 80
         if not timing_ok:
-            result['reasons'].append(f"❌ Timing: {current_minute}' outside 78-81 window")
-            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 78-81 minutes)")
+            result['reasons'].append(f"❌ Timing: {current_minute}' outside 76-80 window")
+            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 76-80 minutes)")
             return result
         else:
             result['reasons'].append(f"✅ Timing: {current_minute}' in alert window")
@@ -110,17 +110,17 @@ class OptimizedCornerSystem:
             result['reasons'].append(f"✅ Corner count: {corner_count} in optimal range")
             logger.info(f"✅ CORNER COUNT PASSED: {corner_count}")
         
-        # NEW: SHOTS ON TARGET CHECK - Total shots on target <= 8 for stagnant games
+        # NEW: SHOTS ON TARGET CHECK - Total shots on target <= 9 for stagnant games
         home_shots_on_target = current_stats.get('shots_on_target', {}).get('home', 0)
         away_shots_on_target = current_stats.get('shots_on_target', {}).get('away', 0)
         total_shots_on_target = home_shots_on_target + away_shots_on_target
         
-        if total_shots_on_target > 8:
-            result['reasons'].append(f"❌ Too many shots on target: {total_shots_on_target} > 8 (game too active)")
-            logger.info(f"🎯 SHOTS ON TARGET FAILED: {total_shots_on_target} > 8 (too active for stagnant game)")
+        if total_shots_on_target > 9:
+            result['reasons'].append(f"❌ Too many shots on target: {total_shots_on_target} > 9 (game too active)")
+            logger.info(f"🎯 SHOTS ON TARGET FAILED: {total_shots_on_target} > 9 (too active for stagnant game)")
             return result
         else:
-            result['reasons'].append(f"✅ Shots on target: {total_shots_on_target} <= 8 (low attacking activity)")
+            result['reasons'].append(f"✅ Shots on target: {total_shots_on_target} <= 9 (low attacking activity)")
             logger.info(f"✅ SHOTS ON TARGET PASSED: {total_shots_on_target}")
         
         # MOMENTUM CHECK: NEW - Check for LOW momentum (stagnant game)
