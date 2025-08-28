@@ -126,10 +126,10 @@ if __name__ == "__main__":
     
     logger.info("✅ LATE CORNER SYSTEM STARTED - MOMENTUM INVERTED v2.1!")
     logger.info("📊 Dashboard: http://localhost:8080")
-    logger.info("🔇 Late Corner: 76-80 min (Market: Under X More Corners)")
+    logger.info("🔇 Late Corner: 74-78 min (Market: Under X More Corners)")
     logger.info("🚫 First Half: DISABLED (only using momentum inverted system)")
     logger.info("🧪 SYSTEM READY: Momentum inverted corner opportunities!")
-    logger.info("🔄 Version: v2.1 - Momentum inversion with restrictive filters")
+    logger.info("🔄 Version: v2.2 - Momentum inversion with 74-78min timing")
     
     # Keep main thread alive
     try:

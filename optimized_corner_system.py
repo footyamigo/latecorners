@@ -12,7 +12,7 @@ Key Changes:
 - Expanded score line filtering: More patterns for stagnant games
 - Corner count filtering: 6-9 corners (tightened for low momentum)
 - Shots on target filtering: <= 9 total (moderate attacking activity threshold)
-- Timing: 76-80 minutes (expanded earlier window)
+- Timing: 74-78 minutes (earlier window for more opportunities)
 - Stagnation detection: Games with minimal attacking activity
 """
 
@@ -41,7 +41,7 @@ class OptimizedCornerSystem:
         logger.info(f"   Max momentum per team: {self.MAX_MOMENTUM_PER_TEAM}")
         logger.info(f"   Max combined momentum: {self.MAX_COMBINED_MOMENTUM}")
         logger.info(f"   Stagnant threshold: {self.STAGNANT_THRESHOLD}")
-        logger.info("🚀 NEW SYSTEM ACTIVE: 76-80min window, ≤9 shots, 10 score patterns - v2.1")
+        logger.info("🚀 NEW SYSTEM ACTIVE: 74-78min window, ≤9 shots, 10 score patterns - v2.2")
     
     def should_alert(self, current_stats: Dict, previous_stats: Dict, 
                     minutes_passed: float, momentum_scores: Dict = None) -> Dict[str, any]:
@@ -82,11 +82,11 @@ class OptimizedCornerSystem:
         
         logger.info(f"🔍 MOMENTUM INVERTED CHECK: {score_line} at {current_minute}' with {corner_count} corners")
         
-        # TIMING CHECK: 76-80 minutes (expanded earlier window)
-        timing_ok = 76 <= current_minute <= 80
+        # TIMING CHECK: 74-78 minutes (earlier window for more opportunities)
+        timing_ok = 74 <= current_minute <= 78
         if not timing_ok:
-            result['reasons'].append(f"❌ Timing: {current_minute}' outside 76-80 window")
-            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 76-80 minutes)")
+            result['reasons'].append(f"❌ Timing: {current_minute}' outside 74-78 window")
+            logger.info(f"⏱️ TIMING FAILED: {current_minute}' (need 74-78 minutes)")
             return result
         else:
             result['reasons'].append(f"✅ Timing: {current_minute}' in alert window")
