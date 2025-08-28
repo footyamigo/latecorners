@@ -41,6 +41,7 @@ class OptimizedCornerSystem:
         logger.info(f"   Max momentum per team: {self.MAX_MOMENTUM_PER_TEAM}")
         logger.info(f"   Max combined momentum: {self.MAX_COMBINED_MOMENTUM}")
         logger.info(f"   Stagnant threshold: {self.STAGNANT_THRESHOLD}")
+        logger.info("🚀 NEW SYSTEM ACTIVE: 76-80min window, ≤9 shots, 10 score patterns - v2.1")
     
     def should_alert(self, current_stats: Dict, previous_stats: Dict, 
                     minutes_passed: float, momentum_scores: Dict = None) -> Dict[str, any]:
