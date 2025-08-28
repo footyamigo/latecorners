@@ -98,9 +98,9 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     logger.info("📊 ARCHITECTURE: Shared Data System")
     logger.info("🌐 DATA SOURCE: Dashboard (single SportMonks API connection)")
-    logger.info("🚀 LATE CORNER SYSTEM: ENABLED with NEW PROFITABLE RULES!")
-    logger.info("🏁 FIRST HALF SYSTEM: 30-35 minutes (independent monitoring)")
-    logger.info("💡 NEW STRATEGY: Under 2 more corners with score line filtering")
+    logger.info("🔇 MOMENTUM INVERTED SYSTEM: ENABLED - LOW momentum detection!")
+    logger.info("🚫 FIRST HALF SYSTEM: DISABLED (not needed)")
+    logger.info("💡 STRATEGY: Under X corners when momentum shows stagnation")
     logger.info("=" * 60)
     
     # Start dashboard first (it becomes the data provider)
@@ -119,17 +119,17 @@ if __name__ == "__main__":
     # Wait a bit more, then start first half system
     time.sleep(3)
     
-    # Start first half system third (independent monitoring)
-    logger.info("🏁 STARTING: First half system (30-35 min) - independent...")
-    first_half_thread = threading.Thread(target=run_first_half_system, daemon=False)
-    first_half_thread.start()
+    # DISABLED: First half system (only using late corner momentum system now)
+    logger.info("🚫 DISABLED: First half system - using ONLY late corner momentum system")
+    # first_half_thread = threading.Thread(target=run_first_half_system, daemon=False)
+    # first_half_thread.start()
     
-    logger.info("✅ BOTH SYSTEMS STARTED WITH NEW PROFITABLE RULES!")
+    logger.info("✅ LATE CORNER SYSTEM STARTED - MOMENTUM INVERTED v2.1!")
     logger.info("📊 Dashboard: http://localhost:8080")
-    logger.info("🚀 Late Corner: 79-84 min (Market: Under 2 More Corners)")
-    logger.info("🏁 First Half: 30-35 minutes (Market: 1st Half Asian Corners)")
-    logger.info("🧪 SYSTEM RESTART: Ready for profitable corner opportunities!")
-    logger.info("🔄 Version: Aug 18 - Optimized timing and odds filtering")
+    logger.info("🔇 Late Corner: 76-80 min (Market: Under X More Corners)")
+    logger.info("🚫 First Half: DISABLED (only using momentum inverted system)")
+    logger.info("🧪 SYSTEM READY: Momentum inverted corner opportunities!")
+    logger.info("🔄 Version: v2.1 - Momentum inversion with restrictive filters")
     
     # Keep main thread alive
     try:
