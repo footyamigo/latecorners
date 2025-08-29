@@ -179,13 +179,16 @@ class LiveDataCollector:
         # Key stat type IDs we need
         stat_mapping = {
             34: 'corners',          # Corners ✅ (Type 34 - original working + official docs)
-            42: 'shots_total',      # Shots Total  
-            86: 'shots_on_target',  # Shots on Target ✅ (Type 86 - confirmed)
             41: 'shots_off_target', # Shots off Target ✅ (Type 41 - confirmed)  
+            42: 'shots_total',      # Shots Total  
+            43: 'attacks',          # Attacks ✅ (Type 43 - confirmed)
             44: 'dangerous_attacks', # Dangerous Attacks
             45: 'ball_possession',  # Ball Possession % ✅ (Type 45 - original working system)
+            47: 'attacks',          # NEW: Type 47 - appears to be attacks/offensive actions
             49: 'shots_inside_box', # Shots Inside Box (premium)
             60: 'crosses',          # Crosses (premium)
+            84: 'dangerous_attacks', # NEW: Type 84 - appears to be dangerous attacks/key moments
+            86: 'shots_on_target',  # Shots on Target ✅ (Type 86 - confirmed)
         }
         
         home_stats = {}

@@ -738,10 +738,12 @@ class SportmonksClient:
                 34: 'corners',
                 41: 'shots_off_target',
                 42: 'shots_total',
-                44: 'dangerous_attacks',
-                45: 'possession',
                 43: 'attacks',
+                44: 'dangerous_attacks',
+                45: 'ball_possession',  # Use consistent naming with live_data_collector
+                47: 'attacks',              # NEW: Type 47 - appears to be attacks/offensive actions
                 52: 'goals',
+                84: 'dangerous_attacks',    # NEW: Type 84 - appears to be dangerous attacks/key moments
                 86: 'shots_on_target',
             }
             
@@ -815,8 +817,8 @@ class SportmonksClient:
                 big_chances_created={'home': 0, 'away': 0},  # Not available in live feed
                 big_chances_missed={'home': 0, 'away': 0},   # Not available in live feed
                 possession={
-                    'home': home_stats.get('possession', 0),
-                    'away': away_stats.get('possession', 0)
+                    'home': home_stats.get('ball_possession', 0),
+                    'away': away_stats.get('ball_possession', 0)
                 },
                 hit_woodwork={
                     'home': home_stats.get('hit_woodwork', 0),

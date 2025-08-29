@@ -359,6 +359,8 @@ def is_valid_live_match(match_data):
     
     # Filter out matches with unrealistic minutes (likely ended or data error)
     minute = match_data.get('minute', 0)
+    if minute is None:
+        minute = 0
     if minute > 120:  # Even with extra time, 120+ minutes is suspicious
         return False
     
@@ -408,8 +410,12 @@ def extract_match_data(match):
         minute = 0
         for period in periods:
             if period.get('ticking', False):
-                minute = period.get('minutes', 0)
+                minute = period.get('minutes', 0) or 0  # Ensure minute is never None
                 break
+        
+        # Ensure minute is always a valid integer
+        if minute is None:
+            minute = 0
         
         # Get league
         league_info = match.get('league', {})
@@ -418,7 +424,7 @@ def extract_match_data(match):
         # Extract live statistics
         statistics = extract_live_statistics(match)
         
-        # Determine priority and status
+        # Determine priority and status (now safe from None comparison)
         if minute >= 85:
             priority = 'critical'
             status = 'Critical'
